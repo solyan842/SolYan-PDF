@@ -28,13 +28,18 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install lightweight API dependencies
-        run: pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1
+      - name: Install Tesseract system fallback
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng fonts-dejavu-core
 
-      - name: Compile service
-        run: python -m compileall app
+      - name: Install lightweight API and fallback dependencies
+        run: pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1 pytesseract==0.3.13 pypdfium2==5.14.0 Pillow
 
-      - name: Verify health without loading models
+      - name: Compile service and benchmark harness
+        run: python -m compileall app benchmark.py
+
+      - name: Verify health without loading Paddle models
         run: |
           python - <<'PY'
           from fastapi.testclient import TestClient
@@ -45,10 +50,32 @@ jobs:
           body = response.json()
           assert body['status'] == 'ok'
           assert body['models_loaded'] == {'ocr': False, 'structure': False}
+          assert body['fallback']['enabled'] is True
+          assert body['fallback']['binary_available'] is True
           print(body)
+          PY
+
+      - name: Smoke test Vietnamese Tesseract fallback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          from app.main import _tesseract_text
+
+          image = Image.new('RGB', (900, 180), 'white')
+          draw = ImageDraw.Draw(image)
+          font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 52)
+          draw.text((30, 50), 'Xin chào Việt Nam 2026', font=font, fill='black')
+          path = Path('fallback-test.png')
+          image.save(path)
+          text, pages = _tesseract_text(path, '.png')
+          assert pages and text.strip(), (text, pages)
+          print(text)
           PY
 
       - name: Validate Dockerfile pins
         run: |
           grep -q 'paddlepaddle==3.2.0' Dockerfile
           grep -q 'paddleocr\[doc-parser\]==3.7.0' requirements.txt
+          grep -q 'pypdfium2==5.14.0' requirements.txt
+          grep -q 'tesseract-ocr-vie' Dockerfile
