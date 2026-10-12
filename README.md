@@ -1,6 +1,6 @@
 # SolYan PDF
 
-SolYan PDF is a self-hostable, web-first PDF toolkit with a dedicated **Tiện ích Việt Nam** section. Lightweight operations run in the browser where practical; heavier features are isolated behind replaceable engine services.
+SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **Tiện ích Việt Nam** section. Lightweight operations run in the browser where practical; heavier features are isolated behind replaceable engine services.
 
 ## Current capabilities
 
@@ -38,7 +38,7 @@ SolYan PDF is a self-hostable, web-first PDF toolkit with a dedicated **Tiện �
 ## Architecture
 
 ```text
-Browser / Next.js
+Browser / Next.js PWA
       |
       v
 FastAPI orchestration backend (qpdf + network utilities)
@@ -64,6 +64,10 @@ Then open:
 
 The first OCR request can be slow because Paddle models may need to download inside the OCR container.
 
+## PWA
+
+The frontend includes a web app manifest, scalable icon and a network-first service worker. When served over HTTPS it can be installed from supported desktop/mobile browsers. The service worker only handles same-origin navigation fallback; PDF processing behavior remains unchanged.
+
 ## Configuration
 
 Important variables are documented in `.env.example`.
@@ -71,18 +75,23 @@ Important variables are documented in `.env.example`.
 - `NEXT_PUBLIC_API_URL` is baked into the Next.js client at image build time.
 - `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_CX` are required only for Google keyword-position lookup.
 - `BLOOM_SERVICE_URL` / `BLOOM_API_KEY` are required only for experimental PDF -> Office conversion. Bloom is not bundled into the default compose stack.
+- Private/loopback Ping targets are blocked by default. `ALLOW_PRIVATE_NETWORK_UTILITIES=1` is intended only for trusted self-hosted/LAN deployments.
+- `X-Forwarded-For` is ignored unless `TRUST_PROXY_HEADERS=1` is explicitly enabled behind a trusted reverse proxy.
 
-## Verification status
+## Security & verification status
 
 GitHub Actions currently verifies:
+- production dependency audit with a patched PostCSS override
 - Next.js production build
-- FastAPI/qpdf backend and network routes
+- FastAPI/qpdf backend and hardened network routes
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
 - Real LibreOffice DOCX -> PDF conversion
 - Real PKCS#12 PDF signing
 - Real PDF/A conversion using the internal non-Ghostscript backend
 - Docker Compose model and frontend/backend image builds
+
+The frontend also sends baseline `nosniff`, frame-denial, referrer and permissions-policy headers.
 
 ## Benchmarking
 
@@ -94,5 +103,6 @@ See `docs/BENCHMARKING.md` for:
 
 - PDF -> DOCX/XLSX/PPTX remains **Experimental** until representative corpus results establish a fidelity baseline.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
+- A repository-level open-source license has not yet been selected by the project owner.
 
 See `docs/ROADMAP.md` for the exact implementation status and remaining work.
