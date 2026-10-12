@@ -15,10 +15,12 @@ RUN apt-get update \
     && useradd --system --gid solyan --create-home --home-dir /home/solyan solyan \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./requirements.txt
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/ \
-    && python -m pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock paddle-requirements.lock ./
+RUN python -m pip install --no-cache-dir pip==26.2.1 \
+    && python -m pip install --no-cache-dir -r paddle-requirements.lock \
+    && python -m pip install --no-cache-dir -r requirements.lock \
+    && python -m pip install --no-cache-dir --no-deps -r requirements.txt \
+    && python -m pip check
 
 COPY app ./app
 RUN chown -R solyan:solyan /app /home/solyan

@@ -133,6 +133,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Real PKCS#12 signing smoke test
 - [x] Real PDF/A smoke test
 - [x] Compose validation + frontend/backend container build CI
+- [x] Run all six runtime images as non-root with writable HOME enforced by CI
 
 ## Release packaging
 
@@ -145,7 +146,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Lock full frontend npm graph with `package-lock.json` + `npm ci`
 - [x] Lock backend / Office / signing / PDF-A Python transitive graphs with `requirements.lock`
 - [x] Generate resolved OS/Python/npm package inventories for all six release images in CI artifacts
-- [ ] Add dedicated PaddleOCR/PaddlePaddle transitive lock preserving the CPU wheel index
+- [x] Add dedicated PaddleOCR/PaddlePaddle transitive lock preserving the CPU wheel index
 - [ ] Add hash-verified Python locks where practical
 - [ ] Pin/snapshot distro packages for stricter image reproducibility
 

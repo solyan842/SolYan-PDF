@@ -26,9 +26,9 @@ The multi-arch index digest is intentionally used instead of an amd64-only manif
 | Office service | Full Python transitive graph in `engines/office-service/requirements.lock` |
 | Signature service | Full Python transitive graph in `engines/sign-service/requirements.lock` |
 | PDF/A archive service | Full Python transitive graph in `engines/archive-service/requirements.lock` |
-| OCR service | Direct versions pinned; full Paddle/PaddleOCR transitive lock still pending because PaddlePaddle uses a dedicated CPU wheel index |
+| OCR service | PaddlePaddle 3.2.0 is locked separately in `paddle-requirements.lock` with the official CPU wheel index; the remaining PaddleOCR/Python graph is locked in `requirements.lock` |
 
-Standard Python lockfiles are generated in a clean Python 3.13.16 environment by `scripts/lock-python-deps.sh`. Docker/CI install both the lock and direct requirements together and run `pip check`.
+Python lockfiles are generated in a clean Python 3.13.16 environment by `scripts/lock-python-deps.sh` with pip 26.2.1 pinned for lock generation. OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently resolve PaddlePaddle from a different source. Production Docker builds install the lockfiles and run `pip check`.
 
 ## Frontend
 
@@ -57,7 +57,7 @@ Standard Python lockfiles are generated in a clean Python 3.13.16 environment by
 
 | Component | Version | License | Integration |
 |---|---:|---|---|
-| PaddlePaddle | 3.2.0 | Apache-2.0 | CPU inference runtime |
+| PaddlePaddle | 3.2.0 | Apache-2.0 | CPU inference runtime; dedicated CPU-index lock |
 | PaddleOCR | 3.7.0 | Apache-2.0 | primary OCR/document intelligence |
 | pytesseract | 0.3.13 | Apache-2.0 | Python adapter |
 | pypdfium2 | 5.14.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering |
@@ -105,13 +105,13 @@ Standard Python lockfiles are generated in a clean Python 3.13.16 environment by
 
 ## Resolved image inventory
 
-`.github/workflows/image-inventory-ci.yml` builds all six default images and stores a 30-day artifact for each image. The artifact records the resolved OS package list, Python/npm dependency graph where applicable, core binary versions and Docker image metadata.
+`.github/workflows/image-inventory-ci.yml` builds all six default images and stores a 30-day artifact for each image. The artifact records the resolved OS package list, Python/npm dependency graph where applicable, core binary versions and Docker image metadata. The same workflow also rejects root runtime users and verifies that each image has a writable runtime HOME.
 
 See `docs/REPRODUCIBILITY.md` for the exact inventory/lock model and limitations.
 
 ## Reproducibility note
 
-Application-level npm dependencies and four standard Python service graphs are locked; Docker base-image indexes are pinned; resolved image package inventories are captured by CI. The OCR/Paddle graph remains a special-case lock task. Dockerfiles also still run `apt-get update` and install Debian packages without exact version constraints, and Python locks are version-pinned rather than hash-verified.
+Application-level npm and Python dependency graphs are now version-locked, including the PaddleOCR/PaddlePaddle special case; Docker base-image indexes are pinned; resolved image package inventories are captured by CI. Dockerfiles still run `apt-get update` and install Debian packages without exact version constraints, and Python locks are version-pinned rather than hash-verified.
 
 Therefore the containers are **traceable and substantially more reproducible, but not yet bit-for-bit reproducible**.
 

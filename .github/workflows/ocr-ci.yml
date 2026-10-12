@@ -117,9 +117,16 @@ jobs:
           assert avg_wer < 0.70, avg_wer
           PY
 
-      - name: Validate Dockerfile pins
+      - name: Validate locked production dependency graph
         run: |
-          grep -q 'paddlepaddle==3.2.0' Dockerfile
-          grep -q 'paddleocr\[doc-parser\]==3.7.0' requirements.txt
-          grep -q 'pypdfium2==5.14.0' requirements.txt
+          test -s requirements.lock
+          test -s paddle-requirements.lock
+          grep -q '^paddlepaddle==3.2.0$' paddle-requirements.lock
+          grep -q '^--index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/$' paddle-requirements.lock
+          grep -q '^paddleocr==3.7.0$' requirements.lock
+          grep -q '^pypdfium2==5.14.0$' requirements.lock
+          grep -q 'pip==26.2.1' Dockerfile
+          grep -q 'paddle-requirements.lock' Dockerfile
+          grep -q 'requirements.lock' Dockerfile
+          grep -q 'pip check' Dockerfile
           grep -q 'tesseract-ocr-vie' Dockerfile
