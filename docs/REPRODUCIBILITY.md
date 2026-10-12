@@ -17,7 +17,31 @@ This prevents a mutable tag from silently selecting a different base image in a 
 
 The production audit remains a separate gate; a locked dependency can still become known-vulnerable later.
 
-## 3. Resolved package inventory
+## 3. Python dependency locks
+
+The following services have committed full transitive `requirements.lock` files generated in clean Python **3.13.16** virtual environments:
+
+- `backend`
+- `engines/office-service`
+- `engines/sign-service`
+- `engines/archive-service`
+
+Regenerate them with:
+
+```bash
+PYTHON_BIN=/path/to/python3.13.16 ./scripts/lock-python-deps.sh
+```
+
+Docker and CI install both `requirements.lock` and the direct `requirements.txt` in one resolver invocation. This has two purposes:
+
+1. transitive packages resolve to the exact committed versions;
+2. if a direct requirement is changed without regenerating the lock, conflicting pins fail the build rather than silently drifting.
+
+Every locked service also runs `pip check` after installation.
+
+The PaddleOCR service is deliberately excluded from this lock set for now because PaddlePaddle is installed separately from its dedicated CPU wheel index. It requires a dedicated lock procedure that preserves the special index/source behavior rather than treating it as a normal PyPI-only service.
+
+## 4. Resolved package inventory
 
 `.github/workflows/image-inventory-ci.yml` builds all six default images and uploads one inventory artifact per image:
 
@@ -39,19 +63,20 @@ Each inventory captures, where present:
 
 Artifacts are retained by GitHub Actions for 30 days. For a formal release, download and retain these artifacts with the release records or regenerate them from the exact release commit while package sources remain available.
 
-## 4. What is still not bit-for-bit reproducible
+## 5. What is still not bit-for-bit reproducible
 
-Base-image pinning, the npm lockfile and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
+Base-image pinning, npm/Python locks and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
 
 - Debian package installation still runs `apt-get update` against live repositories;
 - distro packages are installed by package name rather than exact version;
-- some Python transitive dependencies are resolved by pip at image build time;
+- the PaddleOCR/PaddlePaddle service does not yet have a committed complete transitive lock;
+- the Python lockfiles pin versions but do not yet use package hashes / `--require-hashes`;
 - timestamps and build-tool metadata can differ between builds.
 
-A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash-locked Python dependency sets, and normalized build metadata.
+A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash-locked Python dependency sets, a dedicated Paddle CPU-index lock and normalized build metadata.
 
-## 5. Release rule
+## 6. Release rule
 
 Do not describe SolYan PDF containers as bit-for-bit reproducible until a repeat build of every release image has been verified to produce the intended deterministic result under the chosen reproducibility definition.
 
-Until then, the accurate description is: **pinned base images + locked frontend dependency graph + recorded resolved package inventories**.
+Until then, the accurate description is: **pinned base images + locked frontend graph + locked standard Python service graphs + recorded resolved image inventories**.
