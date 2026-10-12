@@ -13,6 +13,18 @@ The integration canary currently tests against:
 
 The canary pin is deliberately exact. Updating it requires a PR, a license re-check and a fresh end-to-end canary run.
 
+## Container storage requirement
+
+At the pinned commit, Bloom defaults `storage.root` to `./.bloom-storage`, while its standalone Docker image runs as the non-root `bloom` user. A relative storage root under `/app` is therefore not writable in that image.
+
+Bloom exposes the supported `BLOOM_STORAGE_ROOT` configuration variable, so the SolYan canary sets:
+
+```text
+BLOOM_STORAGE_ROOT=/tmp/bloom-storage
+```
+
+This keeps the upstream image and non-root runtime unchanged while placing temporary canary storage in a writable location. A production operator using the optional Bloom service should provide an appropriate writable/persistent storage root for the deployment model.
+
 ## What the canary proves
 
 `.github/workflows/bloom-canary-ci.yml` builds the pinned Bloom standalone server plus the SolYan Office and backend images, then runs one controlled synthetic case for each target:
