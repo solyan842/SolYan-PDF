@@ -1,4 +1,4 @@
-# SolYan PDF v0.1.0 — Release Dependency Manifest
+# SolYan PDF v0.1.1 — Release Dependency Manifest
 
 Release date: 2026-10-12
 
