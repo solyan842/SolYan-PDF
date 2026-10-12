@@ -25,6 +25,7 @@ The following services have committed full transitive `requirements.lock` files 
 - `engines/office-service`
 - `engines/sign-service`
 - `engines/archive-service`
+- `engines/ocr-service`
 
 Regenerate them with:
 
@@ -32,14 +33,16 @@ Regenerate them with:
 PYTHON_BIN=/path/to/python3.13.16 ./scripts/lock-python-deps.sh
 ```
 
-Docker and CI install both `requirements.lock` and the direct `requirements.txt` in one resolver invocation. This has two purposes:
+The lock-generation script pins pip **26.2.1** so regeneration itself does not depend on an arbitrary latest pip release.
 
-1. transitive packages resolve to the exact committed versions;
-2. if a direct requirement is changed without regenerating the lock, conflicting pins fail the build rather than silently drifting.
+For the standard services, Docker installs the transitive lock plus the direct `requirements.txt` and runs `pip check`.
 
-Every locked service also runs `pip check` after installation.
+The OCR service uses a two-part lock because PaddlePaddle is distributed from a dedicated CPU wheel index:
 
-The PaddleOCR service is deliberately excluded from this lock set for now because PaddlePaddle is installed separately from its dedicated CPU wheel index. It requires a dedicated lock procedure that preserves the special index/source behavior rather than treating it as a normal PyPI-only service.
+- `engines/ocr-service/paddle-requirements.lock` pins `paddlepaddle==3.2.0` and preserves the official Paddle CPU index;
+- `engines/ocr-service/requirements.lock` pins the rest of the PaddleOCR/Python transitive graph.
+
+The production OCR image installs the Paddle lock first, then the remaining graph, validates the direct requirements without re-resolving dependencies, and finishes with `pip check`.
 
 ## 4. Resolved package inventory
 
@@ -61,6 +64,8 @@ Each inventory captures, where present:
 - Node/npm versions and the production npm dependency tree;
 - qpdf, Tesseract and LibreOffice version output.
 
+The same workflow rejects images whose default runtime UID is root and verifies that the runtime HOME exists and is writable.
+
 Artifacts are retained by GitHub Actions for 30 days. For a formal release, download and retain these artifacts with the release records or regenerate them from the exact release commit while package sources remain available.
 
 ## 5. What is still not bit-for-bit reproducible
@@ -69,14 +74,13 @@ Base-image pinning, npm/Python locks and inventory capture improve traceability,
 
 - Debian package installation still runs `apt-get update` against live repositories;
 - distro packages are installed by package name rather than exact version;
-- the PaddleOCR/PaddlePaddle service does not yet have a committed complete transitive lock;
 - the Python lockfiles pin versions but do not yet use package hashes / `--require-hashes`;
 - timestamps and build-tool metadata can differ between builds.
 
-A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash-locked Python dependency sets, a dedicated Paddle CPU-index lock and normalized build metadata.
+A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash-locked Python dependency sets and normalized build metadata.
 
 ## 6. Release rule
 
 Do not describe SolYan PDF containers as bit-for-bit reproducible until a repeat build of every release image has been verified to produce the intended deterministic result under the chosen reproducibility definition.
 
-Until then, the accurate description is: **pinned base images + locked frontend graph + locked standard Python service graphs + recorded resolved image inventories**.
+Until then, the accurate description is: **pinned base images + locked frontend graph + locked Python service graphs including Paddle CPU-index handling + recorded resolved image inventories**.
