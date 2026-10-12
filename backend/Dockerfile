@@ -7,9 +7,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt requirements.lock ./
-RUN pip install --no-cache-dir -r requirements.lock -r requirements.txt \
-    && pip check
+COPY requirements.txt requirements.lock requirements.hashed.lock ./
+RUN python -m pip install --no-cache-dir --require-hashes -r requirements.hashed.lock \
+    && python -m pip install --no-cache-dir --no-deps -r requirements.txt \
+    && python -m pip check
 COPY app ./app
 RUN chown -R solyan:solyan /app /home/solyan
 
