@@ -27,24 +27,28 @@ This keeps the upstream image and non-root runtime unchanged while placing tempo
 
 ## XLSX print-layout normalization
 
-The pinned Bloom XLSX exporter writes worksheet cells, row heights and column widths but does not emit print-page setup metadata. In the controlled `xlsx-financial` canary this caused a one-page PDF source to round-trip through XLSX/LibreOffice as two PDF pages even though the first page itself was visually close.
+The pinned Bloom XLSX exporter writes worksheet cells, row heights and column widths but does not emit print-page setup metadata. In controlled round-trip benchmarks this can make a one-page PDF become multiple PDF pages after XLSX -> LibreOffice -> PDF even when the reproduced content itself is visually close.
 
-SolYan does **not** assume A4 for every document. Before requesting Bloom conversion for XLSX, the backend uses its already-required qpdf engine to inspect page 1 of the original PDF:
+SolYan does **not** assume A4 for every document. Before requesting Bloom conversion for XLSX, the backend uses its already-required qpdf engine to inspect the original PDF:
 
-1. `qpdf --show-pages` identifies the first page object.
-2. qpdf JSON object inspection reads `/MediaBox` and inherited `/Rotate`, following `/Parent` where necessary.
-3. The effective page dimensions are matched, with a small producer-rounding tolerance, to a known standard paper size.
-4. Current recognized print sizes are Letter, Tabloid, Legal, A3, A4 and A5.
-5. Unknown/custom page sizes are left untouched; SolYan returns Bloom's XLSX without adding print setup.
+1. `qpdf --show-npages` records the source page count.
+2. `qpdf --show-pages` identifies the first page object.
+3. qpdf JSON object inspection reads `/MediaBox` and inherited `/Rotate`, following `/Parent` where necessary.
+4. The effective page dimensions are matched, with a small producer-rounding tolerance, to a known standard paper size.
+5. Current recognized print sizes are Letter, Tabloid, Legal, A3, A4 and A5.
+6. Unknown/custom page sizes are left untouched; SolYan returns Bloom's XLSX without adding print setup.
 
 When a known page size is detected, SolYan applies a conservative OpenXML post-process to Bloom XLSX results:
 
 - if a worksheet already contains `<pageSetup>`, SolYan leaves it unchanged;
-- otherwise SolYan enables `fitToPage`, preserves the source portrait/landscape orientation, writes the matching OOXML `paperSize`, and sets `fitToWidth=1`, `fitToHeight=0`;
+- otherwise SolYan enables `fitToPage`, preserves the source portrait/landscape orientation and writes the matching OOXML `paperSize`;
+- horizontal pagination is normalized with `fitToWidth=1`;
+- vertical fitting is forced with `fitToHeight=1` **only** when the original PDF has exactly one page and Bloom produced exactly one worksheet;
+- multi-page PDFs or XLSX files containing multiple worksheets retain unlimited vertical pagination with `fitToHeight=0`, avoiding an unsafe attempt to squeeze arbitrary documents into one printed page;
 - cell values, formulas, styles, row/column geometry and existing page setup are not modified;
 - malformed/non-ZIP output is returned unchanged rather than rewritten.
 
-The Bloom canary requires the controlled XLSX case to preserve page count after the Office -> PDF round-trip. The visual-similarity benchmark separately penalizes missing/extra pages, so pagination errors cannot be hidden by a high first-page score.
+The Bloom canary requires the controlled XLSX case to preserve page count after the Office -> PDF round-trip. The full 18-case synthetic benchmark also runs whenever the XLSX/Bloom conversion adapter changes, so regressions across the six controlled XLSX layouts are visible before merge. The visual-similarity benchmark separately penalizes missing/extra pages, so pagination errors cannot be hidden by a high first-page score.
 
 ## What the canary proves
 
@@ -60,11 +64,16 @@ For each case the workflow exercises the whole path:
 
 The workflow requires successful conversion, non-empty output and a valid PDF round-trip. It records similarity scores but does **not** enforce broad product fidelity thresholds. The XLSX canary additionally requires page-count preservation for its controlled one-page source.
 
-## What the canary does not prove
+## Full controlled synthetic benchmark
 
-A three-case synthetic canary is an integration and compatibility gate, not a release-quality benchmark. It does not replace:
+`.github/workflows/bloom-full-benchmark-ci.yml` runs all 18 controlled synthetic cases (6 DOCX, 6 XLSX, 6 PPTX) against the same pinned Bloom commit. It runs on relevant conversion/benchmark changes, can be dispatched manually and also runs weekly. Its JSON artifact records per-case similarity, timings and page-count drift.
 
-- the 18-case controlled synthetic corpus;
+This full synthetic benchmark is a regression and diagnosis tool, not a substitute for real-world release acceptance data.
+
+## What the canary and synthetic corpus do not prove
+
+Neither the three-case canary nor the 18-case synthetic corpus is a release-quality real-world benchmark. They do not replace:
+
 - representative real-world PDF -> Office corpora;
 - target-specific acceptance thresholds;
 - manual inspection of difficult tables, typography, charts and slide layouts.
