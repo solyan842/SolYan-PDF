@@ -1,4 +1,7 @@
 const tools = [
+  { href: '/office-to-pdf', title: 'Office → PDF', description: 'Word, Excel, PowerPoint và OpenDocument sang PDF.', local: false, badge: 'LibreOffice' },
+  { href: '/images-to-pdf', title: 'Ảnh → PDF', description: 'Ghép PNG/JPG thành PDF ngay trên thiết bị.', local: true },
+  { href: '/pdf-to-images', title: 'PDF → Ảnh', description: 'Render các trang thành PNG/JPEG và tải ZIP.', local: true },
   { href: '/ocr', title: 'OCR tài liệu', description: 'PP-OCRv6 và PP-StructureV3 cho ảnh/PDF scan.', local: false, badge: 'PaddleOCR' },
   { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
   { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, redact và khung chú thích.', local: true },
@@ -51,7 +54,7 @@ export default function HomePage() {
       </section>
       <section className="coming-soon">
         <h2>Tiếp theo</h2>
-        <p>Office conversion · Compare · Digital Sign · Workflow</p>
+        <p>PDF → Office R&amp;D · Compare · Digital Sign · Workflow</p>
       </section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>

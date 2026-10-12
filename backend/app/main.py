@@ -11,6 +11,7 @@ from fastapi.responses import Response
 
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
+from .office_proxy import router as office_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
@@ -24,6 +25,7 @@ app.add_middleware(
 )
 app.include_router(network_router)
 app.include_router(ocr_router)
+app.include_router(office_router)
 
 
 def _require_qpdf() -> None:
