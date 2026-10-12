@@ -223,13 +223,43 @@ jobs:
               raise SystemExit(f'Health checks timed out: {sorted(pending)}')
           PY
 
-      - name: Run real-world diagnostic benchmark
+      - name: Run real-world diagnostic benchmark with preserved log
         run: |
+          set +e
+          set -o pipefail
           PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
             --manifest "$REAL_MANIFEST" \
             --corpus-dir /tmp/pdf-to-office-real-stage/corpus \
             --api http://127.0.0.1:8000 \
-            --output /tmp/pdf-to-office-real-report.json
+            --output /tmp/pdf-to-office-real-report.json \
+            2>&1 | tee /tmp/pdf-to-office-real-benchmark.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > /tmp/pdf-to-office-real-benchmark.exit
+          echo "benchmark_exit_code=$status"
+          exit 0
+
+      - name: Upload benchmark execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-office-real-benchmark-execution
+          path: |
+            /tmp/pdf-to-office-real-benchmark.log
+            /tmp/pdf-to-office-real-benchmark.exit
+            /tmp/pdf-to-office-real-report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce benchmark process result
+        run: |
+          set -euo pipefail
+          status="$(cat /tmp/pdf-to-office-real-benchmark.exit)"
+          if [ "$status" -ne 0 ]; then
+            echo "Benchmark process failed with exit code $status"
+            echo "===== benchmark tail ====="
+            tail -n 200 /tmp/pdf-to-office-real-benchmark.log || true
+            exit "$status"
+          fi
 
       - name: Validate diagnostic report shape
         run: |
