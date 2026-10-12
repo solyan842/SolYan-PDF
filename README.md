@@ -15,6 +15,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 ### OCR & document intelligence
 - PaddleOCR text OCR for images/scanned PDFs
 - PP-StructureV3 structured output for layout/table/reading-order workflows
+- Scanned table -> Excel (`.xlsx`) export through PP-StructureV3, with multi-page/table results merged into one workbook
 - Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 - JSON/Markdown/text exports
 - CER/WER benchmark harness for Vietnamese OCR quality measurement
@@ -86,6 +87,7 @@ GitHub Actions currently verifies:
 - production dependency audit with a patched PostCSS override
 - Next.js production build
 - FastAPI/qpdf backend and hardened network routes
+- OCR binary proxy behavior for scanned-table XLSX downloads
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
 - 59-sample Vietnamese real-scan Tesseract regression gate with source-level CER/WER checks
