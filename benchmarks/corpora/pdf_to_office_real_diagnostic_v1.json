@@ -1,0 +1,155 @@
+{
+  "version": "pdf-to-office-real-diagnostic-v1",
+  "corpus_kind": "public-real-world-diagnostic",
+  "description": "Public real-world PDFs with pinned provenance for diagnostic PDF-to-Office measurement. This corpus is intentionally non-gating until representative coverage and product release thresholds are approved.",
+  "release_gate": false,
+  "limitations": [
+    "This is a small diagnostic corpus, not a statistically representative release corpus.",
+    "Similarity and pagination results are measurements only; no product-release threshold is encoded here.",
+    "Wikimedia source bytes are SHA-256 verified before any deterministic page subsetting.",
+    "CC BY-SA material remains subject to its upstream license and attribution requirements."
+  ],
+  "cases": [
+    {
+      "id": "docx-google-doc",
+      "target": "docx",
+      "filename": "docx-google-doc.pdf",
+      "title": "Google Docs generated document",
+      "category": "document",
+      "selected_pages": [1],
+      "source": {
+        "provider": "py-pdf/sample-files",
+        "license": "CC BY-SA 4.0",
+        "repository": "py-pdf/sample-files",
+        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
+        "path": "011-google-doc-document/google-doc-document.pdf",
+        "pages": 1,
+        "sha256": "69f6b7f493b1bc55d518942976cbeadc4ec0a36f6d8a6dc24feffc516d35b2c9"
+      }
+    },
+    {
+      "id": "docx-multicolumn",
+      "target": "docx",
+      "filename": "docx-multicolumn.pdf",
+      "title": "LaTeX multi-column document",
+      "category": "multi-column",
+      "selected_pages": [1, 2, 3],
+      "source": {
+        "provider": "py-pdf/sample-files",
+        "license": "CC BY-SA 4.0",
+        "repository": "py-pdf/sample-files",
+        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
+        "path": "026-latex-multicolumn/multicolumn.pdf",
+        "pages": 3,
+        "sha256": "bdb495e95b3e1afae95013099dc59b0cea047f1fa70f677ee9cb33f10faa1c6c"
+      }
+    },
+    {
+      "id": "docx-libreoffice-images",
+      "target": "docx",
+      "filename": "docx-libreoffice-images.pdf",
+      "title": "LibreOffice document with image references",
+      "category": "document-images",
+      "selected_pages": [1, 2, 3],
+      "source": {
+        "provider": "py-pdf/sample-files",
+        "license": "CC BY-SA 4.0",
+        "repository": "py-pdf/sample-files",
+        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
+        "path": "028-image-references-deduplication/wrong-references.pdf",
+        "pages": 3,
+        "sha256": "16cb8e10bd59e30b4d350f11d0ed9c7d0bd7e7bb962a46022c89836e2aa44f63"
+      }
+    },
+    {
+      "id": "xlsx-table-material",
+      "target": "xlsx",
+      "filename": "xlsx-table-material.pdf",
+      "title": "USSBS table of material",
+      "category": "scanned-handwritten-table",
+      "selected_pages": [3, 13, 16],
+      "source": {
+        "provider": "Wikimedia Commons",
+        "license": "Public Domain",
+        "commons_filename": "NDL8818342 The table of material. Report No. 44a(4), USSBS Index Section 2.pdf",
+        "pages": 48,
+        "sha256": "260a4b17192038b7dbe85788b4e760650f93770ad6fdb7bfd91b9476f4f574b4"
+      }
+    },
+    {
+      "id": "xlsx-unidentified-table",
+      "target": "xlsx",
+      "filename": "xlsx-unidentified-table.pdf",
+      "title": "USSBS unidentified table collection",
+      "category": "mixed-scanned-table",
+      "selected_pages": [2, 7, 21],
+      "source": {
+        "provider": "Wikimedia Commons",
+        "license": "Public Domain",
+        "commons_filename": "NDL8816038 Unidentified table. Report No. 17g(9), USSBS Index Section 2.pdf",
+        "pages": 22,
+        "sha256": "04b5ccc3439f993fef9e79043b2a588ba1c8d09dd1238bcea3327aa833320754"
+      }
+    },
+    {
+      "id": "xlsx-transport-table",
+      "target": "xlsx",
+      "filename": "xlsx-transport-table.pdf",
+      "title": "USSBS transportation plan tables",
+      "category": "wide-dense-table",
+      "selected_pages": [1, 4, 7],
+      "source": {
+        "provider": "Wikimedia Commons",
+        "license": "Public Domain",
+        "commons_filename": "NDL8820352 Comparative table on transportation plan and actual transportation results of \"C\" ships. Report No. 54tt(1), USSBS Index Section 2 part2.pdf",
+        "pages": 7,
+        "sha256": "638bf0bdefa9c123b5747e8f235ec31dcbc8c138d6a426f354eb7a4f1a0f45be"
+      }
+    },
+    {
+      "id": "pptx-commons-copyright",
+      "target": "pptx",
+      "filename": "pptx-commons-copyright.pdf",
+      "title": "Wikimedia Commons and copyright presentation",
+      "category": "slides-text-icons",
+      "selected_pages": [1, 2, 3, 4, 5, 6, 7, 8],
+      "source": {
+        "provider": "Wikimedia Commons",
+        "license": "CC BY-SA 4.0",
+        "commons_filename": "Presentation on Wikimedia Commons & Copyright.pdf",
+        "pages": 8,
+        "sha256": "2a24b75b58bce46b38960e45c9cbf65090837bd95a609cdd6ce50a7becf9022e"
+      }
+    },
+    {
+      "id": "pptx-what-is-cc",
+      "target": "pptx",
+      "filename": "pptx-what-is-cc.pdf",
+      "title": "What is Creative Commons presentation",
+      "category": "slides-graphics-layout",
+      "selected_pages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      "source": {
+        "provider": "Wikimedia Commons",
+        "license": "CC BY-SA 4.0",
+        "commons_filename": "What is Creative Commons.pdf",
+        "pages": 11,
+        "sha256": "2038698287d356f0a2ea4dc2649404defd51a728936b8488bda5857863eb1bcd"
+      }
+    },
+    {
+      "id": "pptx-copyright-laws",
+      "target": "pptx",
+      "filename": "pptx-copyright-laws.pdf",
+      "title": "Introduction to copyright laws presentation",
+      "category": "slides-images-text",
+      "selected_pages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      "source": {
+        "provider": "Wikimedia Commons",
+        "license": "CC BY-SA 4.0",
+        "commons_filename": "2.Introduction to copyright laws.pdf",
+        "pages": 15,
+        "sha256": "11ef91942ecacc83c478d2aa4d14b4567d2034c32aa488105d9df26d9ca1feab"
+      }
+    }
+  ]
+}
