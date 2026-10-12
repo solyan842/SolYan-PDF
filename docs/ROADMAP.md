@@ -44,7 +44,8 @@
 - [x] Image OCR
 - [x] Scanned PDF OCR
 - [x] Vietnamese OCR CER/WER benchmark harness
-- [ ] Establish release baseline on a representative Vietnamese corpus
+- [x] Establish reproducible initial real-scan baseline: 9 pinned public-domain scans, Tesseract fallback CER 13.47% / WER 22.88%
+- [ ] Expand real Vietnamese OCR corpus to 50–100+ diverse pages before broad quality claims
 - [x] Layout recognition
 - [x] Table recognition
 - [x] Reading order
@@ -127,6 +128,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Signing/PDF-A proxy upload bounds
 - [x] OCR service CI wiring
 - [x] Real Vietnamese Tesseract fallback smoke test
+- [x] Real Vietnamese 9-scan CER/WER regression baseline
 - [x] Real LibreOffice DOCX → PDF smoke test
 - [x] Real PKCS#12 signing smoke test
 - [x] Real PDF/A smoke test
@@ -138,11 +140,11 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Add `LICENSE` and `NOTICE`
 - [x] Add `CHANGELOG.md` for v0.1.0
 - [x] Add direct dependency release manifest
+- [x] Publish GitHub tag/release `v0.1.0`
 - [ ] Pin base-image digests / resolved OS package versions for bit-for-bit reproducible images
 
 ## Release decisions / external inputs still required
 
-- [ ] Provide/version a representative Vietnamese OCR release corpus
 - [ ] Provide/version representative PDF → Office benchmark corpora and define acceptable fidelity threshold
 - [ ] Choose whether multi-party remote signing belongs in V1 or a later release
 - [ ] Choose cloud-storage providers and provide credentials if connectors are wanted
