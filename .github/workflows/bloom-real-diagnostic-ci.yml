@@ -1,0 +1,185 @@
+name: Bloom Real-World PDF-to-Office Diagnostic
+
+on:
+  push:
+    branches:
+      - benchmark/pdf-office-real-diagnostic-v1
+    paths:
+      - 'backend/app/bloom_proxy.py'
+      - 'backend/app/xlsx_print.py'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
+      - 'patches/bloom/**'
+      - '.github/workflows/bloom-real-diagnostic-ci.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '43 4 * * 0'
+
+permissions:
+  contents: read
+
+env:
+  BLOOM_REPO: https://github.com/stemlen/bloom-pdf-editor.git
+  BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
+  BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
+  BLOOM_REGRESSION_TEST: patches/bloom/solyan-table-cluster-regression.test.ts
+  REAL_MANIFEST: benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup Node matching Bloom image
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install benchmark dependencies
+        run: pip install -r benchmarks/requirements.txt
+
+      - name: Fetch pinned Bloom source and apply SolYan table patch
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout "$BLOOM_REPO" /tmp/bloom
+          git -C /tmp/bloom fetch --depth=1 origin "$BLOOM_COMMIT"
+          git -C /tmp/bloom checkout --detach "$BLOOM_COMMIT"
+          test "$(git -C /tmp/bloom rev-parse HEAD)" = "$BLOOM_COMMIT"
+          grep -q 'Apache License' /tmp/bloom/LICENSE
+          git -C /tmp/bloom apply --check "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          git -C /tmp/bloom apply "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          cp "$GITHUB_WORKSPACE/$BLOOM_REGRESSION_TEST" /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
+          grep -q 'currentBottom' /tmp/bloom/server/src/engines/table/candidates.ts
+
+      - name: Typecheck Bloom and run SolYan regression
+        working-directory: /tmp/bloom/server
+        run: |
+          npm ci
+          npm run typecheck
+          npx vitest run src/tests/solyan-table-cluster-regression.test.ts
+
+      - name: Build pinned patched Bloom, Office and backend images
+        run: |
+          docker build -t solyan-bloom-real /tmp/bloom/server
+          docker build -t solyan-office-real engines/office-service
+          docker build -t solyan-backend-real backend
+
+      - name: Start isolated diagnostic stack
+        run: |
+          docker network create solyan-bloom-real
+          docker run -d --name bloom-real --network solyan-bloom-real \
+            -e BLOOM_STORAGE_ROOT=/tmp/bloom-storage \
+            solyan-bloom-real
+          docker run -d --name office-real --network solyan-bloom-real solyan-office-real
+          docker run -d --name backend-real --network solyan-bloom-real -p 8000:8000 \
+            -e BLOOM_SERVICE_URL=http://bloom-real:8787 \
+            -e OFFICE_SERVICE_URL=http://office-real:8020 \
+            solyan-backend-real
+
+      - name: Wait for backend and Bloom health
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+
+          urls = {
+              'backend': 'http://127.0.0.1:8000/health',
+              'bloom': 'http://127.0.0.1:8000/experimental/bloom/health',
+          }
+          deadline = time.monotonic() + 180
+          pending = dict(urls)
+          while pending and time.monotonic() < deadline:
+              for name, url in list(pending.items()):
+                  try:
+                      with urllib.request.urlopen(url, timeout=5) as response:
+                          if 200 <= response.status < 300:
+                              print(name, response.read().decode('utf-8', 'replace'))
+                              pending.pop(name)
+                  except Exception as exc:
+                      print('waiting', name, type(exc).__name__, exc)
+              if pending:
+                  time.sleep(3)
+          if pending:
+              raise SystemExit(f'Health checks timed out: {sorted(pending)}')
+          PY
+
+      - name: Fetch and verify pinned real-world corpus
+        run: |
+          python benchmarks/fetch_pdf_to_office_real_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --output-dir /tmp/pdf-to-office-real-corpus \
+            --output-inventory /tmp/pdf-to-office-real-inventory.json
+
+      - name: Run real-world diagnostic benchmark
+        run: |
+          PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --corpus-dir /tmp/pdf-to-office-real-corpus \
+            --api http://127.0.0.1:8000 \
+            --output /tmp/pdf-to-office-real-report.json
+
+      - name: Validate diagnostic report shape
+        run: |
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          inventory = json.loads(Path('/tmp/pdf-to-office-real-inventory.json').read_text())
+          report = json.loads(Path('/tmp/pdf-to-office-real-report.json').read_text())
+          results = report['results']
+          summary = report['summary']
+
+          assert inventory['corpus_kind'] == 'public-real-world-diagnostic', inventory
+          assert report['corpus_kind'] == 'public-real-world-diagnostic', report
+          assert report['release_gate'] is False, report
+          assert report['thresholds'] == {}, report
+          assert report['failures'] == [], report
+          assert summary['cases'] == 9, summary
+          assert Counter(item['target'] for item in results) == {'docx': 3, 'xlsx': 3, 'pptx': 3}
+          assert len({item['id'] for item in results}) == 9
+          assert sum(item['output_pages'] for item in inventory['cases']) == 50
+
+          for item in results:
+              assert item['office_bytes'] > 0, item
+              assert item['roundtrip_pdf_bytes'] > 0, item
+              assert item['source_pages'] >= 1, item
+              assert item['roundtrip_pages'] >= 1, item
+              assert 0.0 <= item['average_similarity'] <= 100.0, item
+
+          # Deliberately do not assert similarity, page-count or geometry thresholds here.
+          # This workflow establishes a measured real-world baseline; release gates remain
+          # a separate product decision after the corpus is representative enough.
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Upload real-world diagnostic artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-office-real-diagnostic-v1
+          path: |
+            /tmp/pdf-to-office-real-inventory.json
+            /tmp/pdf-to-office-real-report.json
+          retention-days: 30
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: |
+          for name in bloom-real office-real backend-real; do
+            echo "===== $name ====="
+            docker logs "$name" || true
+          done
+
+      - name: Stop diagnostic stack
+        if: always()
+        run: |
+          docker rm -f backend-real office-real bloom-real 2>/dev/null || true
+          docker network rm solyan-bloom-real 2>/dev/null || true
