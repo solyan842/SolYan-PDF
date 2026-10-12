@@ -45,7 +45,8 @@
 - [x] Scanned PDF OCR
 - [x] Vietnamese OCR CER/WER benchmark harness
 - [x] Establish reproducible initial real-scan baseline: 9 pinned public-domain scans, Tesseract fallback CER 13.47% / WER 22.88%
-- [ ] Expand real Vietnamese OCR corpus to 50–100+ diverse pages before broad quality claims
+- [x] Expand real Vietnamese OCR regression corpus to 59 pages: 9 public-domain modern documents + 50 proofread scan pages from two public-domain Vietnamese works, with exact Wikisource revisions and source-PDF SHA256 pins
+- [x] Establish expanded 59-sample Tesseract fallback baseline: CER 9.41% / WER 22.18%, with per-source regression checks
 - [x] Layout recognition
 - [x] Table recognition
 - [x] Reading order
@@ -133,6 +134,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] OCR service CI wiring
 - [x] Real Vietnamese Tesseract fallback smoke test
 - [x] Real Vietnamese 9-scan CER/WER regression baseline
+- [x] Expanded 59-sample real-scan Vietnamese OCR regression gate with exact source provenance
 - [x] Real LibreOffice DOCX → PDF smoke test
 - [x] Real PKCS#12 signing smoke test
 - [x] Real PDF/A smoke test
