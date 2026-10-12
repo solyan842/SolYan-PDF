@@ -2,6 +2,15 @@
 
 All notable changes to SolYan PDF are documented here.
 
+## [Unreleased]
+
+### Vietnamese OCR regression coverage
+- Expanded the reproducible real-scan Vietnamese OCR corpus from 9 to 59 samples without using synthetic scans.
+- Added 25 proofread scan pages from *Nam Hải dị nhân liệt truyện* and 25 from *Việt Nam phong tục*, with exact Wikisource revision pins and SHA-256-pinned Public Domain Commons source PDFs.
+- Added runtime attribution for CC BY-SA 4.0 proofread transcriptions; generated benchmark transcriptions/images are not vendored into the Apache-2.0 source tree.
+- Established the expanded Tesseract fallback baseline at average CER 9.41% / WER 22.18%.
+- Added a source-level regression gate over all 59 real samples with measured drift budgets rather than a synthetic quality threshold.
+
 ## [0.1.2] - 2026-10-12
 
 Patch release focused on hardening the experimental PDF -> Office path and making its compatibility gates reproducible and explicit.
