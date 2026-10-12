@@ -56,11 +56,9 @@ def _download(case: dict) -> tuple[bytes, str]:
         repository = source['repository']
         commit = source['commit']
         path = '/'.join(urllib.parse.quote(part, safe='') for part in source['path'].split('/'))
-        url = f'https://api.github.com/repos/{repository}/contents/{path}?ref={commit}'
-        headers.update({
-            'Accept': 'application/vnd.github.raw+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-        })
+        # The raw endpoint is commit-addressed and avoids GitHub Contents API
+        # availability/rate-limit variance. The manifest SHA-256 is still authoritative.
+        url = f'https://raw.githubusercontent.com/{repository}/{commit}/{path}'
     elif provider == 'Wikimedia Commons':
         # Prefer a manifest-pinned direct upload URL to avoid repeated redirect
         # traffic through Special:Redirect. SHA-256 remains the source of truth.
