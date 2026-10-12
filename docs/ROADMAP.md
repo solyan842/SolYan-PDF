@@ -148,7 +148,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Generate resolved OS/Python/npm package inventories for all six release images in CI artifacts
 - [x] Add dedicated PaddleOCR/PaddlePaddle transitive lock preserving the CPU wheel index
 - [x] Add hash-verified Python locks where practical (backend / Office / signing / PDF-A)
-- [ ] Pin/snapshot distro packages for stricter image reproducibility
+- [x] Pin Debian package sources to snapshot `20261012T000000Z` for all Python images
 
 ## Release decisions / external inputs still required
 

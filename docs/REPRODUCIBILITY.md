@@ -11,13 +11,26 @@ All release Dockerfiles pin OCI multi-architecture index digests:
 
 This prevents a mutable tag from silently selecting a different base image in a later build while preserving multi-architecture support.
 
-## 2. Frontend dependency lock
+## 2. Debian package snapshot
+
+All five Python/Debian images replace live Debian mirrors with the fixed snapshot ID **`20261012T000000Z`**:
+
+- `https://snapshot.debian.org/archive/debian/20261012T000000Z/`
+- `https://snapshot.debian.org/archive/debian-security/20261012T000000Z/`
+
+The sources use `trixie`, `trixie-updates` and `trixie-security`, retain Debian archive signature verification, and set `Check-Valid-Until: no` because historical snapshots intentionally stop moving.
+
+This means a later build does not silently select a newer qpdf, Tesseract, LibreOffice, system library or font merely because Debian mirrors advanced. Image Inventory CI verifies the snapshot URLs inside every Debian image and fails if `deb.debian.org` remains configured.
+
+The frontend image has no `apk add` step; its OS userspace is supplied entirely by the pinned Alpine base-image digest.
+
+## 3. Frontend dependency lock
 
 `frontend/package-lock.json` is generated with Node 22.13 / npm 10.9 and committed to the repository. Both CI and the Docker dependency stage use `npm ci`, so the complete npm dependency graph comes from the lockfile instead of being re-resolved from semver ranges on every build.
 
 The production audit remains a separate gate; a locked dependency can still become known-vulnerable later.
 
-## 3. Python dependency locks
+## 4. Python dependency locks
 
 All five Python services have committed full transitive version locks generated in clean Python **3.13.16** environments:
 
@@ -58,7 +71,7 @@ The OCR service uses a two-part version lock because PaddlePaddle is distributed
 
 The OCR image installs the Paddle lock first, then the remaining version graph, validates direct requirements without re-resolving dependencies and finishes with `pip check`. This graph is version/source locked but is not yet covered by the standard PyPI hash-lock procedure.
 
-## 4. Resolved package inventory
+## 5. Resolved package inventory
 
 `.github/workflows/image-inventory-ci.yml` builds all six default images and uploads one inventory artifact per image:
 
@@ -71,30 +84,30 @@ The OCR image installs the Paddle lock first, then the remaining version graph, 
 
 Each inventory captures, where present:
 
-- Docker image ID, creation timestamp, architecture and size;
+- Docker image ID, creation timestamp, architecture, size and image labels;
 - `/etc/os-release`;
+- configured APT sources;
 - all `dpkg` or `apk` packages with resolved versions;
 - Python version and `pip freeze --all`;
 - Node/npm versions and the production npm dependency tree;
 - qpdf, Tesseract and LibreOffice version output.
 
-The same workflow rejects images whose default runtime UID is root and verifies that the runtime HOME exists and is writable.
+The same workflow rejects images whose default runtime UID is root, verifies that the runtime HOME exists and is writable, and verifies the fixed Debian snapshot configuration on Debian images.
 
 Artifacts are retained by GitHub Actions for 30 days. For a formal release, download and retain these artifacts with the release records or regenerate them from the exact release commit while package sources remain available.
 
-## 5. What is still not bit-for-bit reproducible
+## 6. What is still not bit-for-bit reproducible
 
-Base-image pinning, npm/Python locks, standard-service SHA-256 verification and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
+Base-image pinning, Debian snapshot pinning, npm/Python locks, standard-service SHA-256 verification and inventory capture substantially reduce external resolver drift. SolYan PDF still does **not** claim bit-for-bit image reproducibility because:
 
-- Debian package installation still runs `apt-get update` against live repositories;
-- distro packages are installed by package name rather than exact version or dated snapshot;
 - the OCR/Paddle dedicated-index dependency graph is version/source locked but not yet hash-verified;
-- timestamps and build-tool metadata can differ between builds.
+- build timestamps and some generated metadata can differ between builds;
+- repeat-build byte identity across every image/architecture has not been established as a release invariant.
 
-A stricter reproducible-build phase would use dated distro snapshots or exact package versions, extend hash verification to the Paddle CPU-index graph where reliable, and normalize build metadata.
+A stricter final reproducible-build phase would extend trustworthy hash verification to the Paddle CPU-index graph where practical and normalize build metadata, then compare repeat-build image outputs under a defined reproducibility policy.
 
-## 6. Release rule
+## 7. Release rule
 
 Do not describe SolYan PDF containers as bit-for-bit reproducible until a repeat build of every release image has been verified to produce the intended deterministic result under the chosen reproducibility definition.
 
-Until then, the accurate description is: **pinned base images + locked frontend graph + locked Python graphs + SHA-256 verification for standard PyPI services + Paddle CPU-index source locking + recorded resolved image inventories**.
+Until then, the accurate description is: **pinned base-image digests + fixed Debian package snapshot + locked frontend/Python graphs + SHA-256 verification for standard PyPI services + Paddle CPU-index source locking + recorded resolved image inventories**.
