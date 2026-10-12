@@ -12,7 +12,6 @@ on:
   push:
     branches:
       - main
-      - benchmark/vietnamese-real-ocr-60-wikisource
     paths:
       - 'benchmarks/fetch_vietnamese_ocr_real.py'
       - 'benchmarks/fetch_vietnamese_ocr_wikisource.py'
