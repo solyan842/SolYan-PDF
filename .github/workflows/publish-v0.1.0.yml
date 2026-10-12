@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view v0.1.0 >/dev/null 2>&1; then
+          if gh release view v0.1.0 --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release v0.1.0 already exists; nothing to do."
             exit 0
           fi
@@ -33,5 +33,4 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --target 51133e124952c4cad405c25ba03b45d84f4579a4 \
             --title "SolYan PDF v0.1.0" \
-            --notes-file CHANGELOG.md \
-            --verify-tag=false
+            --notes-file CHANGELOG.md
