@@ -7,6 +7,7 @@ on:
       - 'backend/app/xlsx_print.py'
       - 'engines/office-service/**'
       - 'benchmarks/**'
+      - 'patches/bloom/**'
       - '.github/workflows/bloom-full-benchmark-ci.yml'
   workflow_dispatch:
   schedule:
@@ -18,6 +19,8 @@ permissions:
 env:
   BLOOM_REPO: https://github.com/stemlen/bloom-pdf-editor.git
   BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
+  BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
+  BLOOM_REGRESSION_TEST: patches/bloom/solyan-table-cluster-regression.test.ts
 
 jobs:
   benchmark:
@@ -32,10 +35,15 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Setup Node matching Bloom image
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Install benchmark dependencies
         run: pip install -r benchmarks/requirements.txt
 
-      - name: Fetch pinned Bloom source
+      - name: Fetch pinned Bloom source and apply experimental patch
         run: |
           git clone --filter=blob:none --no-checkout "$BLOOM_REPO" /tmp/bloom
           git -C /tmp/bloom fetch --depth=1 origin "$BLOOM_COMMIT"
@@ -43,8 +51,25 @@ jobs:
           test "$(git -C /tmp/bloom rev-parse HEAD)" = "$BLOOM_COMMIT"
           grep -q 'Apache License' /tmp/bloom/LICENSE
           grep -q 'BLOOM_STORAGE_ROOT' /tmp/bloom/server/src/utils/config.ts
+          git -C /tmp/bloom apply --check "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          git -C /tmp/bloom apply "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          cp "$GITHUB_WORKSPACE/$BLOOM_REGRESSION_TEST" /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
+          grep -q 'currentBottom' /tmp/bloom/server/src/engines/table/candidates.ts
+          test -f /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
 
-      - name: Build pinned Bloom, Office and backend images
+      - name: Run patched Bloom relevant tests and typecheck
+        working-directory: /tmp/bloom/server
+        run: |
+          npm ci
+          npm run typecheck
+          # The exact pinned Bloom commit has two unrelated, pre-existing
+          # whitespace assertions failing in phase4-idm.test.ts. Do not weaken
+          # SolYan's table/XLSX gate: run every other upstream test file plus
+          # the SolYan regression test, then validate the 18-case E2E corpus.
+          test_files=$(find src/tests -name '*.test.ts' ! -name 'phase4-idm.test.ts' -print)
+          npx vitest run $test_files
+
+      - name: Build pinned patched Bloom, Office and backend images
         run: |
           docker build -t solyan-bloom-full /tmp/bloom/server
           docker build -t solyan-office-full engines/office-service
@@ -103,7 +128,14 @@ jobs:
             --api http://127.0.0.1:8000 \
             --output /tmp/pdf-to-office-full-report.json
 
-      - name: Validate full report coverage
+      - name: Upload full synthetic benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-office-bloom-full-synthetic
+          path: /tmp/pdf-to-office-full-report.json
+          retention-days: 30
+
+      - name: Validate full report and experimental hypothesis
         run: |
           python - <<'PY'
           import json
@@ -112,7 +144,8 @@ jobs:
 
           report = json.loads(Path('/tmp/pdf-to-office-full-report.json').read_text())
           results = report['results']
-          assert report['summary']['cases'] == 18, report['summary']
+          summary = report['summary']
+          assert summary['cases'] == 18, summary
           assert Counter(item['target'] for item in results) == {'docx': 6, 'xlsx': 6, 'pptx': 6}
           assert len({item['id'] for item in results}) == 18
           assert not report['failures']
@@ -122,15 +155,18 @@ jobs:
               assert item['source_pages'] >= 1, item
               assert item['roundtrip_pages'] >= 1, item
               assert 0.0 <= item['average_similarity'] <= 100.0, item
-          print(json.dumps(report['summary'], indent=2))
-          PY
 
-      - name: Upload full synthetic benchmark report
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdf-to-office-bloom-full-synthetic
-          path: /tmp/pdf-to-office-full-report.json
-          retention-days: 30
+          # Experimental success criterion, not a product-release threshold:
+          # the clustering patch must remove synthetic page-count fragmentation
+          # for all six XLSX cases without introducing DOCX/PPTX page drift.
+          for target in ('docx', 'xlsx', 'pptx'):
+              target_summary = summary['targets'][target]
+              assert target_summary['page_count_mismatches'] == 0, target_summary
+              assert target_summary['unmatched_pages'] == 0, target_summary
+              assert target_summary['geometry_mismatches'] == 0, target_summary
+
+          print(json.dumps(summary, indent=2))
+          PY
 
       - name: Collect container logs on failure
         if: failure()

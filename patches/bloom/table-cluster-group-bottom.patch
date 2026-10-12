@@ -1,0 +1,116 @@
+diff --git a/server/src/engines/table/candidates.ts b/server/src/engines/table/candidates.ts
+--- a/server/src/engines/table/candidates.ts
++++ b/server/src/engines/table/candidates.ts
+@@ -51,6 +51,14 @@
+       for (const cluster of clusters) {
+         if (cluster.nodeIds.length < 4) continue;
+         const hasVectorBorders = pageHasTableVectors(input, pageIndex, cluster.bbox);
++        // Borderless text needs repeated support in both dimensions. Preserve
++        // Bloom's intentional two-row merged-cell shape: one wide merged label
++        // above a dense row is a valid table even though only one row repeats.
++        const repeatedGrid = cluster.rowSupport >= 2 && cluster.columnSupport >= 2;
++        const twoRowMergedGrid = cluster.rowCount === 2 && cluster.maxRowOccupancy >= 3;
++        if (!hasVectorBorders && !repeatedGrid && !twoRowMergedGrid) {
++          continue;
++        }
+         const score =
+           0.4 +
+           Math.min(0.4, cluster.regularity) +
+@@ -75,6 +83,10 @@
+   nodeIds: string[];
+   bbox: BoundingBox;
+   regularity: number;
++  rowSupport: number;
++  columnSupport: number;
++  rowCount: number;
++  maxRowOccupancy: number;
+ }> {
+   // Greedy: take all text nodes on page that share column/row alignment as one candidate
+   // Split into separate tables if there's a large vertical gap
+@@ -86,34 +98,41 @@
+ 
+   const groups: SemanticNode[][] = [];
+   let current: SemanticNode[] = [];
++  let currentBottom = Number.POSITIVE_INFINITY;
+ 
+   for (const n of sorted) {
+     if (current.length === 0) {
+       current.push(n);
++      currentBottom = n.bbox!.y;
+       continue;
+     }
+-    const prev = current[current.length - 1]!;
+-    const gap =
+-      (prev.bbox!.y) - (n.bbox!.y + n.bbox!.height);
++
++    // Compare the next node against the bottom edge of the whole current
++    // cluster, not merely the last node appended. A tall cell can extend below
++    // a later short cell in the same row; using that short cell's bottom creates
++    // a false >48pt gap and fragments one logical table into multiple candidates.
++    const nextTop = n.bbox!.y + n.bbox!.height;
++    const gap = currentBottom - nextTop;
+     // Large gap → new table candidate
+     if (gap > 48) {
+       groups.push(current);
+       current = [n];
++      currentBottom = n.bbox!.y;
+     } else {
+       current.push(n);
++      currentBottom = Math.min(currentBottom, n.bbox!.y);
+     }
+   }
+   if (current.length) groups.push(current);
+ 
+   return groups
+     .map((group) => {
+-      const xs = snapPositions(group.map((g) => g.bbox!.x + g.bbox!.width / 2), 8);
+-      const ys = snapPositions(
+-        group.map((g) => g.bbox!.y + g.bbox!.height / 2),
+-        8,
+-      );
+-      const cols = xs.length;
+-      const rows = ys.length;
++      const xCenters = group.map((g) => g.bbox!.x + g.bbox!.width / 2);
++      const yCenters = group.map((g) => g.bbox!.y + g.bbox!.height / 2);
++      const xCounts = snapCounts(xCenters, 8);
++      const yCounts = snapCounts(yCenters, 8);
++      const cols = xCounts.length;
++      const rows = yCounts.length;
+       if (cols < 2 || rows < 2) {
+         return null;
+       }
+@@ -130,20 +149,29 @@
+         nodeIds: group.map((g) => g.id),
+         bbox,
+         regularity,
++        rowSupport: yCounts.filter((count) => count >= 2).length,
++        columnSupport: xCounts.filter((count) => count >= 2).length,
++        rowCount: rows,
++        maxRowOccupancy: Math.max(...yCounts),
+       };
+     })
+     .filter((c): c is NonNullable<typeof c> => c != null);
+ }
+ 
+-function snapPositions(values: number[], tol: number): number[] {
++function snapCounts(values: number[], tol: number): number[] {
+   const sorted = [...values].sort((a, b) => a - b);
+-  const out: number[] = [];
++  const anchors: number[] = [];
++  const counts: number[] = [];
+   for (const v of sorted) {
+-    if (out.length === 0 || Math.abs(out[out.length - 1]! - v) > tol) {
+-      out.push(v);
++    const last = anchors.length - 1;
++    if (last < 0 || Math.abs(anchors[last]! - v) > tol) {
++      anchors.push(v);
++      counts.push(1);
++    } else {
++      counts[last] = counts[last]! + 1;
+     }
+   }
+-  return out;
++  return counts;
+ }
+ 
+ function pageHasTableVectors(
