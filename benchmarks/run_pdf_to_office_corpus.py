@@ -29,6 +29,8 @@ def _summary(results: list[dict]) -> dict:
             'minimum_similarity': min(similarities) if similarities else 0.0,
             'source_pages': sum(int(item['source_pages']) for item in items),
             'roundtrip_pages': sum(int(item['roundtrip_pages']) for item in items),
+            'page_count_mismatches': sum(1 for item in items if not bool(item.get('page_count_match', True))),
+            'unmatched_pages': sum(int(item.get('unmatched_pages', 0)) for item in items),
             'convert_seconds': sum(float(item['convert_seconds']) for item in items),
             'roundtrip_seconds': sum(float(item['roundtrip_seconds']) for item in items),
         }
@@ -37,6 +39,8 @@ def _summary(results: list[dict]) -> dict:
         'cases': len(results),
         'average_similarity': sum(all_scores) / max(1, len(all_scores)),
         'minimum_similarity': min(all_scores) if all_scores else 0.0,
+        'page_count_mismatches': sum(1 for item in results if not bool(item.get('page_count_match', True))),
+        'unmatched_pages': sum(int(item.get('unmatched_pages', 0)) for item in results),
         'targets': targets,
     }
 
@@ -64,7 +68,10 @@ def main() -> None:
             'template': case['template'],
         })
         results.append(report)
-        print(f"{case['id']}: {report['average_similarity']:.2f}%")
+        print(
+            f"{case['id']}: {report['average_similarity']:.2f}% "
+            f"pages={report['source_pages']}->{report['roundtrip_pages']}"
+        )
 
     summary = _summary(results)
     failures = []
