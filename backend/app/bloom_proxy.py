@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from .xlsx_print import apply_fit_to_width
+from .xlsx_print import apply_fit_to_width, detect_pdf_print_setup
 
 router = APIRouter(prefix="/experimental", tags=["Experimental conversion"])
 BLOOM_SERVICE_URL = os.getenv("BLOOM_SERVICE_URL", "http://bloom-service:8787").rstrip("/")
@@ -43,6 +43,11 @@ def pdf_to_office(
     if not data.startswith(b"%PDF-"):
         raise HTTPException(status_code=400, detail="Uploaded file is not a PDF")
 
+    # Resolve print geometry from the original PDF before conversion. The XLSX
+    # normalizer only runs when qpdf can map page 1 to a recognized paper size;
+    # custom/unknown PDFs therefore keep Bloom's output unchanged.
+    xlsx_print_setup = detect_pdf_print_setup(data) if target == "xlsx" else None
+
     headers = _headers()
     try:
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0), headers=headers) as client:
@@ -67,7 +72,9 @@ def pdf_to_office(
                 if state == "Completed":
                     result = client.get(f"{BLOOM_SERVICE_URL}/download/{job_id}")
                     result.raise_for_status()
-                    content = apply_fit_to_width(result.content) if target == "xlsx" else result.content
+                    content = result.content
+                    if target == "xlsx" and xlsx_print_setup is not None:
+                        content = apply_fit_to_width(content, *xlsx_print_setup)
                     disposition = result.headers.get("content-disposition", f'attachment; filename="solyan-converted.{target}"')
                     return Response(
                         content=content,
