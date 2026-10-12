@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - benchmark/pdf-office-real-diagnostic-v1
-      - fix/bloom-inherited-page-geometry
     paths:
       - 'backend/app/bloom_proxy.py'
       - 'backend/app/xlsx_print.py'
