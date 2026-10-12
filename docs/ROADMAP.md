@@ -141,7 +141,9 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Add `CHANGELOG.md` for v0.1.0
 - [x] Add direct dependency release manifest
 - [x] Publish GitHub tag/release `v0.1.0`
-- [ ] Pin base-image digests / resolved OS package versions for bit-for-bit reproducible images
+- [x] Pin Node/Python multi-arch base-image digests
+- [ ] Record resolved OS/Python package inventory (SBOM) for release images
+- [ ] Pin/snapshot distro packages where practical for bit-for-bit reproducible images
 
 ## Release decisions / external inputs still required
 
