@@ -29,46 +29,24 @@ jobs:
       - name: Install PDF metadata dependency
         run: pip install pypdf==6.1.1
 
-      - name: Fetch exact py-pdf sample-files commit
-        run: |
-          set -euo pipefail
-          git clone https://github.com/py-pdf/sample-files.git /tmp/sample-files
-          git -C /tmp/sample-files switch --detach "$PY_PDF_COMMIT"
-          test "$(git -C /tmp/sample-files rev-parse HEAD)" = "$PY_PDF_COMMIT"
-          test -f /tmp/sample-files/011-google-doc-document/google-doc-document.pdf
-          test -f /tmp/sample-files/026-latex-multicolumn/multicolumn.pdf
-          test -f /tmp/sample-files/028-image-references-deduplication/wrong-references.pdf
-
       - name: Download and fingerprint candidate corpus
         run: |
           set -euo pipefail
           python - <<'PY'
           import hashlib
           import json
-          import shutil
+          import os
           import urllib.parse
           import urllib.request
           from pathlib import Path
           from pypdf import PdfReader
 
+          commit = os.environ['PY_PDF_COMMIT']
           cases = [
-              {
-                  'id': 'docx-google-doc', 'target': 'docx', 'category': 'document',
-                  'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
-                  'upstream_path': '011-google-doc-document/google-doc-document.pdf',
-              },
-              {
-                  'id': 'docx-multicolumn', 'target': 'docx', 'category': 'multi-column',
-                  'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
-                  'upstream_path': '026-latex-multicolumn/multicolumn.pdf',
-              },
-              {
-                  'id': 'docx-libreoffice-images', 'target': 'docx', 'category': 'document-images',
-                  'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
-                  'upstream_path': '028-image-references-deduplication/wrong-references.pdf',
-              },
+              {'id': 'docx-google-doc', 'target': 'docx', 'category': 'document', 'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files', 'upstream_path': '011-google-doc-document/google-doc-document.pdf'},
+              {'id': 'docx-multicolumn', 'target': 'docx', 'category': 'multi-column', 'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files', 'upstream_path': '026-latex-multicolumn/multicolumn.pdf'},
+              {'id': 'docx-libreoffice-images', 'target': 'docx', 'category': 'document-images', 'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files', 'upstream_path': '028-image-references-deduplication/wrong-references.pdf'},
           ]
-
           commons = [
               ('xlsx-table-material', 'xlsx', 'table', 'NDL8818342 The table of material. Report No. 44a(4), USSBS Index Section 2.pdf', 'Public Domain'),
               ('xlsx-unidentified-table', 'xlsx', 'table', 'NDL8816038 Unidentified table. Report No. 17g(9), USSBS Index Section 2.pdf', 'Public Domain'),
@@ -78,39 +56,31 @@ jobs:
               ('pptx-copyright-laws', 'pptx', 'slides', '2.Introduction to copyright laws.pdf', 'CC BY-SA 4.0'),
           ]
           for case_id, target, category, filename, license_name in commons:
-              cases.append({
-                  'id': case_id,
-                  'target': target,
-                  'category': category,
-                  'license': license_name,
-                  'source': 'Wikimedia Commons',
-                  'commons_filename': filename,
-                  'url': 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + urllib.parse.quote(filename, safe=''),
-              })
+              cases.append({'id': case_id, 'target': target, 'category': category, 'license': license_name, 'source': 'Wikimedia Commons', 'commons_filename': filename})
 
           out_dir = Path('/tmp/pdf-office-real-probe')
           out_dir.mkdir(parents=True, exist_ok=True)
-          upstream_root = Path('/tmp/sample-files')
           inventory = []
-          ua = {'User-Agent': 'SolYan-PDF PDF-to-Office benchmark/0.1.2 (https://github.com/solyan842/SolYan-PDF)'}
+          base_headers = {'User-Agent': 'SolYan-PDF PDF-to-Office benchmark/0.1.2 (https://github.com/solyan842/SolYan-PDF)'}
 
           for case in cases:
-              path = out_dir / f"{case['id']}.pdf"
               if case['source'] == 'py-pdf/sample-files':
-                  source_path = upstream_root / case['upstream_path']
-                  print('COPY', case['id'], source_path, flush=True)
-                  shutil.copyfile(source_path, path)
-                  data = path.read_bytes()
-                  resolved_url = f"https://github.com/py-pdf/sample-files/blob/02b8203bf416db3db03438bc8278dfcb0555f3/{case['upstream_path']}"
+                  encoded_path = '/'.join(urllib.parse.quote(part, safe='') for part in case['upstream_path'].split('/'))
+                  url = f'https://api.github.com/repos/py-pdf/sample-files/contents/{encoded_path}?ref={commit}'
+                  headers = {**base_headers, 'Accept': 'application/vnd.github.raw+json', 'X-GitHub-Api-Version': '2022-11-28'}
               else:
-                  print('FETCH', case['id'], case['url'], flush=True)
-                  req = urllib.request.Request(case['url'], headers=ua)
-                  with urllib.request.urlopen(req, timeout=180) as response:
-                      data = response.read()
-                      resolved_url = response.geturl()
-                  path.write_bytes(data)
+                  url = 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + urllib.parse.quote(case['commons_filename'], safe='')
+                  headers = base_headers
 
-              assert data[:5] == b'%PDF-', (case['id'], data[:20], resolved_url)
+              print('FETCH', case['id'], url, flush=True)
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=180) as response:
+                  data = response.read()
+                  resolved_url = response.geturl()
+              assert data[:5] == b'%PDF-', (case['id'], data[:80], resolved_url)
+
+              path = out_dir / f"{case['id']}.pdf"
+              path.write_bytes(data)
               reader = PdfReader(path)
               item = {
                   **case,
@@ -120,6 +90,8 @@ jobs:
                   'sha256': hashlib.sha256(data).hexdigest(),
                   'resolved_url': resolved_url,
               }
+              if case['source'] == 'py-pdf/sample-files':
+                  item['upstream_commit'] = commit
               inventory.append(item)
               print(case['id'], 'pages=', item['pages'], 'bytes=', item['bytes'], 'sha256=', item['sha256'], flush=True)
 
