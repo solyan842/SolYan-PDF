@@ -27,7 +27,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install PDF metadata dependency
-        run: pip install pypdf==6.1.1
+        run: pip install pypdf==6.1.1 cryptography==46.0.3
 
       - name: Download and fingerprint candidate corpus
         run: |
