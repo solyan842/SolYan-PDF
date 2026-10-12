@@ -142,8 +142,8 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Add direct dependency release manifest
 - [x] Publish GitHub tag/release `v0.1.0`
 - [x] Pin Node/Python multi-arch base-image digests
-- [ ] Record resolved OS/Python package inventory (SBOM) for release images
-- [ ] Pin/snapshot distro packages where practical for bit-for-bit reproducible images
+- [x] Generate resolved OS/Python/npm package inventories for all six release images in CI artifacts
+- [ ] Pin/snapshot distro packages and hash-lock transitive dependencies where practical for bit-for-bit reproducible images
 
 ## Release decisions / external inputs still required
 

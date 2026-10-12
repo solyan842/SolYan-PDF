@@ -1,0 +1,79 @@
+name: Image Inventory CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/Dockerfile'
+      - 'frontend/package.json'
+      - 'backend/Dockerfile'
+      - 'backend/requirements.txt'
+      - 'engines/**/Dockerfile'
+      - 'engines/**/requirements.txt'
+      - 'scripts/image-inventory.sh'
+      - '.github/workflows/image-inventory-ci.yml'
+      - 'docs/RELEASE-MANIFEST.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/Dockerfile'
+      - 'frontend/package.json'
+      - 'backend/Dockerfile'
+      - 'backend/requirements.txt'
+      - 'engines/**/Dockerfile'
+      - 'engines/**/requirements.txt'
+      - 'scripts/image-inventory.sh'
+      - '.github/workflows/image-inventory-ci.yml'
+      - 'docs/RELEASE-MANIFEST.md'
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: frontend
+            context: frontend
+          - name: backend
+            context: backend
+          - name: ocr-service
+            context: engines/ocr-service
+          - name: office-service
+            context: engines/office-service
+          - name: sign-service
+            context: engines/sign-service
+          - name: archive-service
+            context: engines/archive-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build --pull=false -t "solyan-${{ matrix.name }}:inventory" "${{ matrix.context }}"
+
+      - name: Capture image metadata
+        run: |
+          mkdir -p inventory
+          {
+            echo '# Docker image metadata'
+            docker image inspect "solyan-${{ matrix.name }}:inventory" --format 'id={{.Id}} created={{.Created}} architecture={{.Architecture}} os={{.Os}} size={{.Size}}'
+            echo
+          } > "inventory/${{ matrix.name }}.txt"
+
+      - name: Capture package inventory
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/scripts/image-inventory.sh:/tmp/image-inventory.sh:ro" \
+            --entrypoint /bin/sh \
+            "solyan-${{ matrix.name }}:inventory" \
+            -c 'sh /tmp/image-inventory.sh' >> "inventory/${{ matrix.name }}.txt"
+
+      - name: Upload inventory artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-inventory-${{ matrix.name }}
+          path: inventory/${{ matrix.name }}.txt
+          retention-days: 30
+          if-no-files-found: error
