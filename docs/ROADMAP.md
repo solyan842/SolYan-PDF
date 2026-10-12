@@ -6,8 +6,9 @@
 - [x] Record architecture principles
 - [x] Record initial PDF engine candidates
 - [x] Record Vietnamese Utilities scope
-- [ ] Add license/dependency register
-- [ ] Add coding and contribution conventions
+- [x] Add license/dependency register
+- [x] Add coding and contribution conventions
+- [x] Lock web-first / PWA-ready product direction
 
 ## Phase 1 — Core PDF utilities
 
