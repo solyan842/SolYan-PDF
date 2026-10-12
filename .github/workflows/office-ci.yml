@@ -1,0 +1,68 @@
+name: Office Service CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/office-service/**'
+      - '.github/workflows/office-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/office-service/**'
+      - '.github/workflows/office-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engines/office-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install LibreOffice
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress fonts-dejavu-core fonts-liberation
+          libreoffice --version
+
+      - name: Install service and test dependencies
+        run: pip install -r requirements.txt httpx==0.28.1 python-docx==1.2.0
+
+      - name: Compile service
+        run: python -m compileall app
+
+      - name: Convert DOCX through API
+        run: |
+          python - <<'PY'
+          import io
+          from docx import Document
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          buffer = io.BytesIO()
+          document = Document()
+          document.add_heading('SolYan PDF Office CI', 1)
+          document.add_paragraph('LibreOffice conversion smoke test.')
+          document.save(buffer)
+
+          client = TestClient(app)
+          health = client.get('/health')
+          assert health.status_code == 200, health.text
+          response = client.post(
+              '/convert/to-pdf',
+              files={'file': ('test.docx', buffer.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+          )
+          assert response.status_code == 200, response.text
+          assert response.content.startswith(b'%PDF-')
+          assert len(response.content) > 500
+          print('office conversion ok', len(response.content))
+          PY
