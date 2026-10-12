@@ -78,9 +78,12 @@ jobs:
           PY
 
       - name: Recognize scanned tables and round-trip XLSX
+        shell: bash
         run: |
-          set -euo pipefail
-          PYTHONPATH=benchmarks python - <<'PY'
+          set -uo pipefail
+          mkdir -p /tmp/scan-xlsx/logs
+          set +e
+          PYTHONPATH=benchmarks python - <<'PY' 2>&1 | tee /tmp/scan-xlsx/logs/diagnostic.log
           import json
           import time
           from pathlib import Path
@@ -102,10 +105,10 @@ jobs:
                   files={'file': (source_path.name, source, 'application/pdf')},
               )
           ocr_seconds = time.perf_counter() - started
-          print('OCR status', response.status_code)
-          print('OCR headers', dict(response.headers))
+          print('OCR status', response.status_code, flush=True)
+          print('OCR headers', dict(response.headers), flush=True)
           if response.status_code >= 400:
-              print(response.text[:12000])
+              print(response.text[:12000], flush=True)
               response.raise_for_status()
 
           xlsx_path = root / 'recognized.xlsx'
@@ -146,9 +149,9 @@ jobs:
                   files={'file': ('recognized.xlsx', response.content, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
               )
           roundtrip_seconds = time.perf_counter() - roundtrip_started
-          print('LibreOffice status', rt.status_code)
+          print('LibreOffice status', rt.status_code, flush=True)
           if rt.status_code >= 400:
-              print(rt.text[:12000])
+              print(rt.text[:12000], flush=True)
               rt.raise_for_status()
 
           roundtrip_path = root / 'roundtrip.pdf'
@@ -177,29 +180,36 @@ jobs:
               'similarity': similarity,
           }
           (root / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-          print(json.dumps(report, ensure_ascii=False, indent=2))
+          print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
           PY
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > /tmp/scan-xlsx/logs/diagnostic.exitcode
+          exit "$status"
+
+      - name: Collect service logs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/scan-xlsx/logs
+          docker logs ocr-scan-xlsx > /tmp/scan-xlsx/logs/ocr-service.log 2>&1 || true
+          docker logs office-scan-xlsx > /tmp/scan-xlsx/logs/office-service.log 2>&1 || true
 
       - name: Upload diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ppstructure-scanned-xlsx-diagnostic
+          name: ppstructure-scanned-xlsx-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             /tmp/scan-xlsx/inventory.json
             /tmp/scan-xlsx/recognized.xlsx
             /tmp/scan-xlsx/roundtrip.pdf
             /tmp/scan-xlsx/report.json
+            /tmp/scan-xlsx/logs/diagnostic.log
+            /tmp/scan-xlsx/logs/diagnostic.exitcode
+            /tmp/scan-xlsx/logs/ocr-service.log
+            /tmp/scan-xlsx/logs/office-service.log
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Service logs on failure
-        if: failure()
-        run: |
-          echo '===== OCR ====='
-          docker logs ocr-scan-xlsx || true
-          echo '===== OFFICE ====='
-          docker logs office-scan-xlsx || true
 
       - name: Stop services
         if: always()
