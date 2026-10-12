@@ -1,0 +1,147 @@
+name: Bloom Full Synthetic Benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/bloom_proxy.py'
+      - 'backend/app/xlsx_print.py'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
+      - '.github/workflows/bloom-full-benchmark-ci.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 0'
+
+permissions:
+  contents: read
+
+env:
+  BLOOM_REPO: https://github.com/stemlen/bloom-pdf-editor.git
+  BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install benchmark dependencies
+        run: pip install -r benchmarks/requirements.txt
+
+      - name: Fetch pinned Bloom source
+        run: |
+          git clone --filter=blob:none --no-checkout "$BLOOM_REPO" /tmp/bloom
+          git -C /tmp/bloom fetch --depth=1 origin "$BLOOM_COMMIT"
+          git -C /tmp/bloom checkout --detach "$BLOOM_COMMIT"
+          test "$(git -C /tmp/bloom rev-parse HEAD)" = "$BLOOM_COMMIT"
+          grep -q 'Apache License' /tmp/bloom/LICENSE
+          grep -q 'BLOOM_STORAGE_ROOT' /tmp/bloom/server/src/utils/config.ts
+
+      - name: Build pinned Bloom, Office and backend images
+        run: |
+          docker build -t solyan-bloom-full /tmp/bloom/server
+          docker build -t solyan-office-full engines/office-service
+          docker build -t solyan-backend-full backend
+
+      - name: Start isolated benchmark stack
+        run: |
+          docker network create solyan-bloom-full
+          docker run -d --name bloom-full --network solyan-bloom-full \
+            -e BLOOM_STORAGE_ROOT=/tmp/bloom-storage \
+            solyan-bloom-full
+          docker run -d --name office-full --network solyan-bloom-full solyan-office-full
+          docker run -d --name backend-full --network solyan-bloom-full -p 8000:8000 \
+            -e BLOOM_SERVICE_URL=http://bloom-full:8787 \
+            -e OFFICE_SERVICE_URL=http://office-full:8020 \
+            solyan-backend-full
+
+      - name: Wait for backend and Bloom health
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+
+          urls = {
+              'backend': 'http://127.0.0.1:8000/health',
+              'bloom': 'http://127.0.0.1:8000/experimental/bloom/health',
+          }
+          deadline = time.monotonic() + 180
+          pending = dict(urls)
+          while pending and time.monotonic() < deadline:
+              for name, url in list(pending.items()):
+                  try:
+                      with urllib.request.urlopen(url, timeout=5) as response:
+                          if 200 <= response.status < 300:
+                              print(name, response.read().decode('utf-8', 'replace'))
+                              pending.pop(name)
+                  except Exception as exc:
+                      print('waiting', name, type(exc).__name__, exc)
+              if pending:
+                  time.sleep(3)
+          if pending:
+              raise SystemExit(f'Health checks timed out: {sorted(pending)}')
+          PY
+
+      - name: Generate all 18 controlled cases
+        run: |
+          python benchmarks/generate_pdf_to_office_corpus.py \
+            --manifest benchmarks/corpora/pdf_to_office_synthetic_v1.json \
+            --output-dir /tmp/pdf-to-office-full-corpus
+
+      - name: Run full end-to-end synthetic benchmark
+        run: |
+          PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
+            --manifest benchmarks/corpora/pdf_to_office_synthetic_v1.json \
+            --corpus-dir /tmp/pdf-to-office-full-corpus \
+            --api http://127.0.0.1:8000 \
+            --output /tmp/pdf-to-office-full-report.json
+
+      - name: Validate full report coverage
+        run: |
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/pdf-to-office-full-report.json').read_text())
+          results = report['results']
+          assert report['summary']['cases'] == 18, report['summary']
+          assert Counter(item['target'] for item in results) == {'docx': 6, 'xlsx': 6, 'pptx': 6}
+          assert len({item['id'] for item in results}) == 18
+          assert not report['failures']
+          for item in results:
+              assert item['office_bytes'] > 0, item
+              assert item['roundtrip_pdf_bytes'] > 0, item
+              assert item['source_pages'] >= 1, item
+              assert item['roundtrip_pages'] >= 1, item
+              assert 0.0 <= item['average_similarity'] <= 100.0, item
+          print(json.dumps(report['summary'], indent=2))
+          PY
+
+      - name: Upload full synthetic benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-office-bloom-full-synthetic
+          path: /tmp/pdf-to-office-full-report.json
+          retention-days: 30
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: |
+          for name in bloom-full office-full backend-full; do
+            echo "===== $name ====="
+            docker logs "$name" || true
+          done
+
+      - name: Stop benchmark stack
+        if: always()
+        run: |
+          docker rm -f backend-full office-full bloom-full 2>/dev/null || true
+          docker network rm solyan-bloom-full 2>/dev/null || true
