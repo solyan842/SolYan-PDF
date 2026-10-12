@@ -6,6 +6,8 @@ on:
       - benchmark/vietnamese-real-ocr-60-wikisource
     paths:
       - '.github/workflows/wikisource-corpus-probe.yml'
+      - 'benchmarks/fetch_vietnamese_ocr_wikisource.py'
+      - 'benchmarks/corpora/vietnamese_real_wikisource_v1.json'
   workflow_dispatch:
 
 permissions:
@@ -15,99 +17,41 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inventory two proofread Wikisource sources
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install rendering dependencies
+        run: pip install pypdfium2==5.14.0 Pillow
+
+      - name: Fetch one locked real-scan page from each source
         run: |
           set -euo pipefail
+          python benchmarks/fetch_vietnamese_ocr_wikisource.py \
+            --output /tmp/vn-ocr-wikisource \
+            --limit-per-source 1
+
+      - name: Validate generated corpus and attribution
+        run: |
           python - <<'PY'
-          import hashlib
           import json
-          import re
-          import urllib.parse
-          import urllib.request
           from pathlib import Path
 
-          UA = {'User-Agent': 'SolYan-PDF OCR benchmark/0.1.2 (https://github.com/solyan842/SolYan-PDF)'}
-          API = 'https://vi.wikisource.org/w/api.php'
-          sources = [
-              {
-                  'id': 'nam_hai_di_nhan',
-                  'work': 'Nam Hải dị nhân liệt truyện',
-                  'file': 'Nam Hai di nhan liet truyen.pdf',
-                  'pages': list(range(5, 30)),
-                  'commons_file': 'Nam_Hai_di_nhan_liet_truyen.pdf',
-              },
-              {
-                  'id': 'viet_nam_phong_tuc',
-                  'work': 'Việt Nam phong tục',
-                  'file': 'Viet Nam phong tuc.pdf',
-                  'pages': list(range(20, 45)),
-                  'commons_file': 'Viet_Nam_phong_tuc.pdf',
-              },
-          ]
-
-          def fetch_revisions(file_name, numbers):
-              titles = '|'.join(f'Trang:{file_name}/{n}' for n in numbers)
-              query = urllib.parse.urlencode({
-                  'action': 'query', 'format': 'json', 'formatversion': '2',
-                  'prop': 'revisions', 'rvprop': 'ids|timestamp|content',
-                  'rvslots': 'main', 'titles': titles,
-              })
-              req = urllib.request.Request(f'{API}?{query}', headers=UA)
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  payload = json.load(response)
-              records = []
-              for page in payload['query']['pages']:
-                  if page.get('missing'):
-                      raise RuntimeError(f"missing {page['title']}")
-                  rev = page['revisions'][0]
-                  content = rev['slots']['main']['content']
-                  q = re.search(r'<pagequality\s+level="(\d+)"', content)
-                  number = int(page['title'].rsplit('/', 1)[1])
-                  records.append({
-                      'page': number,
-                      'title': page['title'],
-                      'revid': rev['revid'],
-                      'timestamp': rev['timestamp'],
-                      'quality': int(q.group(1)) if q else 0,
-                      'content_chars': len(content),
-                  })
-              records.sort(key=lambda item: item['page'])
-              return records
-
-          inventory = {'schema_version': 1, 'sources': []}
-          for source in sources:
-              records = fetch_revisions(source['file'], source['pages'])
-              assert [r['page'] for r in records] == source['pages'], records
-              assert len(records) == 25
-              assert all(r['quality'] >= 3 for r in records), [r for r in records if r['quality'] < 3]
-              assert all(r['content_chars'] >= 150 for r in records), [r for r in records if r['content_chars'] < 150]
-
-              url = f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{source['commons_file']}"
-              req = urllib.request.Request(url, headers=UA)
-              with urllib.request.urlopen(req, timeout=180) as response:
-                  data = response.read()
-              assert data[:5] == b'%PDF-'
-              digest = hashlib.sha256(data).hexdigest()
-              print(source['id'], 'PAGES', len(records), 'QUALITY', sorted({r['quality'] for r in records}))
-              print(source['id'], 'PDF_BYTES', len(data), 'PDF_SHA256', digest)
-              print(source['id'], 'REVIDS', [(r['page'], r['revid']) for r in records])
-              inventory['sources'].append({
-                  **source,
-                  'records': records,
-                  'download_url': url,
-                  'pdf_bytes': len(data),
-                  'sha256': digest,
-                  'scan_license': 'Public Domain',
-                  'transcription_license': 'CC BY-SA 4.0',
-              })
-
-          assert sum(len(s['records']) for s in inventory['sources']) == 50
-          Path('/tmp/wikisource-pages.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          root = Path('/tmp/vn-ocr-wikisource')
+          records = [json.loads(line) for line in (root / 'corpus.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+          assert len(records) == 2, records
+          assert {r['source_id'] for r in records} == {'nam_hai_di_nhan', 'viet_nam_phong_tuc'}
+          assert all(r['page_quality'] >= 3 for r in records)
+          assert all(len(r['expected']) >= 100 for r in records)
+          assert all((root / r['file']).read_bytes()[:8] == b'\x89PNG\r\n\x1a\n' for r in records)
+          attribution = json.loads((root / 'ATTRIBUTION.json').read_text(encoding='utf-8'))
+          assert attribution['transcription_license'] == 'CC BY-SA 4.0'
+          assert len(attribution['sources']) == 2
+          print('samples=', len(records))
+          print('expected_lengths=', [len(r['expected']) for r in records])
+          print('source_ids=', [r['source_id'] for r in records])
           PY
-
-      - name: Upload locked page inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: wikisource-real-ocr-page-inventory
-          path: /tmp/wikisource-pages.json
-          retention-days: 7
