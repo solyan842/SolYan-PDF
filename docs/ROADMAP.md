@@ -144,10 +144,10 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Publish GitHub tag/release `v0.1.0`
 - [x] Pin Node/Python multi-arch base-image digests
 - [x] Lock full frontend npm graph with `package-lock.json` + `npm ci`
-- [x] Lock backend / Office / signing / PDF-A Python transitive graphs with `requirements.lock`
+- [x] Lock all Python transitive graphs, with PaddlePaddle kept on its dedicated CPU index
 - [x] Generate resolved OS/Python/npm package inventories for all six release images in CI artifacts
-- [x] Add dedicated PaddleOCR/PaddlePaddle transitive lock preserving the CPU wheel index
-- [x] Add hash-verified Python locks where practical (backend / Office / signing / PDF-A)
+- [x] Add SHA-256 hash verification for backend / Office / signing / PDF-A and the PyPI portion of OCR
+- [x] Preserve PaddlePaddle as a separate source/version-locked CPU-index dependency
 - [x] Pin Debian package sources to snapshot `20261012T000000Z` for all Python images
 
 ## Release decisions / external inputs still required

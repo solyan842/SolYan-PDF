@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/hash-python-locks.sh'
+      - 'scripts/hash-pinned-pypi.py'
       - 'backend/requirements.lock'
       - 'backend/requirements.hashed.lock'
       - 'backend/Dockerfile'
@@ -16,12 +17,17 @@ on:
       - 'engines/archive-service/requirements.lock'
       - 'engines/archive-service/requirements.hashed.lock'
       - 'engines/archive-service/Dockerfile'
+      - 'engines/ocr-service/requirements.lock'
+      - 'engines/ocr-service/requirements.hashed.lock'
+      - 'engines/ocr-service/paddle-requirements.lock'
+      - 'engines/ocr-service/Dockerfile'
       - '.github/workflows/hash-lock-ci.yml'
   push:
     branches:
       - main
     paths:
       - 'scripts/hash-python-locks.sh'
+      - 'scripts/hash-pinned-pypi.py'
       - 'backend/requirements.lock'
       - 'backend/requirements.hashed.lock'
       - 'backend/Dockerfile'
@@ -34,6 +40,10 @@ on:
       - 'engines/archive-service/requirements.lock'
       - 'engines/archive-service/requirements.hashed.lock'
       - 'engines/archive-service/Dockerfile'
+      - 'engines/ocr-service/requirements.lock'
+      - 'engines/ocr-service/requirements.hashed.lock'
+      - 'engines/ocr-service/paddle-requirements.lock'
+      - 'engines/ocr-service/Dockerfile'
       - '.github/workflows/hash-lock-ci.yml'
 
 jobs:
@@ -48,6 +58,9 @@ jobs:
         with:
           python-version: '3.13.16'
 
+      - name: Validate OCR hash generator
+        run: python -m py_compile scripts/hash-pinned-pypi.py
+
       - name: Regenerate hash locks
         run: bash ./scripts/hash-python-locks.sh
 
@@ -57,9 +70,10 @@ jobs:
             backend/requirements.hashed.lock \
             engines/office-service/requirements.hashed.lock \
             engines/sign-service/requirements.hashed.lock \
-            engines/archive-service/requirements.hashed.lock
+            engines/archive-service/requirements.hashed.lock \
+            engines/ocr-service/requirements.hashed.lock
 
-      - name: Verify hash enforcement in production Dockerfiles
+      - name: Verify standard hash enforcement in production Dockerfiles
         run: |
           for file in \
             backend/Dockerfile \
@@ -70,12 +84,20 @@ jobs:
             grep -q 'requirements.hashed.lock' "$file"
           done
 
+      - name: Verify OCR split hash/source enforcement
+        run: |
+          grep -q -- '--require-hashes --no-deps -r requirements.hashed.lock' engines/ocr-service/Dockerfile
+          grep -q 'paddle-requirements.lock' engines/ocr-service/Dockerfile
+          grep -q '^--index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/$' engines/ocr-service/paddle-requirements.lock
+          grep -q '^paddlepaddle==3.2.0$' engines/ocr-service/paddle-requirements.lock
+
       - name: Verify SHA-256 entries exist
         run: |
           for file in \
             backend/requirements.hashed.lock \
             engines/office-service/requirements.hashed.lock \
             engines/sign-service/requirements.hashed.lock \
-            engines/archive-service/requirements.hashed.lock; do
+            engines/archive-service/requirements.hashed.lock \
+            engines/ocr-service/requirements.hashed.lock; do
             grep -q -- '--hash=sha256:' "$file"
           done

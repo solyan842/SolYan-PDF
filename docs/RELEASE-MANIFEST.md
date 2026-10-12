@@ -34,11 +34,13 @@ The frontend image uses the already-pinned Alpine base image and performs no `ap
 | Office service | Version graph in `requirements.lock`; distribution hashes in `requirements.hashed.lock`; production uses `pip --require-hashes` |
 | Signature service | Version graph in `requirements.lock`; distribution hashes in `requirements.hashed.lock`; production uses `pip --require-hashes` |
 | PDF/A archive service | Version graph in `requirements.lock`; distribution hashes in `requirements.hashed.lock`; production uses `pip --require-hashes` |
-| OCR service | PaddlePaddle 3.2.0 is locked separately in `paddle-requirements.lock` with the official CPU wheel index; the remaining PaddleOCR/Python graph is version-locked in `requirements.lock`; hash-locking remains a separate future hardening task |
+| OCR service | PaddlePaddle 3.2.0 stays in `paddle-requirements.lock` on the official CPU index; every ordinary PyPI package in the remaining OCR graph is version-locked and SHA-256 hash-verified in `requirements.hashed.lock` |
 
-Version lockfiles are generated in a clean Python 3.13.16 environment by `scripts/lock-python-deps.sh` with pip 26.2.1 pinned for lock generation. Standard-service hash locks are generated from those committed version graphs by `scripts/hash-python-locks.sh` with pip-tools 7.6.2. `.github/workflows/hash-lock-ci.yml` regenerates them and fails if the committed hash files drift.
+Version lockfiles are generated in a clean Python 3.13.16 environment by `scripts/lock-python-deps.sh` with pip 26.2.1 pinned for lock generation. Standard-service hash locks are generated from those committed version graphs by `scripts/hash-python-locks.sh` with pip-tools 7.6.2.
 
-OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently resolve PaddlePaddle from a different source. Production standard-service Docker builds install only artifacts accepted by the committed SHA-256 hash locks and then run `pip check`.
+For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribution digest for the exact versions already present in the OCR PyPI graph. Production installs PaddlePaddle first from its dedicated CPU source, then installs the ordinary PyPI graph with `pip --require-hashes --no-deps`, and finishes with `pip check`. This preserves the explicit Paddle source boundary while preventing unapproved PyPI artifacts from entering the OCR environment.
+
+`.github/workflows/hash-lock-ci.yml` regenerates the standard and OCR PyPI hash files and fails if committed output drifts.
 
 ## Frontend
 
@@ -67,10 +69,10 @@ OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently re
 
 | Component | Version | License | Integration |
 |---|---:|---|---|
-| PaddlePaddle | 3.2.0 | Apache-2.0 | CPU inference runtime; dedicated CPU-index lock |
-| PaddleOCR | 3.7.0 | Apache-2.0 | primary OCR/document intelligence |
-| pytesseract | 0.3.13 | Apache-2.0 | Python adapter |
-| pypdfium2 | 5.14.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering |
+| PaddlePaddle | 3.2.0 | Apache-2.0 | CPU inference runtime; dedicated CPU-index source/version lock |
+| PaddleOCR | 3.7.0 | Apache-2.0 | primary OCR/document intelligence; PyPI artifact hash-verified |
+| pytesseract | 0.3.13 | Apache-2.0 | Python adapter; PyPI artifact hash-verified |
+| pypdfium2 | 5.14.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering; PyPI artifact hash-verified |
 | Tesseract OCR | snapshot-resolved distro package | Apache-2.0 | fallback OCR binary |
 | Vietnamese Tesseract data | snapshot-resolved distro package | upstream tessdata licensing applies | `vie` recognition data |
 
@@ -121,9 +123,9 @@ See `docs/REPRODUCIBILITY.md` for the exact inventory/lock model and limitations
 
 ## Reproducibility note
 
-Application-level npm and Python dependency graphs are version-locked, including the PaddleOCR/PaddlePaddle special case. Backend, Office, signing and PDF/A Python distributions are additionally SHA-256 hash-verified. Docker base-image indexes are pinned, Debian OS-package resolution uses a fixed snapshot, and resolved image inventories are captured by CI.
+Application-level npm and Python dependency graphs are version-locked. All ordinary PyPI distributions — including the OCR/PaddleOCR graph except the separately sourced PaddlePaddle wheel itself — are SHA-256 hash-verified. Docker base-image indexes are pinned, Debian OS-package resolution uses a fixed snapshot, and resolved image inventories are captured by CI.
 
-The containers are still **not claimed bit-for-bit reproducible** because the OCR/Paddle special-index graph is not yet hash-verified and timestamps/build-tool metadata can vary. Repeat-build byte identity has not been established as a release guarantee.
+The containers are still **not claimed bit-for-bit reproducible** because the PaddlePaddle wheel from its dedicated CPU index is source/version locked rather than architecture-wide hash-pinned, and timestamps/build-tool metadata can vary. Repeat-build byte identity has not been established as a release guarantee.
 
 ## License compliance rule
 

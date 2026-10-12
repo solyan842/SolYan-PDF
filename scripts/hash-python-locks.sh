@@ -38,4 +38,9 @@ for service in "${SERVICES[@]}"; do
     "$input"
 done
 
+echo 'Hash-locking engines/ocr-service PyPI portion'
+"$PYTHON_BIN" "$ROOT/scripts/hash-pinned-pypi.py" \
+  "$ROOT/engines/ocr-service/requirements.lock" \
+  "$ROOT/engines/ocr-service/requirements.hashed.lock"
+
 echo 'Hash-verified Python lockfiles generated successfully.'
