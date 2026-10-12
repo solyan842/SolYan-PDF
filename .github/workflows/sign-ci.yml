@@ -26,10 +26,12 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.13.16'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt httpx==0.28.1 pypdf==6.1.1
+      - name: Install locked dependencies
+        run: |
+          pip install -r requirements.lock -r requirements.txt httpx==0.28.1 pypdf==6.1.1
+          pip check
 
       - name: Compile service
         run: python -m compileall app
