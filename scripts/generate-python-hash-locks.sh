@@ -4,7 +4,7 @@ set -euo pipefail
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIP_VERSION="26.2.1"
-PIP_TOOLS_VERSION="7.5.1"
+PIP_TOOLS_VERSION="7.6.2"
 SERVICES=(
   backend
   engines/office-service
@@ -28,7 +28,7 @@ pip_compile="$venv_dir/venv/bin/pip-compile"
 
 for service in "${SERVICES[@]}"; do
   echo "Hash-locking ${service}"
-  CUSTOM_COMPILE_COMMAND='PYTHON_BIN=/path/to/python3.13.16 ./scripts/generate-python-hash-locks.sh' \
+  CUSTOM_COMPILE_COMMAND='PYTHON_BIN=/path/to/python3.13.16 bash ./scripts/generate-python-hash-locks.sh' \
     "$pip_compile" \
       --generate-hashes \
       --resolver=backtracking \
