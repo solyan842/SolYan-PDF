@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from .network import router as network_router
+from .ocr_proxy import router as ocr_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
@@ -22,6 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(network_router)
+app.include_router(ocr_router)
 
 
 def _require_qpdf() -> None:
