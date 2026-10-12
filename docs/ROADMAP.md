@@ -149,6 +149,8 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Add SHA-256 hash verification for backend / Office / signing / PDF-A and the PyPI portion of OCR
 - [x] Preserve PaddlePaddle as a separate source/version-locked CPU-index dependency
 - [x] Pin Debian package sources to snapshot `20261012T000000Z` for all Python images
+- [x] Publish hardened patch release `v0.1.1`
+- [x] Remove completed one-shot release publisher workflows after successful publication
 
 ## Release decisions / external inputs still required
 
