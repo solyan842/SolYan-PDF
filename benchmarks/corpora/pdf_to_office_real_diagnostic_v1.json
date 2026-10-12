@@ -21,7 +21,7 @@
         "provider": "py-pdf/sample-files",
         "license": "CC BY-SA 4.0",
         "repository": "py-pdf/sample-files",
-        "commit": "02b8203bf416db3db03438bc8278dfcb0555f3",
+        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
         "path": "011-google-doc-document/google-doc-document.pdf",
         "pages": 1,
         "sha256": "69f6b7f493b1bc55d518942976cbeadc4ec0a36f6d8a6dc24feffc516d35b2c9"
@@ -38,7 +38,7 @@
         "provider": "py-pdf/sample-files",
         "license": "CC BY-SA 4.0",
         "repository": "py-pdf/sample-files",
-        "commit": "02b8203bf416db3db03438bc8278dfcb0555f3",
+        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
         "path": "026-latex-multicolumn/multicolumn.pdf",
         "pages": 3,
         "sha256": "bdb495e95b3e1afae95013099dc59b0cea047f1fa70f677ee9cb33f10faa1c6c"
@@ -55,7 +55,7 @@
         "provider": "py-pdf/sample-files",
         "license": "CC BY-SA 4.0",
         "repository": "py-pdf/sample-files",
-        "commit": "02b8203bf416db3db03438bc8278dfcb0555f3",
+        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
         "path": "028-image-references-deduplication/wrong-references.pdf",
         "pages": 3,
         "sha256": "16cb8e10bd59e30b4d350f11d0ed9c7d0bd7e7bb962a46022c89836e2aa44f63"
