@@ -105,9 +105,38 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
     }
 
 
+def _read_shared_strings(archive: zipfile.ZipFile) -> list[str]:
+    try:
+        root = ET.fromstring(archive.read('xl/sharedStrings.xml'))
+    except (KeyError, ET.ParseError):
+        return []
+    out = []
+    for item in root.findall('x:si', _NS):
+        out.append(''.join(node.text or '' for node in item.findall('.//x:t', _NS)))
+    return out
+
+
+def _cell_preview(root: ET.Element, shared_strings: list[str], limit: int = 32) -> list[dict]:
+    preview = []
+    for cell in root.findall('.//x:c', _NS):
+        value = cell.find('x:v', _NS)
+        raw = value.text if value is not None and value.text is not None else ''
+        display = raw
+        if cell.attrib.get('t') == 's':
+            try:
+                display = shared_strings[int(raw)]
+            except (ValueError, IndexError):
+                display = raw
+        preview.append({'ref': cell.attrib.get('r'), 'value': display})
+        if len(preview) >= limit:
+            break
+    return preview
+
+
 def _xlsx_diagnostics(xlsx_bytes: bytes) -> dict:
     try:
         with zipfile.ZipFile(io.BytesIO(xlsx_bytes), 'r') as archive:
+            shared_strings = _read_shared_strings(archive)
             sheet_paths = sorted(
                 name
                 for name in archive.namelist()
@@ -155,6 +184,7 @@ def _xlsx_diagnostics(xlsx_bytes: bytes) -> dict:
                         'declared_column_width_sum': width_sum,
                         'page_setup': dict(page_setup.attrib) if page_setup is not None else None,
                         'page_setup_properties': dict(page_setup_pr.attrib) if page_setup_pr is not None else None,
+                        'cell_preview': _cell_preview(root, shared_strings),
                     }
                 )
             return {'sheet_count': len(sheet_paths), 'sheets': sheets}
