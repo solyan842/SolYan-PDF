@@ -47,6 +47,49 @@ jobs:
       - name: Import app and verify qpdf health
         run: python -c "from app.main import health; print(health())"
 
+      - name: Verify XLSX fit-to-width postprocessor
+        run: |
+          python - <<'PY'
+          import io
+          import zipfile
+          from app.xlsx_print import apply_fit_to_width
+
+          def make_xlsx(sheet_xml: str) -> bytes:
+              buf = io.BytesIO()
+              with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as archive:
+                  archive.writestr('xl/worksheets/sheet1.xml', sheet_xml)
+                  archive.writestr('[Content_Types].xml', '<Types/>')
+              return buf.getvalue()
+
+          def sheet(data: bytes) -> str:
+              with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                  return archive.read('xl/worksheets/sheet1.xml').decode()
+
+          bare_xml = (
+              '<?xml version="1.0" encoding="UTF-8"?>'
+              '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+              '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+              '<sheetData><row r="1"/></sheetData>'
+              '</worksheet>'
+          )
+          bare = make_xlsx(bare_xml)
+          patched = apply_fit_to_width(bare)
+          patched_xml = sheet(patched)
+          assert patched != bare
+          assert '<pageSetUpPr fitToPage="1"/>' in patched_xml, patched_xml
+          assert '<pageSetup fitToWidth="1" fitToHeight="0"/>' in patched_xml, patched_xml
+          assert apply_fit_to_width(patched) == patched
+
+          existing_xml = bare_xml.replace(
+              '</worksheet>',
+              '<pageSetup orientation="landscape" fitToWidth="2"/></worksheet>',
+          )
+          existing = make_xlsx(existing_xml)
+          assert apply_fit_to_width(existing) == existing
+          assert apply_fit_to_width(b'not-a-zip') == b'not-a-zip'
+          print('xlsx print normalization ok')
+          PY
+
       - name: Verify hardened network utility routes
         run: |
           python - <<'PY'
