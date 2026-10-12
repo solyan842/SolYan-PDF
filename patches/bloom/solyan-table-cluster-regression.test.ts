@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TableCandidateDetector } from '../engines/table/candidates.js';
 import { esc, runText } from '../engines/exporter/docx/ooxml/xml.js';
+import { parsePdfDocument } from '../engines/parser/document-parser.js';
 import { decodePdfTextString } from '../engines/parser/parser-engine.js';
 
 function detect(nodes: Record<string, any>, readingOrder: string[], vectors: any[] = []) {
@@ -16,6 +17,32 @@ function detect(nodes: Record<string, any>, readingOrder: string[], vectors: any
     } as any,
     typography: {} as any,
   });
+}
+
+function buildInheritedPageGeometryPdf(): Uint8Array {
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /MediaBox [0 0 960 540] /CropBox [10 20 950 520] /Rotate 90 /Count 1 /Kids [3 0 R] >>\nendobj\n',
+    '3 0 obj\n<< /Type /Pages /Parent 2 0 R /Count 1 /Kids [4 0 R] >>\nendobj\n',
+    '4 0 obj\n<< /Type /Page /Parent 3 0 R >>\nendobj\n',
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const object of objects) {
+    offsets.push(pdf.length);
+    pdf += object;
+  }
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let i = 1; i <= objects.length; i++) {
+    pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
+  pdf += `startxref\n${xrefOffset}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
 }
 
 describe('SolYan regression — table candidate clustering', () => {
@@ -85,6 +112,17 @@ describe('SolYan regression — table candidate clustering', () => {
     const candidates = detect(nodes, readingOrder);
 
     expect(candidates).toHaveLength(0);
+  });
+});
+
+describe('SolYan regression — inherited PDF page geometry', () => {
+  it('inherits MediaBox, CropBox and Rotate through nested Pages nodes', async () => {
+    const parsed = await parsePdfDocument(buildInheritedPageGeometryPdf());
+
+    expect(parsed.pages).toHaveLength(1);
+    expect(parsed.pages[0]!.mediaBox).toEqual([0, 0, 960, 540]);
+    expect(parsed.pages[0]!.cropBox).toEqual([10, 20, 950, 520]);
+    expect(parsed.pages[0]!.rotate).toBe(90);
   });
 });
 
