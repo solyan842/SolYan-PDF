@@ -24,6 +24,16 @@ export default function HomePage() {
         <h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1>
         <p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ cần qpdf được chuyển sang backend riêng, giữ engine tách biệt và thay thế được.</p>
       </section>
+
+      <section className="feature-banner">
+        <div>
+          <span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span>
+          <h2>13 Tiện ích Việt Nam</h2>
+          <p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p>
+        </div>
+        <a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a>
+      </section>
+
       <section className="tool-grid" aria-label="Công cụ PDF">
         {tools.map((tool) => (
           <a className="tool-card" href={tool.href} key={tool.href}>
@@ -37,7 +47,7 @@ export default function HomePage() {
       </section>
       <section className="coming-soon">
         <h2>Tiếp theo</h2>
-        <p>Tiện ích Việt Nam · OCR · Office conversion · Viewer/Editor · Compare · Digital Sign</p>
+        <p>OCR · Office conversion · Viewer/Editor · Compare · Digital Sign</p>
       </section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
