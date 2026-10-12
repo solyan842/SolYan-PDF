@@ -1,8 +1,15 @@
 const tools = [
-  { href: '/merge', title: 'Gộp PDF', description: 'Gộp nhiều file PDF theo đúng thứ tự.' },
-  { href: '/split', title: 'Tách PDF', description: 'Tách theo nhóm trang tùy chọn.' },
-  { href: '/organize', title: 'Sắp xếp trang', description: 'Đổi thứ tự, bỏ trang hoặc trích xuất trang.' },
-  { href: '/rotate', title: 'Xoay PDF', description: 'Xoay toàn bộ hoặc một số trang.' },
+  { href: '/merge', title: 'Gộp PDF', description: 'Gộp nhiều file PDF theo đúng thứ tự.', local: true },
+  { href: '/split', title: 'Tách PDF', description: 'Tách theo nhóm trang tùy chọn.', local: true },
+  { href: '/organize', title: 'Sắp xếp trang', description: 'Đổi thứ tự, bỏ trang hoặc trích xuất trang.', local: true },
+  { href: '/rotate', title: 'Xoay PDF', description: 'Xoay toàn bộ hoặc một số trang.', local: true },
+  { href: '/watermark', title: 'Watermark', description: 'Đóng watermark chữ lên PDF.', local: true },
+  { href: '/page-numbers', title: 'Đánh số trang', description: 'Thêm số trang vào chân trang.', local: true },
+  { href: '/metadata', title: 'Metadata', description: 'Xem và chỉnh sửa metadata PDF.', local: true },
+  { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa PDF bằng AES-256 với qpdf.', local: false },
+  { href: '/unlock', title: 'Mở khóa PDF', description: 'Giải mã PDF bằng mật khẩu hợp lệ.', local: false },
+  { href: '/compress', title: 'Nén PDF', description: 'Tối ưu cấu trúc và stream bằng qpdf.', local: false },
+  { href: '/repair', title: 'Sửa PDF', description: 'Rewrite cấu trúc PDF bằng qpdf.', local: false },
 ];
 
 export default function HomePage() {
@@ -15,7 +22,7 @@ export default function HomePage() {
       <section className="hero home-hero">
         <p className="eyebrow">SOLYAN PDF</p>
         <h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1>
-        <p className="subtitle">Các thao tác cơ bản chạy trực tiếp trong trình duyệt. File không cần rời khỏi thiết bị của bạn.</p>
+        <p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ cần qpdf được chuyển sang backend riêng, giữ engine tách biệt và thay thế được.</p>
       </section>
       <section className="tool-grid" aria-label="Công cụ PDF">
         {tools.map((tool) => (
@@ -23,13 +30,14 @@ export default function HomePage() {
             <span className="tool-icon">PDF</span>
             <h2>{tool.title}</h2>
             <p>{tool.description}</p>
+            <span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : 'qpdf server'}</span>
             <span className="tool-link">Mở công cụ →</span>
           </a>
         ))}
       </section>
       <section className="coming-soon">
-        <h2>Đang triển khai tiếp</h2>
-        <p>Protect / Unlock · Watermark · Page numbers · Metadata · Repair · Compress · Tiện ích Việt Nam</p>
+        <h2>Tiếp theo</h2>
+        <p>Tiện ích Việt Nam · OCR · Office conversion · Viewer/Editor · Compare · Digital Sign</p>
       </section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
