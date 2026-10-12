@@ -145,3 +145,62 @@ diff --git a/server/src/engines/exporter/docx/ooxml/xml.ts b/server/src/engines/
      .replace(/>/g, '&gt;')
      .replace(/"/g, '&quot;');
  }
+diff --git a/server/src/engines/parser/parser-engine.ts b/server/src/engines/parser/parser-engine.ts
+--- a/server/src/engines/parser/parser-engine.ts
++++ b/server/src/engines/parser/parser-engine.ts
+@@ -64,4 +64,18 @@
+   }
+ }
+ 
++export function decodePdfTextString(value: string): string {
++  const bytes = Uint8Array.from(value, (char) => char.charCodeAt(0) & 0xff);
++  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
++    return new TextDecoder('utf-16be').decode(bytes.subarray(2));
++  }
++  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
++    return new TextDecoder('utf-16le').decode(bytes.subarray(2));
++  }
++  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
++    return new TextDecoder('utf-8').decode(bytes.subarray(3));
++  }
++  return value;
++}
++
+ function extractMetadata(
+@@ -76,4 +90,4 @@
+   const str = (key: string): string | undefined => {
+     const v = info.get(key);
+-    return typeof v === 'string' ? v : undefined;
++    return typeof v === 'string' ? decodePdfTextString(v) : undefined;
+   };
+@@ -114,3 +128,4 @@
+-    const title = typeof node.get('Title') === 'string' ? (node.get('Title') as string) : 'Untitled';
++    const rawTitle = node.get('Title');
++    const title = typeof rawTitle === 'string' ? decodePdfTextString(rawTitle) : 'Untitled';
+     const dest = node.get('Dest') ?? (node.getDict('A')?.get('D') ?? null);
+     const pageIndex = resolveDestPageIndex(dest, objects, pageCount);
+diff --git a/server/src/engines/exporter/pptx/pptx-exporter.ts b/server/src/engines/exporter/pptx/pptx-exporter.ts
+--- a/server/src/engines/exporter/pptx/pptx-exporter.ts
++++ b/server/src/engines/exporter/pptx/pptx-exporter.ts
+@@ -129,3 +129,19 @@
+-function esc(s: string): string {
+-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
++function isXml10Char(codePoint: number): boolean {
++  return (
++    codePoint === 0x09 ||
++    codePoint === 0x0a ||
++    codePoint === 0x0d ||
++    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
++    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
++    (codePoint >= 0x10000 && codePoint <= 0x10ffff)
++  );
++}
++
++function esc(s: string): string {
++  let xml10Text = '';
++  for (const char of s) {
++    const codePoint = char.codePointAt(0);
++    if (codePoint !== undefined && isXml10Char(codePoint)) xml10Text += char;
++  }
++  return xml10Text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+ }
