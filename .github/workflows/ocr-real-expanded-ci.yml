@@ -1,0 +1,120 @@
+name: Expanded Vietnamese OCR Real Corpus CI
+
+on:
+  push:
+    branches:
+      - benchmark/vietnamese-real-ocr-60-wikisource
+    paths:
+      - 'benchmarks/fetch_vietnamese_ocr_real.py'
+      - 'benchmarks/fetch_vietnamese_ocr_wikisource.py'
+      - 'benchmarks/corpora/vietnamese_real_wikisource_v1.json'
+      - 'engines/ocr-service/**'
+      - '.github/workflows/ocr-real-expanded-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Tesseract and benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng fonts-dejavu-core
+          pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1 pytesseract==0.3.13 pypdfium2==5.14.0 Pillow
+
+      - name: Compile fetchers and benchmark harness
+        run: python -m compileall benchmarks/fetch_vietnamese_ocr_real.py benchmarks/fetch_vietnamese_ocr_wikisource.py engines/ocr-service/app engines/ocr-service/benchmark.py
+
+      - name: Fetch existing 9 public-domain real scans
+        run: python benchmarks/fetch_vietnamese_ocr_real.py --output /tmp/vn-ocr-real-existing
+
+      - name: Fetch and render 50 pinned proofread Wikisource scans
+        run: python benchmarks/fetch_vietnamese_ocr_wikisource.py --output /tmp/vn-ocr-real-wikisource
+
+      - name: Benchmark all 59 real-scan samples with Tesseract fallback
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from collections import defaultdict
+          from pathlib import Path
+
+          service = Path('engines/ocr-service').resolve()
+          sys.path.insert(0, str(service))
+          from fastapi.testclient import TestClient
+          from app.main import app
+          from benchmark import score
+
+          roots = [
+              (Path('/tmp/vn-ocr-real-existing'), 'nom_vn_public_domain'),
+              (Path('/tmp/vn-ocr-real-wikisource'), None),
+          ]
+          client = TestClient(app)
+          results = []
+          for root, fallback_source in roots:
+              records = [json.loads(line) for line in (root / 'corpus.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+              for record in records:
+                  path = root / record['file']
+                  with path.open('rb') as handle:
+                      response = client.post('/ocr/text', files={'file': (path.name, handle, 'image/png')})
+                  assert response.status_code == 200, (record.get('doc_id'), response.text)
+                  payload = response.json()
+                  actual = payload.get('text', '')
+                  assert actual.strip(), record.get('doc_id')
+                  assert payload.get('engine') == 'Tesseract', payload
+                  assert payload.get('fallback_used') is True, payload
+                  cer, wer = score(record['expected'], actual)
+                  source_id = record.get('source_id') or fallback_source
+                  item = {
+                      'doc_id': record['doc_id'],
+                      'source_id': source_id,
+                      'cer': cer,
+                      'wer': wer,
+                      'engine': payload.get('engine'),
+                  }
+                  results.append(item)
+                  print(record['doc_id'], 'CER=', round(cer, 4), 'WER=', round(wer, 4))
+
+          assert len(results) == 59, f'Expected 59 real samples, got {len(results)}'
+          grouped = defaultdict(list)
+          for item in results:
+              grouped[item['source_id']].append(item)
+
+          by_source = {}
+          for source_id, items in sorted(grouped.items()):
+              by_source[source_id] = {
+                  'samples': len(items),
+                  'average_cer': sum(item['cer'] for item in items) / len(items),
+                  'average_wer': sum(item['wer'] for item in items) / len(items),
+              }
+
+          summary = {
+              'samples': len(results),
+              'average_cer': sum(item['cer'] for item in results) / len(results),
+              'average_wer': sum(item['wer'] for item in results) / len(results),
+              'by_source': by_source,
+              'results': results,
+          }
+          out = Path('/tmp/vn-ocr-expanded-baseline.json')
+          out.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print('SUMMARY')
+          print(json.dumps({key: value for key, value in summary.items() if key != 'results'}, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Upload measured baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: vietnamese-real-expanded-tesseract-baseline
+          path: /tmp/vn-ocr-expanded-baseline.json
+          retention-days: 30
