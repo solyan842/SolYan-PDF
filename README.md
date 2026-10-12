@@ -103,6 +103,11 @@ See `docs/BENCHMARKING.md` for:
 
 - PDF -> DOCX/XLSX/PPTX remains **Experimental** until representative corpus results establish a fidelity baseline.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
-- A repository-level open-source license has not yet been selected by the project owner.
+
+## License
+
+SolYan PDF source code is licensed under the **Apache License 2.0**. See `LICENSE`.
+
+Third-party components retain their respective licenses and attribution requirements. See `docs/DEPENDENCIES.md` and `NOTICE`.
 
 See `docs/ROADMAP.md` for the exact implementation status and remaining work.
