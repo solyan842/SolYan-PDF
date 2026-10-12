@@ -1,0 +1,49 @@
+name: Bootstrap Python Hash Locks
+
+on:
+  push:
+    branches:
+      - build/hash-verified-python-locks
+    paths:
+      - 'backend/requirements.txt'
+      - 'engines/office-service/requirements.txt'
+      - 'engines/sign-service/requirements.txt'
+      - 'engines/archive-service/requirements.txt'
+      - 'scripts/generate-python-hash-locks.sh'
+      - '.github/workflows/bootstrap-python-hash-locks.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: build/hash-verified-python-locks
+
+      - name: Setup exact Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Generate hash locks
+        run: PYTHON_BIN=python bash ./scripts/generate-python-hash-locks.sh
+
+      - name: Commit generated locks
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            backend/requirements.hashes \
+            engines/office-service/requirements.hashes \
+            engines/sign-service/requirements.hashes \
+            engines/archive-service/requirements.hashes
+          if git diff --cached --quiet; then
+            echo 'Hash locks already current.'
+            exit 0
+          fi
+          git commit -m 'build: commit generated Python hash locks'
+          git push origin HEAD:build/hash-verified-python-locks
