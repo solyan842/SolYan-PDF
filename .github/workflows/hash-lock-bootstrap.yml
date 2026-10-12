@@ -25,7 +25,7 @@ jobs:
           python-version: '3.13.16'
 
       - name: Generate hash locks
-        run: ./scripts/hash-python-locks.sh
+        run: bash ./scripts/hash-python-locks.sh
 
       - name: Bundle hash locks
         run: |
