@@ -32,6 +32,7 @@ env:
   BLOOM_REPO: https://github.com/stemlen/bloom-pdf-editor.git
   BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
   BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
+  BLOOM_REGRESSION_TEST: patches/bloom/solyan-table-cluster-regression.test.ts
 
 jobs:
   canary:
@@ -59,6 +60,7 @@ jobs:
           grep -q 'BLOOM_STORAGE_ROOT' /tmp/bloom/server/src/utils/config.ts
           git -C /tmp/bloom apply --check "$GITHUB_WORKSPACE/$BLOOM_PATCH"
           git -C /tmp/bloom apply "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          cp "$GITHUB_WORKSPACE/$BLOOM_REGRESSION_TEST" /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
           grep -q 'currentBottom' /tmp/bloom/server/src/engines/table/candidates.ts
           test -f /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
 
