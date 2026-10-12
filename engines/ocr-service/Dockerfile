@@ -35,6 +35,7 @@ RUN rm -f /etc/apt/sources.list \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements.lock requirements.hashed.lock paddle-requirements.lock ./
+# Keep PaddlePaddle on its dedicated CPU source; hash-verify the ordinary PyPI graph separately.
 RUN python -m pip install --no-cache-dir pip==26.2.1 \
     && python -m pip install --no-cache-dir -r paddle-requirements.lock \
     && python -m pip install --no-cache-dir --require-hashes --no-deps -r requirements.hashed.lock \
