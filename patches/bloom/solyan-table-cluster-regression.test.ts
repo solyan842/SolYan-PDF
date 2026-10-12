@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TableCandidateDetector } from '../engines/table/candidates.js';
 import { esc, runText } from '../engines/exporter/docx/ooxml/xml.js';
+import { decodePdfTextString } from '../engines/parser/parser-engine.js';
 
 function detect(nodes: Record<string, any>, readingOrder: string[], vectors: any[] = []) {
   const detector = new TableCandidateDetector();
@@ -103,5 +104,18 @@ describe('SolYan regression — DOCX XML 1.0 escaping', () => {
 
     expect(xml).toContain('<w:t>beforeafterend</w:t>');
     expect(xml).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/);
+  });
+});
+
+describe('SolYan regression — PDF metadata text decoding', () => {
+  it('decodes UTF-16BE PDF text strings before they enter Office core properties', () => {
+    const raw = '\u00fe\u00ff\u0000G\u0000e\u0000n\u0000e\u0000r\u0000a\u0000l\u0000 \u0000p\u0000r\u0000e\u0000s\u0000e\u0000n\u0000t\u0000a\u0000t\u0000i\u0000o\u0000n';
+    expect(decodePdfTextString(raw)).toBe('General presentation');
+  });
+
+  it('decodes BOM-tagged UTF-16LE and UTF-8 while leaving ordinary byte strings unchanged', () => {
+    expect(decodePdfTextString('\u00ff\u00feH\u0000i\u0000')).toBe('Hi');
+    expect(decodePdfTextString('\u00ef\u00bb\u00bfT\u00e1\u00bb\u00b1a')).toBe('Tựa');
+    expect(decodePdfTextString('Plain metadata')).toBe('Plain metadata');
   });
 });
