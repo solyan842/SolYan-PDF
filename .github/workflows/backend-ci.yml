@@ -47,6 +47,63 @@ jobs:
       - name: Import app and verify qpdf health
         run: python -c "from app.main import health; print(health())"
 
+      - name: Verify XLSX source-aware print normalization
+        run: |
+          python - <<'PY'
+          import io
+          import zipfile
+          from app.xlsx_print import _match_paper_size, apply_fit_to_width, detect_pdf_print_setup
+
+          def make_xlsx(sheet_xml: str) -> bytes:
+              buf = io.BytesIO()
+              with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as archive:
+                  archive.writestr('xl/worksheets/sheet1.xml', sheet_xml)
+                  archive.writestr('[Content_Types].xml', '<Types/>')
+              return buf.getvalue()
+
+          def sheet(data: bytes) -> str:
+              with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                  return archive.read('xl/worksheets/sheet1.xml').decode()
+
+          # Standard-paper mapping is orientation independent and custom sizes
+          # are deliberately not normalized.
+          assert _match_paper_size(595.28, 841.89) == 9
+          assert _match_paper_size(841.89, 595.28) == 9
+          assert _match_paper_size(612, 792) == 1
+          assert _match_paper_size(612, 1008) == 5
+          assert _match_paper_size(500, 700) is None
+          assert detect_pdf_print_setup(b'not-a-pdf') is None
+
+          bare_xml = (
+              '<?xml version="1.0" encoding="UTF-8"?>'
+              '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+              '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+              '<sheetData><row r="1"/></sheetData>'
+              '</worksheet>'
+          )
+          bare = make_xlsx(bare_xml)
+          patched = apply_fit_to_width(bare, 9, 'portrait')
+          patched_xml = sheet(patched)
+          assert patched != bare
+          assert '<pageSetUpPr fitToPage="1"/>' in patched_xml, patched_xml
+          assert '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' in patched_xml, patched_xml
+          assert apply_fit_to_width(patched, 9, 'portrait') == patched
+
+          landscape = apply_fit_to_width(bare, 9, 'landscape')
+          assert 'paperSize="9" orientation="landscape"' in sheet(landscape)
+
+          existing_xml = bare_xml.replace(
+              '</worksheet>',
+              '<pageSetup paperSize="1" orientation="landscape" fitToWidth="2"/></worksheet>',
+          )
+          existing = make_xlsx(existing_xml)
+          assert apply_fit_to_width(existing, 9, 'portrait') == existing
+          assert apply_fit_to_width(b'not-a-zip', 9, 'portrait') == b'not-a-zip'
+          assert apply_fit_to_width(bare, 0, 'portrait') == bare
+          assert apply_fit_to_width(bare, 9, 'diagonal') == bare
+          print('xlsx source-aware print normalization ok')
+          PY
+
       - name: Verify hardened network utility routes
         run: |
           python - <<'PY'

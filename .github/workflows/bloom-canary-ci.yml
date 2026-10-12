@@ -145,6 +145,11 @@ jobs:
               assert item['roundtrip_pdf_bytes'] > 0, item
               assert item['source_pages'] >= 1, item
               assert item['roundtrip_pages'] >= 1, item
+
+          xlsx = next(item for item in report['results'] if item['target'] == 'xlsx')
+          assert xlsx['page_count_match'] is True, xlsx
+          assert xlsx['unmatched_pages'] == 0, xlsx
+          assert xlsx['source_pages'] == xlsx['roundtrip_pages'], xlsx
           print(json.dumps(report['summary'], indent=2))
           PY
 
