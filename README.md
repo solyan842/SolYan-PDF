@@ -6,6 +6,7 @@ SolYan PDF is a self-hostable, web-first PDF toolkit with a dedicated **Tiá»‡n Ã
 
 ### Core PDF
 - Merge, split, extract, reorder/remove and rotate pages
+- Drag-and-drop page organizer
 - Watermark, page numbers and metadata editing
 - AES-256 protect/unlock, repair and structural compression through qpdf
 - Browser-side PDF viewer and basic editor
@@ -14,16 +15,19 @@ SolYan PDF is a self-hostable, web-first PDF toolkit with a dedicated **Tiá»‡n Ã
 ### OCR & document intelligence
 - PaddleOCR text OCR for images/scanned PDFs
 - PP-StructureV3 structured output for layout/table/reading-order workflows
+- Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 - JSON/Markdown/text exports
+- CER/WER benchmark harness for Vietnamese OCR quality measurement
 
 ### Conversion
 - Word/Excel/PowerPoint/OpenDocument/RTF -> PDF through LibreOffice headless
 - Images -> PDF in the browser
 - PDF -> PNG/JPEG ZIP in the browser
 - Experimental PDF -> DOCX/XLSX/PPTX adapter for a separately deployed, pinned Bloom service
+- Round-trip visual-fidelity benchmark harness for PDF -> Office
 
 ### Advanced
-- Text-level PDF compare
+- Text-level and pixel/layout PDF compare
 - Real PKCS#12 cryptographic PDF signing with pyHanko
 - PDF/A conversion through the Ghostscript-free OCRmyPDF internal backend
 - Multi-step local workflow builder
@@ -38,7 +42,7 @@ Browser / Next.js
       |
       v
 FastAPI orchestration backend (qpdf + network utilities)
-      |---------------- OCR service (PaddleOCR)
+      |---------------- OCR service (PaddleOCR + Tesseract fallback)
       |---------------- Office service (LibreOffice)
       |---------------- Signature service (pyHanko)
       |---------------- Archive service (OCRmyPDF internal PDF/A)
@@ -74,15 +78,21 @@ GitHub Actions currently verifies:
 - Next.js production build
 - FastAPI/qpdf backend and network routes
 - PaddleOCR service API/lazy-load wiring
+- Real Vietnamese Tesseract fallback smoke test
 - Real LibreOffice DOCX -> PDF conversion
 - Real PKCS#12 PDF signing
 - Real PDF/A conversion using the internal non-Ghostscript backend
+- Docker Compose model and frontend/backend image builds
+
+## Benchmarking
+
+See `docs/BENCHMARKING.md` for:
+- Vietnamese OCR CER/WER measurement
+- PDF -> Office round-trip visual-fidelity testing
 
 ## Known boundaries
 
-- PDF compare is currently text-level, not pixel/layout visual diff.
-- PDF -> DOCX/XLSX/PPTX is **Experimental** until fidelity benchmarking is completed.
-- OCR Vietnamese quality benchmarking and Tesseract fallback remain follow-up work.
-- Cloud-storage connectors, AI summarization and PDF translation are not implemented yet.
+- PDF -> DOCX/XLSX/PPTX remains **Experimental** until representative corpus results establish a fidelity baseline.
+- Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
 See `docs/ROADMAP.md` for the exact implementation status and remaining work.
