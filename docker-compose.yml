@@ -7,7 +7,18 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   backend:
     build:
@@ -28,34 +39,88 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - ocr-service
-      - office-service
-      - sign-service
-      - archive-service
+      ocr-service:
+        condition: service_healthy
+      office-service:
+        condition: service_healthy
+      sign-service:
+        condition: service_healthy
+      archive-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   ocr-service:
     build:
       context: ./engines/ocr-service
     expose:
       - "8010"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=4).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
 
   office-service:
     build:
       context: ./engines/office-service
     expose:
       - "8020"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8020/health', timeout=4).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
   sign-service:
     build:
       context: ./engines/sign-service
     expose:
       - "8030"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8030/health', timeout=4).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   archive-service:
     build:
       context: ./engines/archive-service
     expose:
       - "8040"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8040/health', timeout=4).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
 # Experimental Bloom PDF -> Office is intentionally not bundled here.
 # Deploy the pinned upstream Bloom service separately and set BLOOM_SERVICE_URL.
