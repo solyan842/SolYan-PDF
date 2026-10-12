@@ -14,6 +14,8 @@ services:
       context: ./backend
     environment:
       SOLYAN_ALLOWED_ORIGINS: ${SOLYAN_ALLOWED_ORIGINS:-http://localhost:3000}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-0}
+      ALLOW_PRIVATE_NETWORK_UTILITIES: ${ALLOW_PRIVATE_NETWORK_UTILITIES:-0}
       OCR_SERVICE_URL: ${OCR_SERVICE_URL:-http://ocr-service:8010}
       OFFICE_SERVICE_URL: ${OFFICE_SERVICE_URL:-http://office-service:8020}
       SIGN_SERVICE_URL: ${SIGN_SERVICE_URL:-http://sign-service:8030}
