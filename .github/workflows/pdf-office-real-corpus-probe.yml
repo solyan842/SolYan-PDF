@@ -32,10 +32,8 @@ jobs:
       - name: Fetch exact py-pdf sample-files commit
         run: |
           set -euo pipefail
-          git init /tmp/sample-files
-          git -C /tmp/sample-files remote add origin https://github.com/py-pdf/sample-files.git
-          git -C /tmp/sample-files fetch --depth=1 origin "$PY_PDF_COMMIT"
-          git -C /tmp/sample-files checkout --detach FETCH_HEAD
+          git clone https://github.com/py-pdf/sample-files.git /tmp/sample-files
+          git -C /tmp/sample-files checkout --detach "$PY_PDF_COMMIT"
           test "$(git -C /tmp/sample-files rev-parse HEAD)" = "$PY_PDF_COMMIT"
           test -f /tmp/sample-files/011-google-doc-document/google-doc-document.pdf
           test -f /tmp/sample-files/026-latex-multicolumn/multicolumn.pdf
