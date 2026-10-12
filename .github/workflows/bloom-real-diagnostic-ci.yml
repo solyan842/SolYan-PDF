@@ -26,7 +26,58 @@ env:
   REAL_MANIFEST: benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json
 
 jobs:
+  materialize-corpus:
+    name: corpus / ${{ matrix.case_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        case_id:
+          - docx-google-doc
+          - docx-multicolumn
+          - docx-libreoffice-images
+          - xlsx-table-material
+          - xlsx-unidentified-table
+          - xlsx-transport-table
+          - pptx-commons-copyright
+          - pptx-what-is-cc
+          - pptx-copyright-laws
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install corpus verification dependencies
+        run: pip install pypdf==6.1.1 cryptography==46.0.3
+
+      - name: Fetch, verify and materialize one pinned document
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/real-case-stage"
+          mkdir -p "$stage/corpus" "$stage/inventory"
+          python benchmarks/fetch_pdf_to_office_real_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --case-id "${{ matrix.case_id }}" \
+            --output-dir "$stage/corpus" \
+            --output-inventory "$stage/inventory/${{ matrix.case_id }}.json"
+
+      - name: Upload verified document artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-office-real-case-${{ matrix.case_id }}
+          path: ${{ runner.temp }}/real-case-stage/
+          if-no-files-found: error
+          retention-days: 7
+
   diagnostic:
+    name: Bloom real-world diagnostic
+    needs: materialize-corpus
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -38,13 +89,74 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install benchmark dependencies
+        run: pip install -r benchmarks/requirements.txt
+
+      - name: Download verified corpus artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-to-office-real-case-*
+          path: /tmp/pdf-to-office-real-stage
+          merge-multiple: true
+
+      - name: Assemble and verify corpus artifact set
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          from pypdf import PdfReader
+
+          root = Path('/tmp/pdf-to-office-real-stage')
+          corpus_dir = root / 'corpus'
+          inventory_dir = root / 'inventory'
+          manifest = json.loads(Path('benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json').read_text())
+          expected_ids = [case['id'] for case in manifest['cases']]
+          expected_filenames = {case['id']: case['filename'] for case in manifest['cases']}
+
+          inventories = []
+          for path in sorted(inventory_dir.glob('*.json')):
+              payload = json.loads(path.read_text())
+              assert payload['manifest_version'] == manifest['version'], payload
+              assert payload['corpus_kind'] == manifest['corpus_kind'], payload
+              assert len(payload['cases']) == 1, payload
+              inventories.append(payload['cases'][0])
+
+          assert len(inventories) == 9, [item['id'] for item in inventories]
+          by_id = {item['id']: item for item in inventories}
+          assert set(by_id) == set(expected_ids), (sorted(by_id), sorted(expected_ids))
+          assert len(by_id) == len(inventories), 'duplicate corpus case id'
+          assert sum(int(item['output_pages']) for item in inventories) == 50, inventories
+
+          for case_id in expected_ids:
+              item = by_id[case_id]
+              pdf_path = corpus_dir / expected_filenames[case_id]
+              assert pdf_path.is_file(), pdf_path
+              data = pdf_path.read_bytes()
+              assert hashlib.sha256(data).hexdigest() == item['output_sha256'], item
+              assert len(PdfReader(pdf_path).pages) == int(item['output_pages']), item
+
+          combined = {
+              'manifest_version': manifest['version'],
+              'corpus_kind': manifest['corpus_kind'],
+              'cases': [by_id[case_id] for case_id in expected_ids],
+          }
+          Path('/tmp/pdf-to-office-real-inventory.json').write_text(
+              json.dumps(combined, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps({
+              'cases': len(inventories),
+              'pages': sum(int(item['output_pages']) for item in inventories),
+              'ids': expected_ids,
+          }, indent=2))
+          PY
+
       - name: Setup Node matching Bloom image
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Install benchmark dependencies
-        run: pip install -r benchmarks/requirements.txt
 
       - name: Fetch pinned Bloom source and apply SolYan table patch
         run: |
@@ -111,18 +223,11 @@ jobs:
               raise SystemExit(f'Health checks timed out: {sorted(pending)}')
           PY
 
-      - name: Fetch and verify pinned real-world corpus
-        run: |
-          python benchmarks/fetch_pdf_to_office_real_corpus.py \
-            --manifest "$REAL_MANIFEST" \
-            --output-dir /tmp/pdf-to-office-real-corpus \
-            --output-inventory /tmp/pdf-to-office-real-inventory.json
-
       - name: Run real-world diagnostic benchmark
         run: |
           PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
             --manifest "$REAL_MANIFEST" \
-            --corpus-dir /tmp/pdf-to-office-real-corpus \
+            --corpus-dir /tmp/pdf-to-office-real-stage/corpus \
             --api http://127.0.0.1:8000 \
             --output /tmp/pdf-to-office-real-report.json
 
