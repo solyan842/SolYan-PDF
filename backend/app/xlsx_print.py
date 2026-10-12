@@ -26,10 +26,10 @@ _PAPER_SIZES = (
 _PAPER_TOLERANCE_POINTS = 8.0
 
 
-def detect_pdf_print_setup(pdf_bytes: bytes) -> tuple[int, str] | None:
-    """Return ``(paperSize, orientation)`` for the first PDF page when known.
+def detect_pdf_print_setup(pdf_bytes: bytes) -> tuple[int, str, int] | None:
+    """Return ``(paperSize, orientation, pageCount)`` when page 1 is recognized.
 
-    qpdf is already a required backend engine. Using its object/JSON inspection
+    qpdf is already a required backend engine. Using its inspection commands
     keeps this helper dependency-free and handles inherited MediaBox/Rotate
     values instead of assuming A4 or parsing raw PDF syntax heuristically.
     Unknown/custom paper sizes deliberately return ``None`` so SolYan leaves the
@@ -43,6 +43,17 @@ def detect_pdf_print_setup(pdf_bytes: bytes) -> tuple[int, str] | None:
         with tempfile.TemporaryDirectory(prefix="solyan-xlsx-print-") as temp_dir:
             path = Path(temp_dir) / "source.pdf"
             path.write_bytes(pdf_bytes)
+
+            page_count_result = subprocess.run(
+                ["qpdf", "--show-npages", str(path)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            page_count = int(page_count_result.stdout.strip())
+            if page_count < 1:
+                return None
 
             shown = subprocess.run(
                 ["qpdf", "--show-pages", str(path)],
@@ -111,20 +122,40 @@ def detect_pdf_print_setup(pdf_bytes: bytes) -> tuple[int, str] | None:
             if paper_size is None:
                 return None
             orientation = "landscape" if width > height else "portrait"
-            return paper_size, orientation
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError):
+            return paper_size, orientation, page_count
+    except (
+        OSError,
+        ValueError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ):
         return None
 
 
-def apply_fit_to_width(xlsx_bytes: bytes, paper_size: int, orientation: str) -> bytes:
-    """Add fit-to-width metadata without changing workbook content or custom setup.
+def apply_fit_to_width(
+    xlsx_bytes: bytes,
+    paper_size: int,
+    orientation: str,
+    source_page_count: int,
+) -> bytes:
+    """Normalize print pagination without changing workbook content or custom setup.
 
     A worksheet that already contains ``<pageSetup>`` is left byte-for-byte
-    unchanged. The caller must supply page geometry derived from the source PDF;
-    SolYan does not guess a paper size for unknown/custom documents.
+    unchanged. The caller supplies page geometry derived from the source PDF.
+
+    For a one-page PDF that Bloom maps to exactly one worksheet, the worksheet is
+    fit to one page both wide and high. This is the only case where vertical fit
+    is forced. Multi-page sources or workbooks with multiple worksheets use
+    unlimited vertical pagination, avoiding an unsafe attempt to squeeze an
+    arbitrary document into one printed page.
     """
 
-    if paper_size <= 0 or orientation not in {"portrait", "landscape"}:
+    if (
+        paper_size <= 0
+        or orientation not in {"portrait", "landscape"}
+        or source_page_count < 1
+    ):
         return xlsx_bytes
 
     try:
@@ -136,10 +167,18 @@ def apply_fit_to_width(xlsx_bytes: bytes, paper_size: int, orientation: str) -> 
     changed = False
     try:
         with source, zipfile.ZipFile(output, "w") as target:
+            worksheet_count = sum(1 for info in source.infolist() if _WORKSHEET_RE.match(info.filename))
+            fit_to_height = 1 if source_page_count == 1 and worksheet_count == 1 else 0
+
             for info in source.infolist():
                 payload = source.read(info.filename)
                 if _WORKSHEET_RE.match(info.filename):
-                    updated = _patch_worksheet(payload, paper_size, orientation)
+                    updated = _patch_worksheet(
+                        payload,
+                        paper_size,
+                        orientation,
+                        fit_to_height,
+                    )
                     changed = changed or updated != payload
                     payload = updated
                 target.writestr(info, payload)
@@ -186,7 +225,12 @@ def _match_paper_size(width: float, height: float) -> int | None:
     return None
 
 
-def _patch_worksheet(xml_bytes: bytes, paper_size: int, orientation: str) -> bytes:
+def _patch_worksheet(
+    xml_bytes: bytes,
+    paper_size: int,
+    orientation: str,
+    fit_to_height: int,
+) -> bytes:
     text = xml_bytes.decode("utf-8")
     if "<pageSetup" in text:
         return xml_bytes
@@ -194,7 +238,7 @@ def _patch_worksheet(xml_bytes: bytes, paper_size: int, orientation: str) -> byt
     text = _ensure_fit_to_page_property(text)
     page_setup = (
         f'<pageSetup paperSize="{paper_size}" orientation="{orientation}" '
-        'fitToWidth="1" fitToHeight="0"/>'
+        f'fitToWidth="1" fitToHeight="{fit_to_height}"/>'
     )
     if "</worksheet>" not in text:
         return xml_bytes
