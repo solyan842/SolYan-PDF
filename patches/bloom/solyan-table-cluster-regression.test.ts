@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { TableCandidateDetector } from '../engines/table/candidates.js';
 
+function detect(nodes: Record<string, any>, readingOrder: string[], vectors: any[] = []) {
+  const detector = new TableCandidateDetector();
+  return detector.detect({
+    semantic: {
+      readingOrder,
+      nodes,
+    } as any,
+    layout: null,
+    raw: {
+      pages: [{ index: 0, vectors }],
+    } as any,
+    typography: {} as any,
+  });
+}
+
 describe('SolYan regression — table candidate clustering', () => {
   it('does not split a lattice when one earlier cell extends below the last short cell', () => {
     const nodes: Record<string, any> = {};
@@ -34,21 +49,39 @@ describe('SolYan regression — table candidate clustering', () => {
     add('bottom-c', 240, 420, 60, 20);
     add('bottom-d', 340, 420, 60, 20);
 
-    const detector = new TableCandidateDetector();
-    const candidates = detector.detect({
-      semantic: {
-        readingOrder,
-        nodes,
-      } as any,
-      layout: null,
-      raw: {
-        pages: [{ index: 0, vectors: [] }],
-      } as any,
-      typography: {} as any,
-    });
+    const candidates = detect(nodes, readingOrder);
 
     expect(candidates).toHaveLength(1);
     expect(new Set(candidates[0]!.nodeIds)).toEqual(new Set(readingOrder));
     expect(candidates[0]!.nodeIds).toHaveLength(8);
+  });
+
+  it('rejects sparse borderless invoice headings that only imitate a lattice', () => {
+    const nodes: Record<string, any> = {};
+    const readingOrder: string[] = [];
+
+    const add = (id: string, text: string, x: number, y: number, width: number, height: number) => {
+      nodes[id] = {
+        id,
+        type: 'paragraph',
+        pageIndex: 0,
+        bbox: { x, y, width, height },
+        text,
+      };
+      readingOrder.push(id);
+    };
+
+    // This reproduces the shape isolated by the xlsx-invoice diagnostics:
+    // title/subtitle metadata above a left/right invoice heading pair. It has
+    // >=4 text nodes and >=2 snapped rows/columns, but only one row has multiple
+    // aligned nodes, so it is not a real two-dimensional table lattice.
+    add('case-title', 'Invoice table', 48, 760, 110, 20);
+    add('case-subtitle', 'Synthetic controlled corpus', 48, 738, 190, 10);
+    add('invoice-title', 'INVOICE', 48, 680, 120, 30);
+    add('invoice-ref', 'INV-2026-1012', 430, 690, 110, 10);
+
+    const candidates = detect(nodes, readingOrder);
+
+    expect(candidates).toHaveLength(0);
   });
 });
