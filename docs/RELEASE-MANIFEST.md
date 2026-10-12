@@ -90,13 +90,19 @@ The multi-arch index digest is intentionally used instead of an amd64-only manif
 | Google Custom Search API | external service | provider terms | optional keyword-position utility |
 | Tranco-compatible ranking endpoint | external service | provider/API terms | optional website ranking utility |
 
+## Resolved image inventory
+
+`.github/workflows/image-inventory-ci.yml` builds all six default images and stores a 30-day artifact for each image. The artifact records the resolved OS package list, Python/npm dependency graph where applicable, core binary versions and Docker image metadata.
+
+This makes changes in live package repositories observable even when they are not yet fully pinned. See `docs/REPRODUCIBILITY.md` for the exact inventory model and limitations.
+
 ## Reproducibility note
 
-Application-level direct npm/Python dependencies and the Docker base-image indexes are pinned. However, the Dockerfiles still run `apt-get update` and install Debian packages without exact version constraints, and Python/npm transitive dependency graphs are not yet represented by a fully locked, hash-verified build manifest across all services.
+Application-level direct npm/Python dependencies and Docker base-image indexes are pinned. Resolved image package inventories are captured by CI. However, the Dockerfiles still run `apt-get update` and install Debian packages without exact version constraints, and some Python transitive dependency graphs are still resolved by pip at image build time.
 
-Therefore the containers are **more reproducible but not yet bit-for-bit reproducible**. qpdf, LibreOffice, Tesseract, fonts and other distro packages can still change when repository metadata changes even though the Debian base image itself is fixed.
+Therefore the containers are **traceable and more reproducible, but not yet bit-for-bit reproducible**. qpdf, LibreOffice, Tesseract, fonts and other distro packages can still change when repository metadata changes even though the Debian base image itself is fixed.
 
-The next hardening step is to record the resolved OS/Python package inventory (SBOM) for built images and, where practical, pin release package versions or use a dated package snapshot.
+The next strict-reproducibility step is to pin or snapshot distro package sources/versions and hash-lock transitive dependency sets where practical.
 
 ## License compliance rule
 
