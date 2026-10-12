@@ -2,6 +2,36 @@
 
 All notable changes to SolYan PDF are documented here.
 
+## [0.1.1] - 2026-10-12
+
+Patch release focused on reproducibility, dependency integrity, OCR release validation and deployment verification. No user-facing PDF workflow was intentionally changed.
+
+### Security and reproducibility
+- Pinned Node/Python multi-architecture base-image digests.
+- Locked the complete frontend npm dependency graph with `package-lock.json` and `npm ci`.
+- Locked Python transitive dependency graphs for backend, Office, signing, PDF/A and OCR services.
+- Added SHA-256 artifact verification for backend, Office, signing, PDF/A and the ordinary PyPI portion of the OCR graph.
+- Kept PaddlePaddle isolated on its official CPU package index with an explicit source/version lock.
+- Pinned all Python-image Debian package sources to snapshot `20261012T000000Z`.
+- Added resolved OS/Python/npm package inventory artifacts for all six runtime images.
+- Enforced non-root runtime users and writable runtime homes in image verification.
+
+### OCR verification
+- Established a reproducible 9-document public-domain Vietnamese real-scan baseline.
+- Recorded Tesseract fallback baseline CER 13.47% / WER 22.88%.
+- Added reproducible OCR dependency-graph validation and production image build verification.
+
+### Deployment
+- Added runtime healthchecks for all six default services.
+- Backend startup now waits for OCR, Office, signing and PDF/A services to become healthy; frontend waits for backend health.
+- Deployment CI now validates Compose, builds the full six-image stack, starts it with health waiting, smoke-tests public frontend/backend endpoints and tears the stack down cleanly.
+
+### Known limitations
+- PDF -> DOCX/XLSX/PPTX remains experimental until representative release corpora and fidelity thresholds are accepted.
+- The Vietnamese OCR real-scan corpus is still only 9 documents; broader quality claims remain blocked until 50–100+ diverse verified pages are available.
+- PaddlePaddle is source/version locked on its dedicated CPU index but not yet architecture-wide hash-pinned.
+- Cloud connectors, multi-party remote signing, AI summarization and PDF translation still require separate product/provider decisions.
+
 ## [0.1.0] - 2026-10-12
 
 Initial public V1 release candidate.
