@@ -1,0 +1,74 @@
+name: XLSX PP-StructureV3 Probe
+
+on:
+  push:
+    branches:
+      - experiment/xlsx-ppstructure-v3
+    paths:
+      - 'benchmarks/probe_ppstructure_xlsx.py'
+      - '.github/workflows/xlsx-ppstructure-probe.yml'
+      - 'engines/ocr-service/**'
+      - 'benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json'
+      - 'benchmarks/fetch_pdf_to_office_real_corpus.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python for corpus materialization
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install pinned corpus dependencies
+        run: pip install pypdf==6.1.1 cryptography==46.0.3
+
+      - name: Materialize three pinned scan-table PDFs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/xlsx-ppstructure-corpus /tmp/xlsx-ppstructure-inventory /tmp/xlsx-ppstructure-output
+          chmod 777 /tmp/xlsx-ppstructure-output
+          for case_id in xlsx-table-material xlsx-unidentified-table xlsx-transport-table; do
+            python benchmarks/fetch_pdf_to_office_real_corpus.py \
+              --manifest benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json \
+              --case-id "$case_id" \
+              --output-dir /tmp/xlsx-ppstructure-corpus \
+              --output-inventory "/tmp/xlsx-ppstructure-inventory/$case_id.json"
+          done
+
+      - name: Build pinned SolYan OCR image
+        run: docker build -t solyan-ocr-ppstructure-probe engines/ocr-service
+
+      - name: Run PP-StructureV3 native XLSX probe
+        run: |
+          set -o pipefail
+          docker run --rm --shm-size=1g \
+            -v "$GITHUB_WORKSPACE/benchmarks/probe_ppstructure_xlsx.py:/probe.py:ro" \
+            -v "/tmp/xlsx-ppstructure-corpus:/corpus:ro" \
+            -v "/tmp/xlsx-ppstructure-output:/output" \
+            solyan-ocr-ppstructure-probe \
+            python /probe.py \
+              --corpus-dir /corpus \
+              --output-dir /output/xlsx \
+              --report /output/report.json \
+              --lang en \
+            2>&1 | tee /tmp/xlsx-ppstructure-probe.log
+
+      - name: Upload PP-StructureV3 probe artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xlsx-ppstructure-v3-probe
+          path: |
+            /tmp/xlsx-ppstructure-output/
+            /tmp/xlsx-ppstructure-probe.log
+          if-no-files-found: warn
+          retention-days: 14
