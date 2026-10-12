@@ -1,0 +1,16 @@
+name: Resolve base image digests
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/base-image-digests.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Node base image
+        run: docker buildx imagetools inspect node:22.13-alpine
+
+      - name: Inspect Python base image
+        run: docker buildx imagetools inspect python:3.13-slim
