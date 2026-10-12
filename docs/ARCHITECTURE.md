@@ -1,5 +1,16 @@
 # SolYan PDF Architecture
 
+## Product direction
+
+SolYan PDF is **web-first and PWA-ready**.
+
+The browser is the primary product surface. Backend APIs and PDF/document engines are designed as reusable services so future desktop or mobile clients can use the same processing layer.
+
+Preferred delivery order:
+1. Responsive web application.
+2. PWA installation/offline-capable shell where practical.
+3. Desktop packaging only if deeper local/offline integration is justified later.
+
 ## Principles
 
 1. **Do not rewrite mature engines without a reason.** Prefer well-maintained open-source components with clear licenses.
@@ -7,11 +18,13 @@
 3. **Prefer client-side processing** for lightweight operations where privacy and performance benefit.
 4. **Use server-side workers** for OCR, Office conversion, large files and CPU-heavy jobs.
 5. **Keep license boundaries explicit.** AGPL/commercial/open-core projects may be studied or isolated, but must not be copied into the core without a deliberate license decision.
+6. **Keep the web frontend independent of processing engines.** UI communicates through stable browser modules or backend API contracts.
+7. **Design for progressive capability.** Basic tools should work without accounts; heavier/cloud features can be added later without restructuring the core.
 
 ## Proposed layers
 
 ```text
-Browser
+Browser / PWA
   │
   ├─ Frontend (React/Next.js)
   │    ├─ PDF viewer/editor UI
