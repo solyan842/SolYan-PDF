@@ -1,0 +1,166 @@
+name: Bloom PPTX inherited page geometry verify
+
+on:
+  push:
+    branches:
+      - diagnostic/pptx-inherited-page-geometry
+    paths:
+      - 'patches/bloom/**'
+      - 'benchmarks/**'
+      - 'backend/**'
+      - 'engines/office-service/**'
+      - '.github/workflows/bloom-pptx-geometry-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BLOOM_REPO: https://github.com/stemlen/bloom-pdf-editor.git
+  BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
+  BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
+  BLOOM_REGRESSION_TEST: patches/bloom/solyan-table-cluster-regression.test.ts
+  REAL_MANIFEST: benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install benchmark dependencies
+        run: pip install -r benchmarks/requirements.txt
+
+      - name: Materialize pinned What-is-CC PDF and one-case manifest
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pptx-geometry/corpus
+          python benchmarks/fetch_pdf_to_office_real_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --case-id pptx-what-is-cc \
+            --output-dir /tmp/pptx-geometry/corpus \
+            --output-inventory /tmp/pptx-geometry/inventory.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src = json.loads(Path('benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json').read_text())
+          case = next(c for c in src['cases'] if c['id'] == 'pptx-what-is-cc')
+          out = dict(src)
+          out['cases'] = [case]
+          Path('/tmp/pptx-geometry/manifest.json').write_text(json.dumps(out, indent=2) + '\n')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Fetch pinned Bloom and apply SolYan patch
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout "$BLOOM_REPO" /tmp/bloom
+          git -C /tmp/bloom fetch --depth=1 origin "$BLOOM_COMMIT"
+          git -C /tmp/bloom checkout --detach "$BLOOM_COMMIT"
+          test "$(git -C /tmp/bloom rev-parse HEAD)" = "$BLOOM_COMMIT"
+          git -C /tmp/bloom apply --check "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          git -C /tmp/bloom apply "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          cp "$GITHUB_WORKSPACE/$BLOOM_REGRESSION_TEST" /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
+          grep -q 'inheritedRectFrom' /tmp/bloom/server/src/engines/parser/document-parser.ts
+
+      - name: Typecheck and regression
+        working-directory: /tmp/bloom/server
+        run: |
+          npm ci
+          npm run typecheck
+          npx vitest run src/tests/solyan-table-cluster-regression.test.ts
+
+      - name: Build stack
+        run: |
+          docker build -t solyan-bloom-geometry /tmp/bloom/server
+          docker build -t solyan-office-geometry engines/office-service
+          docker build -t solyan-backend-geometry backend
+
+      - name: Start stack
+        run: |
+          docker network create solyan-pptx-geometry
+          docker run -d --name bloom-geometry --network solyan-pptx-geometry \
+            -e BLOOM_STORAGE_ROOT=/tmp/bloom-storage solyan-bloom-geometry
+          docker run -d --name office-geometry --network solyan-pptx-geometry solyan-office-geometry
+          docker run -d --name backend-geometry --network solyan-pptx-geometry -p 8000:8000 \
+            -e BLOOM_SERVICE_URL=http://bloom-geometry:8787 \
+            -e OFFICE_SERVICE_URL=http://office-geometry:8020 \
+            solyan-backend-geometry
+
+      - name: Wait for health
+        run: |
+          python - <<'PY'
+          import time, urllib.request
+          urls = ['http://127.0.0.1:8000/health', 'http://127.0.0.1:8000/experimental/bloom/health']
+          deadline = time.monotonic() + 180
+          for url in urls:
+              while True:
+                  try:
+                      with urllib.request.urlopen(url, timeout=5) as r:
+                          if 200 <= r.status < 300:
+                              print(url, r.read().decode('utf-8', 'replace'))
+                              break
+                  except Exception as exc:
+                      if time.monotonic() >= deadline:
+                          raise SystemExit(f'health timeout {url}: {exc}')
+                      time.sleep(3)
+          PY
+
+      - name: Run focused real-world PPTX benchmark
+        run: |
+          set -euo pipefail
+          PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
+            --manifest /tmp/pptx-geometry/manifest.json \
+            --corpus-dir /tmp/pptx-geometry/corpus \
+            --api http://127.0.0.1:8000 \
+            --output /tmp/pptx-geometry/report.json
+
+      - name: Enforce inherited geometry fix
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('/tmp/pptx-geometry/report.json').read_text())['results'][0]
+          assert r['id'] == 'pptx-what-is-cc', r
+          assert r['source_pages'] == 11 and r['roundtrip_pages'] == 11, r
+          assert r['geometry_mismatches'] == 0, r
+          assert r['source_render_sizes'] == r['roundtrip_render_sizes'], r
+          assert r['average_similarity'] > 0.0, r
+          print(json.dumps({
+              'average_similarity': r['average_similarity'],
+              'geometry_mismatches': r['geometry_mismatches'],
+              'source_render_sizes': r['source_render_sizes'][:1],
+              'roundtrip_render_sizes': r['roundtrip_render_sizes'][:1],
+          }, indent=2))
+          PY
+
+      - name: Upload focused report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pptx-inherited-page-geometry-report
+          path: /tmp/pptx-geometry/report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          for name in bloom-geometry office-geometry backend-geometry; do
+            echo "===== $name ====="
+            docker logs "$name" || true
+          done
+
+      - name: Stop stack
+        if: always()
+        run: |
+          docker rm -f backend-geometry office-geometry bloom-geometry 2>/dev/null || true
+          docker network rm solyan-pptx-geometry 2>/dev/null || true
