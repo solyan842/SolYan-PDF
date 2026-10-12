@@ -1,0 +1,3 @@
+# PaddlePaddle wheel source is intentionally explicit and separate from the PyPI graph.
+--index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/
+paddlepaddle==3.2.0
