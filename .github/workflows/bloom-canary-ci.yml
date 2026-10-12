@@ -53,6 +53,7 @@ jobs:
           git -C /tmp/bloom checkout --detach "$BLOOM_COMMIT"
           test "$(git -C /tmp/bloom rev-parse HEAD)" = "$BLOOM_COMMIT"
           grep -q 'Apache License' /tmp/bloom/LICENSE
+          grep -q 'BLOOM_STORAGE_ROOT' /tmp/bloom/server/src/utils/config.ts
 
       - name: Build Bloom, Office and backend images
         run: |
@@ -63,7 +64,9 @@ jobs:
       - name: Start isolated canary stack
         run: |
           docker network create solyan-bloom-canary
-          docker run -d --name bloom --network solyan-bloom-canary solyan-bloom-canary
+          docker run -d --name bloom --network solyan-bloom-canary \
+            -e BLOOM_STORAGE_ROOT=/tmp/bloom-storage \
+            solyan-bloom-canary
           docker run -d --name office --network solyan-bloom-canary solyan-office-canary
           docker run -d --name backend --network solyan-bloom-canary -p 8000:8000 \
             -e BLOOM_SERVICE_URL=http://bloom:8787 \
