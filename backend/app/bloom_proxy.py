@@ -7,6 +7,8 @@ import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
+from .xlsx_print import apply_fit_to_width
+
 router = APIRouter(prefix="/experimental", tags=["Experimental conversion"])
 BLOOM_SERVICE_URL = os.getenv("BLOOM_SERVICE_URL", "http://bloom-service:8787").rstrip("/")
 BLOOM_API_KEY = os.getenv("BLOOM_API_KEY", "")
@@ -65,9 +67,10 @@ def pdf_to_office(
                 if state == "Completed":
                     result = client.get(f"{BLOOM_SERVICE_URL}/download/{job_id}")
                     result.raise_for_status()
+                    content = apply_fit_to_width(result.content) if target == "xlsx" else result.content
                     disposition = result.headers.get("content-disposition", f'attachment; filename="solyan-converted.{target}"')
                     return Response(
-                        content=result.content,
+                        content=content,
                         media_type=result.headers.get("content-type", "application/octet-stream"),
                         headers={"Content-Disposition": disposition},
                     )
