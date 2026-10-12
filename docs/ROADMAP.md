@@ -143,8 +143,11 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Publish GitHub tag/release `v0.1.0`
 - [x] Pin Node/Python multi-arch base-image digests
 - [x] Lock full frontend npm graph with `package-lock.json` + `npm ci`
+- [x] Lock backend / Office / signing / PDF-A Python transitive graphs with `requirements.lock`
 - [x] Generate resolved OS/Python/npm package inventories for all six release images in CI artifacts
-- [ ] Pin/snapshot distro packages and hash-lock Python transitive dependencies where practical for bit-for-bit reproducible images
+- [ ] Add dedicated PaddleOCR/PaddlePaddle transitive lock preserving the CPU wheel index
+- [ ] Add hash-verified Python locks where practical
+- [ ] Pin/snapshot distro packages for stricter image reproducibility
 
 ## Release decisions / external inputs still required
 

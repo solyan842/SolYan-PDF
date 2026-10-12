@@ -17,6 +17,19 @@ The Dockerfiles are pinned to OCI multi-architecture index digests so future bui
 
 The multi-arch index digest is intentionally used instead of an amd64-only manifest digest, preserving Docker's architecture selection for supported platforms.
 
+## Dependency lock coverage
+
+| Runtime | Lock state |
+|---|---|
+| Frontend | Full npm graph committed in `frontend/package-lock.json`; Docker/CI use `npm ci` |
+| Backend | Full Python transitive graph in `backend/requirements.lock` |
+| Office service | Full Python transitive graph in `engines/office-service/requirements.lock` |
+| Signature service | Full Python transitive graph in `engines/sign-service/requirements.lock` |
+| PDF/A archive service | Full Python transitive graph in `engines/archive-service/requirements.lock` |
+| OCR service | Direct versions pinned; full Paddle/PaddleOCR transitive lock still pending because PaddlePaddle uses a dedicated CPU wheel index |
+
+Standard Python lockfiles are generated in a clean Python 3.13.16 environment by `scripts/lock-python-deps.sh`. Docker/CI install both the lock and direct requirements together and run `pip check`.
+
 ## Frontend
 
 | Component | Version | License | Integration |
@@ -78,7 +91,7 @@ The multi-arch index digest is intentionally used instead of an amd64-only manif
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | OCRmyPDF | 17.13.0 | MPL-2.0 | PDF/A orchestration |
-| pypdfium2 | >=4.30.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering |
+| pypdfium2 | 5.14.0 in transitive lock | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering |
 | qpdf | distro package | Apache-2.0 | PDF engine |
 | Tesseract OCR | distro package | Apache-2.0 | OCR engine |
 
@@ -94,15 +107,13 @@ The multi-arch index digest is intentionally used instead of an amd64-only manif
 
 `.github/workflows/image-inventory-ci.yml` builds all six default images and stores a 30-day artifact for each image. The artifact records the resolved OS package list, Python/npm dependency graph where applicable, core binary versions and Docker image metadata.
 
-This makes changes in live package repositories observable even when they are not yet fully pinned. See `docs/REPRODUCIBILITY.md` for the exact inventory model and limitations.
+See `docs/REPRODUCIBILITY.md` for the exact inventory/lock model and limitations.
 
 ## Reproducibility note
 
-Application-level direct npm/Python dependencies and Docker base-image indexes are pinned. Resolved image package inventories are captured by CI. However, the Dockerfiles still run `apt-get update` and install Debian packages without exact version constraints, and some Python transitive dependency graphs are still resolved by pip at image build time.
+Application-level npm dependencies and four standard Python service graphs are locked; Docker base-image indexes are pinned; resolved image package inventories are captured by CI. The OCR/Paddle graph remains a special-case lock task. Dockerfiles also still run `apt-get update` and install Debian packages without exact version constraints, and Python locks are version-pinned rather than hash-verified.
 
-Therefore the containers are **traceable and more reproducible, but not yet bit-for-bit reproducible**. qpdf, LibreOffice, Tesseract, fonts and other distro packages can still change when repository metadata changes even though the Debian base image itself is fixed.
-
-The next strict-reproducibility step is to pin or snapshot distro package sources/versions and hash-lock transitive dependency sets where practical.
+Therefore the containers are **traceable and substantially more reproducible, but not yet bit-for-bit reproducible**.
 
 ## License compliance rule
 
