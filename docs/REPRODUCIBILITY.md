@@ -19,30 +19,45 @@ The production audit remains a separate gate; a locked dependency can still beco
 
 ## 3. Python dependency locks
 
-The following services have committed full transitive `requirements.lock` files generated in clean Python **3.13.16** virtual environments:
+### Standard Python services
+
+The following services use committed `requirements.hashes` files generated in a clean Python **3.13.16** environment:
 
 - `backend`
 - `engines/office-service`
 - `engines/sign-service`
 - `engines/archive-service`
-- `engines/ocr-service`
 
 Regenerate them with:
 
 ```bash
-PYTHON_BIN=/path/to/python3.13.16 ./scripts/lock-python-deps.sh
+PYTHON_BIN=/path/to/python3.13.16 bash ./scripts/generate-python-hash-locks.sh
 ```
 
-The lock-generation script pins pip **26.2.1** so regeneration itself does not depend on an arbitrary latest pip release.
+The generator pins:
 
-For the standard services, Docker installs the transitive lock plus the direct `requirements.txt` and runs `pip check`.
+- pip **26.2.1**;
+- pip-tools **7.6.2**;
+- the exact direct requirements in each service's `requirements.txt`.
 
-The OCR service uses a two-part lock because PaddlePaddle is distributed from a dedicated CPU wheel index:
+`pip-compile --generate-hashes` resolves the complete transitive graph and records SHA-256 hashes for accepted distributions. Production Docker images and service CI install these files with:
+
+```bash
+pip install --require-hashes -r requirements.hashes
+```
+
+The dedicated `Python Hash Lock CI` regenerates all four files and fails if the committed locks differ, preventing a direct requirement from changing without a matching hash-lock update.
+
+### OCR / Paddle service
+
+The OCR service remains a deliberate special case because PaddlePaddle is distributed from a dedicated CPU wheel index:
 
 - `engines/ocr-service/paddle-requirements.lock` pins `paddlepaddle==3.2.0` and preserves the official Paddle CPU index;
 - `engines/ocr-service/requirements.lock` pins the rest of the PaddleOCR/Python transitive graph.
 
 The production OCR image installs the Paddle lock first, then the remaining graph, validates the direct requirements without re-resolving dependencies, and finishes with `pip check`.
+
+This graph is version-locked and source-constrained but is **not yet claimed to be hash-verified**.
 
 ## 4. Resolved package inventory
 
@@ -70,17 +85,17 @@ Artifacts are retained by GitHub Actions for 30 days. For a formal release, down
 
 ## 5. What is still not bit-for-bit reproducible
 
-Base-image pinning, npm/Python locks and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
+Base-image pinning, npm locks, Python hash locks and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
 
 - Debian package installation still runs `apt-get update` against live repositories;
-- distro packages are installed by package name rather than exact version;
-- the Python lockfiles pin versions but do not yet use package hashes / `--require-hashes`;
+- distro packages are installed by package name rather than exact version or dated snapshot;
+- PaddlePaddle/PaddleOCR is source-constrained and version-locked but not yet hash-verified;
 - timestamps and build-tool metadata can differ between builds.
 
-A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash-locked Python dependency sets and normalized build metadata.
+A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash verification for the Paddle CPU-index artifacts where maintainable, and normalized build metadata.
 
 ## 6. Release rule
 
 Do not describe SolYan PDF containers as bit-for-bit reproducible until a repeat build of every release image has been verified to produce the intended deterministic result under the chosen reproducibility definition.
 
-Until then, the accurate description is: **pinned base images + locked frontend graph + locked Python service graphs including Paddle CPU-index handling + recorded resolved image inventories**.
+Until then, the accurate description is: **pinned base images + locked frontend graph + hash-verified standard Python service graphs + source-constrained Paddle locks + recorded resolved image inventories**.
