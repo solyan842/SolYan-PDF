@@ -4,6 +4,14 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+### Scanned table to Excel
+- Added PP-StructureV3 scanned-table export to `.xlsx`, including multi-page/multi-table workbook merging with worksheet-level style, merge, dimension, hyperlink and comment preservation.
+- Added a backend binary proxy for `/ocr/xlsx` with bounded uploads and forwarded download/diagnostic headers.
+- Added the OCR web/PWA mode **Bảng scan → Excel (.xlsx)** with direct browser download and page/table metadata.
+- Exposed OCR download headers through CORS so the browser can retain the service filename and result metadata.
+- Added regression coverage for cross-workbook OpenPyXL style copying and for the backend XLSX binary proxy.
+- Removed the completed one-shot PP-Structure scanned-XLSX diagnostic workflow after the feature path was validated.
+
 ### Vietnamese OCR regression coverage
 - Expanded the reproducible real-scan Vietnamese OCR corpus from 9 to 59 samples without using synthetic scans.
 - Added 25 proofread scan pages from *Nam Hải dị nhân liệt truyện* and 25 from *Việt Nam phong tục*, with exact Wikisource revision pins and SHA-256-pinned Public Domain Commons source PDFs.

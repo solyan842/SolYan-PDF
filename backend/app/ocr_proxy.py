@@ -4,13 +4,15 @@ import os
 
 import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import Response
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 OCR_SERVICE_URL = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8010").rstrip("/")
 OCR_PROXY_MAX_FILE_SIZE = int(os.getenv("OCR_PROXY_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-def _forward(path: str, upload: UploadFile) -> dict:
+def _read_upload(upload: UploadFile) -> tuple[bytes, str, str]:
     data = upload.file.read(OCR_PROXY_MAX_FILE_SIZE + 1)
     if len(data) > OCR_PROXY_MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="OCR input exceeds 50 MB limit")
@@ -19,6 +21,11 @@ def _forward(path: str, upload: UploadFile) -> dict:
 
     filename = upload.filename or "document.bin"
     content_type = upload.content_type or "application/octet-stream"
+    return data, filename, content_type
+
+
+def _post(path: str, upload: UploadFile) -> httpx.Response:
+    data, filename, content_type = _read_upload(upload)
     try:
         with httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
             response = client.post(
@@ -35,10 +42,31 @@ def _forward(path: str, upload: UploadFile) -> dict:
             detail = response.text
         raise HTTPException(status_code=response.status_code, detail=str(detail)[:2000])
 
+    return response
+
+
+def _forward(path: str, upload: UploadFile) -> dict:
+    response = _post(path, upload)
     try:
         return response.json()
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="OCR service returned invalid JSON") from exc
+
+
+def _forward_binary(path: str, upload: UploadFile, default_media_type: str) -> Response:
+    response = _post(path, upload)
+    media_type = response.headers.get("content-type", default_media_type).split(";", 1)[0].strip()
+    headers: dict[str, str] = {}
+    for name in (
+        "content-disposition",
+        "x-solyan-ocr-engine",
+        "x-solyan-ocr-pages",
+        "x-solyan-ocr-table-workbooks",
+    ):
+        value = response.headers.get(name)
+        if value:
+            headers[name] = value
+    return Response(content=response.content, media_type=media_type or default_media_type, headers=headers)
 
 
 @router.get("/health")
@@ -59,3 +87,8 @@ def ocr_text(file: UploadFile = File(...)) -> dict:
 @router.post("/structured")
 def ocr_structured(file: UploadFile = File(...)) -> dict:
     return _forward("/ocr/structured", file)
+
+
+@router.post("/xlsx")
+def ocr_xlsx(file: UploadFile = File(...)) -> Response:
+    return _forward_binary("/ocr/xlsx", file, XLSX_MEDIA_TYPE)

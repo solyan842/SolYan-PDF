@@ -47,6 +47,62 @@ jobs:
       - name: Import app and verify qpdf health
         run: python -c "from app.main import health; print(health())"
 
+      - name: Verify OCR XLSX binary proxy
+        run: |
+          python - <<'PY'
+          import httpx
+          from fastapi.testclient import TestClient
+          from unittest.mock import patch
+
+          from app.main import app
+
+          XLSX = b'PK\x03\x04solyan-xlsx'
+
+          class FakeClient:
+              def __init__(self, *args, **kwargs):
+                  pass
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(self, exc_type, exc, tb):
+                  return False
+
+              def post(self, url, files):
+                  assert url.endswith('/ocr/xlsx'), url
+                  filename, data, content_type = files['file']
+                  assert filename == 'scan.pdf'
+                  assert data.startswith(b'%PDF-')
+                  assert content_type == 'application/pdf'
+                  return httpx.Response(
+                      200,
+                      content=XLSX,
+                      headers={
+                          'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          'content-disposition': 'attachment; filename="solyan-ocr-tables.xlsx"',
+                          'x-solyan-ocr-engine': 'PP-StructureV3',
+                          'x-solyan-ocr-pages': '2',
+                          'x-solyan-ocr-table-workbooks': '3',
+                      },
+                      request=httpx.Request('POST', url),
+                  )
+
+          with patch('app.ocr_proxy.httpx.Client', FakeClient):
+              response = TestClient(app).post(
+                  '/ocr/xlsx',
+                  files={'file': ('scan.pdf', b'%PDF-1.7\nscan', 'application/pdf')},
+              )
+
+          assert response.status_code == 200, response.text
+          assert response.content == XLSX
+          assert response.headers['content-type'].startswith('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+          assert response.headers['content-disposition'] == 'attachment; filename="solyan-ocr-tables.xlsx"'
+          assert response.headers['x-solyan-ocr-engine'] == 'PP-StructureV3'
+          assert response.headers['x-solyan-ocr-pages'] == '2'
+          assert response.headers['x-solyan-ocr-table-workbooks'] == '3'
+          print('ocr xlsx binary proxy ok')
+          PY
+
       - name: Verify XLSX source-aware print normalization
         run: |
           python - <<'PY'

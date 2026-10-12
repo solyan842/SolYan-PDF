@@ -25,6 +25,12 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    expose_headers=[
+        "Content-Disposition",
+        "X-SolYan-OCR-Engine",
+        "X-SolYan-OCR-Pages",
+        "X-SolYan-OCR-Table-Workbooks",
+    ],
 )
 app.include_router(network_router)
 app.include_router(ocr_router)
