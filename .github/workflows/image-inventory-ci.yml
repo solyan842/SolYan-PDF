@@ -59,6 +59,14 @@ jobs:
       - name: Build image
         run: docker build --pull=false -t "solyan-${{ matrix.name }}:inventory" "${{ matrix.context }}"
 
+      - name: Verify non-root writable runtime home
+        run: |
+          image="solyan-${{ matrix.name }}:inventory"
+          uid="$(docker run --rm --entrypoint /bin/sh "$image" -c 'id -u')"
+          test "$uid" -ne 0
+          docker run --rm --entrypoint /bin/sh "$image" -c 'test -n "${HOME:-}" && test -d "$HOME" && test -w "$HOME"'
+          echo "runtime_uid=$uid"
+
       - name: Capture image metadata
         run: |
           mkdir -p inventory
