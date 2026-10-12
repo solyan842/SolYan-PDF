@@ -18,6 +18,8 @@ jobs:
     defaults:
       run:
         working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
 
     steps:
       - name: Checkout
@@ -30,6 +32,9 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Build
         run: npm run build
