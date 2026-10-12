@@ -171,13 +171,28 @@ def _safe_sheet_name(base: str, used: set[str]) -> str:
     return candidate
 
 
+def _copy_style(source: Any, target: Any) -> None:
+    """Copy a style across workbooks without reusing foreign style-table IDs."""
+    if not getattr(source, "has_style", False):
+        return
+    target.font = copy(source.font)
+    target.fill = copy(source.fill)
+    target.border = copy(source.border)
+    target.alignment = copy(source.alignment)
+    target.number_format = source.number_format
+    target.protection = copy(source.protection)
+    if hasattr(source, "quotePrefix") and hasattr(target, "quotePrefix"):
+        target.quotePrefix = source.quotePrefix
+    if hasattr(source, "pivotButton") and hasattr(target, "pivotButton"):
+        target.pivotButton = source.pivotButton
+
+
 def _copy_sheet(source: Any, target: Any) -> None:
     for row in source.iter_rows():
         for cell in row:
             dst = target[cell.coordinate]
             dst.value = cell.value
-            if cell.has_style:
-                dst._style = copy(cell._style)
+            _copy_style(cell, dst)
             if cell.hyperlink:
                 dst._hyperlink = copy(cell.hyperlink)
             if cell.comment:
@@ -187,9 +202,27 @@ def _copy_sheet(source: Any, target: Any) -> None:
         target.merge_cells(str(merged_range))
 
     for key, dimension in source.column_dimensions.items():
-        target.column_dimensions[key] = copy(dimension)
+        target_dimension = target.column_dimensions[key]
+        target_dimension.width = dimension.width
+        target_dimension.hidden = dimension.hidden
+        target_dimension.bestFit = dimension.bestFit
+        target_dimension.outlineLevel = dimension.outlineLevel
+        target_dimension.collapsed = dimension.collapsed
+        target_dimension.min = dimension.min
+        target_dimension.max = dimension.max
+        _copy_style(dimension, target_dimension)
+
     for key, dimension in source.row_dimensions.items():
-        target.row_dimensions[key] = copy(dimension)
+        target_dimension = target.row_dimensions[key]
+        target_dimension.height = dimension.height
+        target_dimension.hidden = dimension.hidden
+        target_dimension.outlineLevel = dimension.outlineLevel
+        target_dimension.collapsed = dimension.collapsed
+        if hasattr(dimension, "thickTop"):
+            target_dimension.thickTop = dimension.thickTop
+        if hasattr(dimension, "thickBot"):
+            target_dimension.thickBot = dimension.thickBot
+        _copy_style(dimension, target_dimension)
 
     target.freeze_panes = source.freeze_panes
     target.sheet_format = copy(source.sheet_format)
