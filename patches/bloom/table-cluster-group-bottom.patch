@@ -1,29 +1,33 @@
 diff --git a/server/src/engines/table/candidates.ts b/server/src/engines/table/candidates.ts
 --- a/server/src/engines/table/candidates.ts
 +++ b/server/src/engines/table/candidates.ts
-@@ -51,6 +51,12 @@
+@@ -51,6 +51,14 @@
        for (const cluster of clusters) {
          if (cluster.nodeIds.length < 4) continue;
          const hasVectorBorders = pageHasTableVectors(input, pageIndex, cluster.bbox);
-+        // Borderless text needs repeated support in both dimensions. Sparse page
-+        // furniture (titles, subtitles, invoice metadata) can otherwise satisfy
-+        // the loose >=2x2 uniqueness test without forming a real table lattice.
-+        if (!hasVectorBorders && (cluster.rowSupport < 2 || cluster.columnSupport < 2)) {
++        // Borderless text needs repeated support in both dimensions. Preserve
++        // Bloom's intentional two-row merged-cell shape: one wide merged label
++        // above a dense row is a valid table even though only one row repeats.
++        const repeatedGrid = cluster.rowSupport >= 2 && cluster.columnSupport >= 2;
++        const twoRowMergedGrid = cluster.rowCount === 2 && cluster.maxRowOccupancy >= 3;
++        if (!hasVectorBorders && !repeatedGrid && !twoRowMergedGrid) {
 +          continue;
 +        }
          const score =
            0.4 +
            Math.min(0.4, cluster.regularity) +
-@@ -75,6 +81,8 @@
+@@ -75,6 +83,10 @@
    nodeIds: string[];
    bbox: BoundingBox;
    regularity: number;
 +  rowSupport: number;
 +  columnSupport: number;
++  rowCount: number;
++  maxRowOccupancy: number;
  }> {
    // Greedy: take all text nodes on page that share column/row alignment as one candidate
    // Split into separate tables if there's a large vertical gap
-@@ -86,34 +94,41 @@
+@@ -86,34 +98,41 @@
  
    const groups: SemanticNode[][] = [];
    let current: SemanticNode[] = [];
@@ -75,12 +79,14 @@ diff --git a/server/src/engines/table/candidates.ts b/server/src/engines/table/c
        if (cols < 2 || rows < 2) {
          return null;
        }
-@@ -130,20 +145,27 @@
+@@ -130,20 +149,29 @@
          nodeIds: group.map((g) => g.id),
          bbox,
          regularity,
 +        rowSupport: yCounts.filter((count) => count >= 2).length,
 +        columnSupport: xCounts.filter((count) => count >= 2).length,
++        rowCount: rows,
++        maxRowOccupancy: Math.max(...yCounts),
        };
      })
      .filter((c): c is NonNullable<typeof c> => c != null);
