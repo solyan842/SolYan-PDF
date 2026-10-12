@@ -50,7 +50,7 @@ The version-lock generator pins pip **26.2.1** so regeneration does not depend o
 
 ### Standard PyPI services: SHA-256 verification
 
-Backend, Office, signing and PDF/A additionally commit `requirements.hashed.lock` files generated from their version locks with `scripts/hash-python-locks.sh`. The generator uses Python 3.13.16, pip 26.2.1 and pip-tools 7.6.2 with `--generate-hashes`.
+Backend, Office, signing and PDF/A commit `requirements.hashed.lock` files generated from their version locks with `scripts/hash-python-locks.sh`. The generator uses Python 3.13.16, pip 26.2.1 and pip-tools 7.6.2 with `--generate-hashes`.
 
 Production Dockerfiles install these graphs with:
 
@@ -58,18 +58,25 @@ Production Dockerfiles install these graphs with:
 pip install --require-hashes -r requirements.hashed.lock
 ```
 
-They then validate the direct `requirements.txt` without resolving dependencies again and run `pip check`. `.github/workflows/hash-lock-ci.yml` regenerates all four hashed locks and fails if the committed output differs.
+They then validate the direct `requirements.txt` without resolving dependencies again and run `pip check`.
 
-This prevents a same-version package artifact that does not match an accepted SHA-256 hash from entering those four production Python environments.
+### OCR: hash-verified PyPI graph + source-locked PaddlePaddle
 
-### OCR / Paddle special-index lock
-
-The OCR service uses a two-part version lock because PaddlePaddle is distributed from a dedicated CPU wheel index:
+PaddlePaddle is distributed from a dedicated CPU wheel index, so OCR keeps it separate from the ordinary PyPI graph:
 
 - `engines/ocr-service/paddle-requirements.lock` pins `paddlepaddle==3.2.0` and preserves the official Paddle CPU index;
-- `engines/ocr-service/requirements.lock` pins the rest of the PaddleOCR/Python transitive graph.
+- `engines/ocr-service/requirements.lock` pins the remaining PaddleOCR/Python transitive graph;
+- `engines/ocr-service/requirements.hashed.lock` records every published SHA-256 distribution digest for each exact PyPI release in that graph.
 
-The OCR image installs the Paddle lock first, then the remaining version graph, validates direct requirements without re-resolving dependencies and finishes with `pip check`. This graph is version/source locked but is not yet covered by the standard PyPI hash-lock procedure.
+`scripts/hash-pinned-pypi.py` queries PyPI metadata for the already-pinned versions and generates the multi-platform hash set without resolving dependencies again. The OCR image installs PaddlePaddle first from its dedicated CPU source, then installs the remaining PyPI graph with:
+
+```text
+pip install --require-hashes --no-deps -r requirements.hashed.lock
+```
+
+The `--no-deps` boundary is deliberate: it prevents pip from attempting to re-resolve PaddlePaddle from PyPI while still requiring every explicitly listed PyPI artifact to match an accepted SHA-256 digest. The image finishes with `pip check` to verify that the separately sourced PaddlePaddle and the hash-verified PyPI graph satisfy the complete dependency relationships.
+
+`.github/workflows/hash-lock-ci.yml` regenerates all standard and OCR PyPI hash locks and fails on drift.
 
 ## 5. Resolved package inventory
 
@@ -98,16 +105,16 @@ Artifacts are retained by GitHub Actions for 30 days. For a formal release, down
 
 ## 6. What is still not bit-for-bit reproducible
 
-Base-image pinning, Debian snapshot pinning, npm/Python locks, standard-service SHA-256 verification and inventory capture substantially reduce external resolver drift. SolYan PDF still does **not** claim bit-for-bit image reproducibility because:
+Base-image pinning, Debian snapshot pinning, npm/Python locks, PyPI SHA-256 verification and inventory capture substantially reduce external resolver drift. SolYan PDF still does **not** claim bit-for-bit image reproducibility because:
 
-- the OCR/Paddle dedicated-index dependency graph is version/source locked but not yet hash-verified;
+- the PaddlePaddle wheel from its dedicated CPU index is source/version locked but not yet hash-pinned across all supported architectures;
 - build timestamps and some generated metadata can differ between builds;
 - repeat-build byte identity across every image/architecture has not been established as a release invariant.
 
-A stricter final reproducible-build phase would extend trustworthy hash verification to the Paddle CPU-index graph where practical and normalize build metadata, then compare repeat-build image outputs under a defined reproducibility policy.
+A stricter final reproducible-build phase would establish a reliable architecture-aware PaddlePaddle wheel hash policy and normalize build metadata, then compare repeat-build image outputs under a defined reproducibility policy.
 
 ## 7. Release rule
 
 Do not describe SolYan PDF containers as bit-for-bit reproducible until a repeat build of every release image has been verified to produce the intended deterministic result under the chosen reproducibility definition.
 
-Until then, the accurate description is: **pinned base-image digests + fixed Debian package snapshot + locked frontend/Python graphs + SHA-256 verification for standard PyPI services + Paddle CPU-index source locking + recorded resolved image inventories**.
+Until then, the accurate description is: **pinned base-image digests + fixed Debian package snapshot + locked frontend/Python graphs + SHA-256 verification for all ordinary PyPI dependencies including OCR + Paddle CPU-index source/version locking + recorded resolved image inventories**.
