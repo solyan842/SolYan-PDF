@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import time
 from pathlib import Path
@@ -51,6 +50,46 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
     }
 
 
+def benchmark_pdf(source: bytes, filename: str, target: str, api: str) -> tuple[dict, bytes, bytes]:
+    if not source.startswith(b'%PDF-'):
+        raise ValueError('Input is not a PDF')
+    if target not in {'docx', 'xlsx', 'pptx'}:
+        raise ValueError(f'Unsupported target: {target}')
+
+    start = time.perf_counter()
+    with httpx.Client(timeout=360.0) as client:
+        converted = client.post(
+            f"{api.rstrip('/')}/experimental/pdf-to-office",
+            files={'file': (filename, source, 'application/pdf')},
+            data={'target': target},
+        )
+        converted.raise_for_status()
+        office_bytes = converted.content
+        convert_seconds = time.perf_counter() - start
+
+        roundtrip_start = time.perf_counter()
+        roundtrip = client.post(
+            f"{api.rstrip('/')}/office/to-pdf",
+            files={'file': (f'roundtrip.{target}', office_bytes, 'application/octet-stream')},
+        )
+        roundtrip.raise_for_status()
+        roundtrip_pdf = roundtrip.content
+        roundtrip_seconds = time.perf_counter() - roundtrip_start
+
+    metrics = visual_similarity(source, roundtrip_pdf)
+    report = {
+        'source': filename,
+        'target': target,
+        'source_bytes': len(source),
+        'office_bytes': len(office_bytes),
+        'roundtrip_pdf_bytes': len(roundtrip_pdf),
+        'convert_seconds': convert_seconds,
+        'roundtrip_seconds': roundtrip_seconds,
+        **metrics,
+    }
+    return report, office_bytes, roundtrip_pdf
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description='Round-trip fidelity benchmark for experimental PDF -> Office conversion.')
     parser.add_argument('pdf', type=Path)
@@ -60,40 +99,10 @@ def main() -> None:
     args = parser.parse_args()
 
     source = args.pdf.read_bytes()
-    if not source.startswith(b'%PDF-'):
-        raise SystemExit('Input is not a PDF')
-
-    start = time.perf_counter()
-    with httpx.Client(timeout=360.0) as client:
-        converted = client.post(
-            f"{args.api.rstrip('/')}/experimental/pdf-to-office",
-            files={'file': (args.pdf.name, source, 'application/pdf')},
-            data={'target': args.target},
-        )
-        converted.raise_for_status()
-        office_bytes = converted.content
-        convert_seconds = time.perf_counter() - start
-
-        roundtrip_start = time.perf_counter()
-        roundtrip = client.post(
-            f"{args.api.rstrip('/')}/office/to-pdf",
-            files={'file': (f'roundtrip.{args.target}', office_bytes, 'application/octet-stream')},
-        )
-        roundtrip.raise_for_status()
-        roundtrip_pdf = roundtrip.content
-        roundtrip_seconds = time.perf_counter() - roundtrip_start
-
-    metrics = visual_similarity(source, roundtrip_pdf)
-    report = {
-        'source': str(args.pdf),
-        'target': args.target,
-        'source_bytes': len(source),
-        'office_bytes': len(office_bytes),
-        'roundtrip_pdf_bytes': len(roundtrip_pdf),
-        'convert_seconds': convert_seconds,
-        'roundtrip_seconds': roundtrip_seconds,
-        **metrics,
-    }
+    try:
+        report, office_bytes, roundtrip_pdf = benchmark_pdf(source, args.pdf.name, args.target, args.api)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     if args.save_dir:
         args.save_dir.mkdir(parents=True, exist_ok=True)
