@@ -5,6 +5,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+import httpx
+
 from pdf_to_office import benchmark_pdf
 
 
@@ -80,7 +82,17 @@ def main() -> None:
     for case in manifest['cases']:
         pdf_path = args.corpus_dir / case['filename']
         source = pdf_path.read_bytes()
-        report, _, _ = benchmark_pdf(source, pdf_path.name, case['target'], args.api)
+        print(f"RUN {case['id']} target={case['target']} source={pdf_path.name} bytes={len(source)}", flush=True)
+        try:
+            report, _, _ = benchmark_pdf(source, pdf_path.name, case['target'], args.api)
+        except httpx.HTTPStatusError as exc:
+            response = exc.response
+            print(
+                f"FAIL {case['id']} HTTP {response.status_code} {response.request.method} {response.request.url} "
+                f"body={response.text[:4000]!r}",
+                flush=True,
+            )
+            raise
         report.update(_case_metadata(case))
         results.append(report)
         print(
