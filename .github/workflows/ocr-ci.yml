@@ -111,8 +111,6 @@ jobs:
           Path('/tmp/vn-ocr-real-baseline.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
           print(json.dumps(summary, ensure_ascii=False, indent=2))
 
-          # Generous regression gates: detect catastrophic Vietnamese OCR breakage,
-          # not small engine/version variance across runner images.
           assert avg_cer < 0.40, avg_cer
           assert avg_wer < 0.70, avg_wer
           PY
@@ -120,13 +118,15 @@ jobs:
       - name: Validate locked production dependency graph
         run: |
           test -s requirements.lock
+          test -s requirements.hashed.lock
           test -s paddle-requirements.lock
           grep -q '^paddlepaddle==3.2.0$' paddle-requirements.lock
           grep -q '^--index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/$' paddle-requirements.lock
           grep -q '^paddleocr==3.7.0$' requirements.lock
           grep -q '^pypdfium2==5.14.0$' requirements.lock
+          grep -q -- '--hash=sha256:' requirements.hashed.lock
           grep -q 'pip==26.2.1' Dockerfile
           grep -q 'paddle-requirements.lock' Dockerfile
-          grep -q 'requirements.lock' Dockerfile
+          grep -q -- '--require-hashes --no-deps -r requirements.hashed.lock' Dockerfile
           grep -q 'pip check' Dockerfile
           grep -q 'tesseract-ocr-vie' Dockerfile
