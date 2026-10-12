@@ -1,7 +1,29 @@
 diff --git a/server/src/engines/table/candidates.ts b/server/src/engines/table/candidates.ts
 --- a/server/src/engines/table/candidates.ts
 +++ b/server/src/engines/table/candidates.ts
-@@ -78,21 +78,29 @@ function clusterLattice(nodes: SemanticNode[]): Array<{
+@@ -51,6 +51,12 @@
+       for (const cluster of clusters) {
+         if (cluster.nodeIds.length < 4) continue;
+         const hasVectorBorders = pageHasTableVectors(input, pageIndex, cluster.bbox);
++        // Borderless text needs repeated support in both dimensions. Sparse page
++        // furniture (titles, subtitles, invoice metadata) can otherwise satisfy
++        // the loose >=2x2 uniqueness test without forming a real table lattice.
++        if (!hasVectorBorders && (cluster.rowSupport < 2 || cluster.columnSupport < 2)) {
++          continue;
++        }
+         const score =
+           0.4 +
+           Math.min(0.4, cluster.regularity) +
+@@ -75,6 +81,8 @@
+   nodeIds: string[];
+   bbox: BoundingBox;
+   regularity: number;
++  rowSupport: number;
++  columnSupport: number;
+ }> {
+   // Greedy: take all text nodes on page that share column/row alignment as one candidate
+   // Split into separate tables if there's a large vertical gap
+@@ -86,34 +94,41 @@
  
    const groups: SemanticNode[][] = [];
    let current: SemanticNode[] = [];
@@ -34,3 +56,55 @@ diff --git a/server/src/engines/table/candidates.ts b/server/src/engines/table/c
      }
    }
    if (current.length) groups.push(current);
+ 
+   return groups
+     .map((group) => {
+-      const xs = snapPositions(group.map((g) => g.bbox!.x + g.bbox!.width / 2), 8);
+-      const ys = snapPositions(
+-        group.map((g) => g.bbox!.y + g.bbox!.height / 2),
+-        8,
+-      );
+-      const cols = xs.length;
+-      const rows = ys.length;
++      const xCenters = group.map((g) => g.bbox!.x + g.bbox!.width / 2);
++      const yCenters = group.map((g) => g.bbox!.y + g.bbox!.height / 2);
++      const xCounts = snapCounts(xCenters, 8);
++      const yCounts = snapCounts(yCenters, 8);
++      const cols = xCounts.length;
++      const rows = yCounts.length;
+       if (cols < 2 || rows < 2) {
+         return null;
+       }
+@@ -130,20 +145,27 @@
+         nodeIds: group.map((g) => g.id),
+         bbox,
+         regularity,
++        rowSupport: yCounts.filter((count) => count >= 2).length,
++        columnSupport: xCounts.filter((count) => count >= 2).length,
+       };
+     })
+     .filter((c): c is NonNullable<typeof c> => c != null);
+ }
+ 
+-function snapPositions(values: number[], tol: number): number[] {
++function snapCounts(values: number[], tol: number): number[] {
+   const sorted = [...values].sort((a, b) => a - b);
+-  const out: number[] = [];
++  const anchors: number[] = [];
++  const counts: number[] = [];
+   for (const v of sorted) {
+-    if (out.length === 0 || Math.abs(out[out.length - 1]! - v) > tol) {
+-      out.push(v);
++    const last = anchors.length - 1;
++    if (last < 0 || Math.abs(anchors[last]! - v) > tol) {
++      anchors.push(v);
++      counts.push(1);
++    } else {
++      counts[last] = counts[last]! + 1;
+     }
+   }
+-  return out;
++  return counts;
+ }
+ 
+ function pageHasTableVectors(
