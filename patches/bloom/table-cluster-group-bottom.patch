@@ -117,7 +117,7 @@ diff --git a/server/src/engines/table/candidates.ts b/server/src/engines/table/c
 diff --git a/server/src/engines/exporter/docx/ooxml/xml.ts b/server/src/engines/exporter/docx/ooxml/xml.ts
 --- a/server/src/engines/exporter/docx/ooxml/xml.ts
 +++ b/server/src/engines/exporter/docx/ooxml/xml.ts
-@@ -1,11 +1,27 @@
+@@ -1,9 +1,26 @@
  /** XML helpers for OOXML generation. */
  
 +function isXml10Char(codePoint: number): boolean {
