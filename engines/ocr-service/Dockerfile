@@ -34,10 +34,10 @@ RUN rm -f /etc/apt/sources.list \
     && useradd --system --gid solyan --create-home --home-dir /home/solyan solyan \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt requirements.lock paddle-requirements.lock ./
+COPY requirements.txt requirements.lock requirements.hashed.lock paddle-requirements.lock ./
 RUN python -m pip install --no-cache-dir pip==26.2.1 \
     && python -m pip install --no-cache-dir -r paddle-requirements.lock \
-    && python -m pip install --no-cache-dir -r requirements.lock \
+    && python -m pip install --no-cache-dir --require-hashes --no-deps -r requirements.hashed.lock \
     && python -m pip install --no-cache-dir --no-deps -r requirements.txt \
     && python -m pip check
 
