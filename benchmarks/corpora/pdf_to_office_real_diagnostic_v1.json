@@ -21,7 +21,7 @@
         "provider": "py-pdf/sample-files",
         "license": "CC BY-SA 4.0",
         "repository": "py-pdf/sample-files",
-        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
+        "commit": "02b8203bf416db3db03438bc8278dfcb0555f3",
         "path": "011-google-doc-document/google-doc-document.pdf",
         "pages": 1,
         "sha256": "69f6b7f493b1bc55d518942976cbeadc4ec0a36f6d8a6dc24feffc516d35b2c9"
@@ -38,7 +38,7 @@
         "provider": "py-pdf/sample-files",
         "license": "CC BY-SA 4.0",
         "repository": "py-pdf/sample-files",
-        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
+        "commit": "02b8203bf416db3db03438bc8278dfcb0555f3",
         "path": "026-latex-multicolumn/multicolumn.pdf",
         "pages": 3,
         "sha256": "bdb495e95b3e1afae95013099dc59b0cea047f1fa70f677ee9cb33f10faa1c6c"
@@ -55,7 +55,7 @@
         "provider": "py-pdf/sample-files",
         "license": "CC BY-SA 4.0",
         "repository": "py-pdf/sample-files",
-        "commit": "02b8203bf416db3dbdb03438bc8278dfcb0555f3",
+        "commit": "02b8203bf416db3db03438bc8278dfcb0555f3",
         "path": "028-image-references-deduplication/wrong-references.pdf",
         "pages": 3,
         "sha256": "16cb8e10bd59e30b4d350f11d0ed9c7d0bd7e7bb962a46022c89836e2aa44f63"
@@ -72,6 +72,7 @@
         "provider": "Wikimedia Commons",
         "license": "Public Domain",
         "commons_filename": "NDL8818342 The table of material. Report No. 44a(4), USSBS Index Section 2.pdf",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e4/NDL8818342_The_table_of_material._Report_No._44a%284%29%2C_USSBS_Index_Section_2.pdf",
         "pages": 48,
         "sha256": "260a4b17192038b7dbe85788b4e760650f93770ad6fdb7bfd91b9476f4f574b4"
       }
@@ -87,6 +88,7 @@
         "provider": "Wikimedia Commons",
         "license": "Public Domain",
         "commons_filename": "NDL8816038 Unidentified table. Report No. 17g(9), USSBS Index Section 2.pdf",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/93/NDL8816038_Unidentified_table._Report_No._17g%289%29%2C_USSBS_Index_Section_2.pdf",
         "pages": 22,
         "sha256": "04b5ccc3439f993fef9e79043b2a588ba1c8d09dd1238bcea3327aa833320754"
       }
@@ -102,6 +104,7 @@
         "provider": "Wikimedia Commons",
         "license": "Public Domain",
         "commons_filename": "NDL8820352 Comparative table on transportation plan and actual transportation results of \"C\" ships. Report No. 54tt(1), USSBS Index Section 2 part2.pdf",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/93/NDL8820352_Comparative_table_on_transportation_plan_and_actual_transportation_results_of_%22C%22_ships._Report_No._54tt%281%29%2C_USSBS_Index_Section_2_part2.pdf",
         "pages": 7,
         "sha256": "638bf0bdefa9c123b5747e8f235ec31dcbc8c138d6a426f354eb7a4f1a0f45be"
       }
@@ -117,6 +120,7 @@
         "provider": "Wikimedia Commons",
         "license": "CC BY-SA 4.0",
         "commons_filename": "Presentation on Wikimedia Commons & Copyright.pdf",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/b/be/Presentation_on_Wikimedia_Commons_%26_Copyright.pdf",
         "pages": 8,
         "sha256": "2a24b75b58bce46b38960e45c9cbf65090837bd95a609cdd6ce50a7becf9022e"
       }
@@ -132,6 +136,7 @@
         "provider": "Wikimedia Commons",
         "license": "CC BY-SA 4.0",
         "commons_filename": "What is Creative Commons.pdf",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/What_is_Creative_Commons.pdf",
         "pages": 11,
         "sha256": "2038698287d356f0a2ea4dc2649404defd51a728936b8488bda5857863eb1bcd"
       }
@@ -147,6 +152,7 @@
         "provider": "Wikimedia Commons",
         "license": "CC BY-SA 4.0",
         "commons_filename": "2.Introduction to copyright laws.pdf",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/cb/2.Introduction_to_copyright_laws.pdf",
         "pages": 15,
         "sha256": "11ef91942ecacc83c478d2aa4d14b4567d2034c32aa488105d9df26d9ca1feab"
       }
