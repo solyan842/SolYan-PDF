@@ -5,8 +5,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 RUN groupadd --system solyan \
     && useradd --system --gid solyan --create-home --home-dir /home/solyan solyan
-COPY requirements.txt requirements.lock ./
-RUN pip install --no-cache-dir -r requirements.lock -r requirements.txt \
+COPY requirements.hashes ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.hashes \
     && pip check
 COPY app ./app
 RUN chown -R solyan:solyan /app /home/solyan
