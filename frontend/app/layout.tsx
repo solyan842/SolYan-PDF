@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './advanced.css';
 
 export const metadata: Metadata = {
   title: 'SolYan PDF',
