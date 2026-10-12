@@ -11,7 +11,13 @@ All release Dockerfiles pin OCI multi-architecture index digests:
 
 This prevents a mutable tag from silently selecting a different base image in a later build while preserving multi-architecture support.
 
-## 2. Resolved package inventory
+## 2. Frontend dependency lock
+
+`frontend/package-lock.json` is generated with Node 22.13 / npm 10.9 and committed to the repository. Both CI and the Docker dependency stage use `npm ci`, so the complete npm dependency graph comes from the lockfile instead of being re-resolved from semver ranges on every build.
+
+The production audit remains a separate gate; a locked dependency can still become known-vulnerable later.
+
+## 3. Resolved package inventory
 
 `.github/workflows/image-inventory-ci.yml` builds all six default images and uploads one inventory artifact per image:
 
@@ -33,9 +39,9 @@ Each inventory captures, where present:
 
 Artifacts are retained by GitHub Actions for 30 days. For a formal release, download and retain these artifacts with the release records or regenerate them from the exact release commit while package sources remain available.
 
-## 3. What is still not bit-for-bit reproducible
+## 4. What is still not bit-for-bit reproducible
 
-Base-image pinning and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
+Base-image pinning, the npm lockfile and inventory capture improve traceability, but they do not make the current build bit-for-bit reproducible because:
 
 - Debian package installation still runs `apt-get update` against live repositories;
 - distro packages are installed by package name rather than exact version;
@@ -44,8 +50,8 @@ Base-image pinning and inventory capture improve traceability, but they do not m
 
 A stricter reproducible-build phase would use dated distro snapshots or exact package versions, hash-locked Python dependency sets, and normalized build metadata.
 
-## 4. Release rule
+## 5. Release rule
 
 Do not describe SolYan PDF containers as bit-for-bit reproducible until a repeat build of every release image has been verified to produce the intended deterministic result under the chosen reproducibility definition.
 
-Until then, the accurate description is: **pinned base images + recorded resolved package inventories**.
+Until then, the accurate description is: **pinned base images + locked frontend dependency graph + recorded resolved package inventories**.
