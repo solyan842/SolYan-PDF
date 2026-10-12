@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'engines/ocr-service/**'
+      - 'benchmarks/fetch_vietnamese_ocr_real.py'
       - '.github/workflows/ocr-ci.yml'
   push:
     branches:
       - main
     paths:
       - 'engines/ocr-service/**'
+      - 'benchmarks/fetch_vietnamese_ocr_real.py'
       - '.github/workflows/ocr-ci.yml'
 
 jobs:
@@ -37,7 +39,7 @@ jobs:
         run: pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1 pytesseract==0.3.13 pypdfium2==5.14.0 Pillow
 
       - name: Compile service and benchmark harness
-        run: python -m compileall app benchmark.py
+        run: python -m compileall app benchmark.py ../../benchmarks/fetch_vietnamese_ocr_real.py
 
       - name: Verify health without loading Paddle models
         run: |
@@ -71,6 +73,48 @@ jobs:
           text, pages = _tesseract_text(path, '.png')
           assert pages and text.strip(), (text, pages)
           print(text)
+          PY
+
+      - name: Fetch pinned public-domain Vietnamese real-scan corpus
+        run: python ../../benchmarks/fetch_vietnamese_ocr_real.py --output /tmp/vn-ocr-real
+
+      - name: Benchmark real Vietnamese scans with fallback path
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from fastapi.testclient import TestClient
+          from app.main import app
+          from benchmark import score
+
+          root = Path('/tmp/vn-ocr-real')
+          records = [json.loads(line) for line in (root / 'corpus.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+          assert len(records) == 9, f'Expected 9 pinned real samples, got {len(records)}'
+
+          client = TestClient(app)
+          results = []
+          for record in records:
+              path = root / record['file']
+              with path.open('rb') as handle:
+                  response = client.post('/ocr/text', files={'file': (path.name, handle, 'image/png')})
+              assert response.status_code == 200, (record['doc_id'], response.text)
+              payload = response.json()
+              assert payload.get('engine') == 'Tesseract'
+              assert payload.get('fallback_used') is True
+              cer, wer = score(record['expected'], payload.get('text', ''))
+              results.append({'doc_id': record['doc_id'], 'cer': cer, 'wer': wer})
+              print(record['doc_id'], 'CER=', round(cer, 4), 'WER=', round(wer, 4))
+
+          avg_cer = sum(item['cer'] for item in results) / len(results)
+          avg_wer = sum(item['wer'] for item in results) / len(results)
+          summary = {'samples': len(results), 'average_cer': avg_cer, 'average_wer': avg_wer, 'results': results}
+          Path('/tmp/vn-ocr-real-baseline.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+          # Generous regression gates: detect catastrophic Vietnamese OCR breakage,
+          # not small engine/version variance across runner images.
+          assert avg_cer < 0.40, avg_cer
+          assert avg_wer < 0.70, avg_wer
           PY
 
       - name: Validate Dockerfile pins
