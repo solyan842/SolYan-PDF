@@ -132,9 +132,16 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Real PDF/A smoke test
 - [x] Compose validation + frontend/backend container build CI
 
+## Release packaging
+
+- [x] Select repository license: Apache-2.0
+- [x] Add `LICENSE` and `NOTICE`
+- [x] Add `CHANGELOG.md` for v0.1.0
+- [x] Add direct dependency release manifest
+- [ ] Pin base-image digests / resolved OS package versions for bit-for-bit reproducible images
+
 ## Release decisions / external inputs still required
 
-- [ ] Select the repository-level open-source license
 - [ ] Provide/version a representative Vietnamese OCR release corpus
 - [ ] Provide/version representative PDF → Office benchmark corpora and define acceptable fidelity threshold
 - [ ] Choose whether multi-party remote signing belongs in V1 or a later release
