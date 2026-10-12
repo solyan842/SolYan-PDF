@@ -1,4 +1,5 @@
 const tools = [
+  { href: '/ocr', title: 'OCR tài liệu', description: 'PP-OCRv6 và PP-StructureV3 cho ảnh/PDF scan.', local: false, badge: 'PaddleOCR' },
   { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
   { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, redact và khung chú thích.', local: true },
   { href: '/forms', title: 'Form PDF', description: 'Đọc và điền AcroForm trực tiếp trong trình duyệt.', local: true },
@@ -9,10 +10,10 @@ const tools = [
   { href: '/watermark', title: 'Watermark', description: 'Đóng watermark chữ lên PDF.', local: true },
   { href: '/page-numbers', title: 'Đánh số trang', description: 'Thêm số trang vào chân trang.', local: true },
   { href: '/metadata', title: 'Metadata', description: 'Xem và chỉnh sửa metadata PDF.', local: true },
-  { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa PDF bằng AES-256 với qpdf.', local: false },
-  { href: '/unlock', title: 'Mở khóa PDF', description: 'Giải mã PDF bằng mật khẩu hợp lệ.', local: false },
-  { href: '/compress', title: 'Nén PDF', description: 'Tối ưu cấu trúc và stream bằng qpdf.', local: false },
-  { href: '/repair', title: 'Sửa PDF', description: 'Rewrite cấu trúc PDF bằng qpdf.', local: false },
+  { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa PDF bằng AES-256 với qpdf.', local: false, badge: 'qpdf server' },
+  { href: '/unlock', title: 'Mở khóa PDF', description: 'Giải mã PDF bằng mật khẩu hợp lệ.', local: false, badge: 'qpdf server' },
+  { href: '/compress', title: 'Nén PDF', description: 'Tối ưu cấu trúc và stream bằng qpdf.', local: false, badge: 'qpdf server' },
+  { href: '/repair', title: 'Sửa PDF', description: 'Rewrite cấu trúc PDF bằng qpdf.', local: false, badge: 'qpdf server' },
 ];
 
 export default function HomePage() {
@@ -25,7 +26,7 @@ export default function HomePage() {
       <section className="hero home-hero">
         <p className="eyebrow">SOLYAN PDF</p>
         <h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1>
-        <p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ cần qpdf được chuyển sang backend riêng, giữ engine tách biệt và thay thế được.</p>
+        <p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p>
       </section>
 
       <section className="feature-banner">
@@ -43,14 +44,14 @@ export default function HomePage() {
             <span className="tool-icon">PDF</span>
             <h2>{tool.title}</h2>
             <p>{tool.description}</p>
-            <span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : 'qpdf server'}</span>
+            <span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span>
             <span className="tool-link">Mở công cụ →</span>
           </a>
         ))}
       </section>
       <section className="coming-soon">
         <h2>Tiếp theo</h2>
-        <p>OCR · Office conversion · Compare · Digital Sign · Workflow</p>
+        <p>Office conversion · Compare · Digital Sign · Workflow</p>
       </section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
