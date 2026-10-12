@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import shutil
 import tempfile
 import threading
+import traceback
+from copy import copy
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import Response
 
 MAX_FILE_SIZE = int(os.getenv("OCR_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
 SUPPORTED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
 IMAGE_SUFFIXES = SUPPORTED_SUFFIXES - {".pdf"}
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-app = FastAPI(title="SolYan OCR Service", version="0.2.0")
+app = FastAPI(title="SolYan OCR Service", version="0.3.0")
 
 _ocr_pipeline: Any | None = None
 _structure_pipeline: Any | None = None
@@ -153,6 +158,116 @@ def _tesseract_text(input_path: Path, suffix: str) -> tuple[str, list[dict[str, 
     return "\n\n".join(text for text in texts if text), pages
 
 
+def _safe_sheet_name(base: str, used: set[str]) -> str:
+    cleaned = "".join("_" if ch in "[]:*?/\\" else ch for ch in base).strip() or "Table"
+    cleaned = cleaned[:31]
+    candidate = cleaned
+    index = 2
+    while candidate in used:
+        suffix = f"_{index}"
+        candidate = f"{cleaned[: 31 - len(suffix)]}{suffix}"
+        index += 1
+    used.add(candidate)
+    return candidate
+
+
+def _copy_style(source: Any, target: Any) -> None:
+    """Copy a style across workbooks without reusing foreign style-table IDs."""
+    if not getattr(source, "has_style", False):
+        return
+    target.font = copy(source.font)
+    target.fill = copy(source.fill)
+    target.border = copy(source.border)
+    target.alignment = copy(source.alignment)
+    target.number_format = source.number_format
+    target.protection = copy(source.protection)
+    if hasattr(source, "quotePrefix") and hasattr(target, "quotePrefix"):
+        target.quotePrefix = source.quotePrefix
+    if hasattr(source, "pivotButton") and hasattr(target, "pivotButton"):
+        target.pivotButton = source.pivotButton
+
+
+def _copy_sheet(source: Any, target: Any) -> None:
+    for row in source.iter_rows():
+        for cell in row:
+            dst = target[cell.coordinate]
+            dst.value = cell.value
+            _copy_style(cell, dst)
+            if cell.hyperlink:
+                dst._hyperlink = copy(cell.hyperlink)
+            if cell.comment:
+                dst.comment = copy(cell.comment)
+
+    for merged_range in source.merged_cells.ranges:
+        target.merge_cells(str(merged_range))
+
+    for key, dimension in source.column_dimensions.items():
+        target_dimension = target.column_dimensions[key]
+        target_dimension.width = dimension.width
+        target_dimension.hidden = dimension.hidden
+        target_dimension.bestFit = dimension.bestFit
+        target_dimension.outlineLevel = dimension.outlineLevel
+        target_dimension.collapsed = dimension.collapsed
+        target_dimension.min = dimension.min
+        target_dimension.max = dimension.max
+        _copy_style(dimension, target_dimension)
+
+    for key, dimension in source.row_dimensions.items():
+        target_dimension = target.row_dimensions[key]
+        target_dimension.height = dimension.height
+        target_dimension.hidden = dimension.hidden
+        target_dimension.outlineLevel = dimension.outlineLevel
+        target_dimension.collapsed = dimension.collapsed
+        if hasattr(dimension, "thickTop"):
+            target_dimension.thickTop = dimension.thickTop
+        if hasattr(dimension, "thickBot"):
+            target_dimension.thickBot = dimension.thickBot
+        _copy_style(dimension, target_dimension)
+
+    target.freeze_panes = source.freeze_panes
+    target.sheet_format = copy(source.sheet_format)
+    target.sheet_properties = copy(source.sheet_properties)
+    target.page_margins = copy(source.page_margins)
+    target.page_setup = copy(source.page_setup)
+    target.print_options = copy(source.print_options)
+
+
+def _merge_xlsx_files(generated: list[tuple[int, Path]]) -> bytes:
+    from openpyxl import Workbook, load_workbook
+
+    output = Workbook()
+    output.remove(output.active)
+    used_names: set[str] = set()
+
+    for page_index, path in generated:
+        source_book = load_workbook(path, data_only=False)
+        try:
+            for table_index, source_sheet in enumerate(source_book.worksheets, start=1):
+                name = _safe_sheet_name(
+                    f"P{page_index}-T{table_index}-{source_sheet.title}",
+                    used_names,
+                )
+                target_sheet = output.create_sheet(name)
+                _copy_sheet(source_sheet, target_sheet)
+        finally:
+            source_book.close()
+
+    if not output.worksheets:
+        raise ValueError("PP-StructureV3 produced no table worksheets")
+
+    stream = io.BytesIO()
+    output.save(stream)
+    output.close()
+    return stream.getvalue()
+
+
+def _structure_results(input_path: Path) -> list[Any]:
+    try:
+        return list(_load_structure().predict(input=str(input_path)))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Structured OCR failed: {exc}") from exc
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {
@@ -165,6 +280,7 @@ def health() -> dict[str, object]:
             "binary_available": shutil.which("tesseract") is not None,
             "language": os.getenv("TESSERACT_LANG", "vie+eng"),
         },
+        "exports": {"xlsx": True},
     }
 
 
@@ -207,15 +323,15 @@ def ocr_structured(file: UploadFile = File(...)) -> dict[str, Any]:
         output_dir = root / "output"
         output_dir.mkdir()
         input_path.write_bytes(data)
+        results = _structure_results(input_path)
+        payloads = [_result_json(result) for result in results]
         try:
-            results = list(_load_structure().predict(input=str(input_path)))
-            payloads = [_result_json(result) for result in results]
             for result in results:
                 saver = getattr(result, "save_to_markdown", None)
                 if callable(saver):
                     saver(save_path=str(output_dir))
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=f"Structured OCR failed: {exc}") from exc
+            raise HTTPException(status_code=422, detail=f"Structured OCR export failed: {exc}") from exc
 
         markdown_parts: list[str] = []
         for path in sorted(output_dir.rglob("*.md")):
@@ -230,3 +346,64 @@ def ocr_structured(file: UploadFile = File(...)) -> dict[str, Any]:
             "pages": payloads,
             "markdown": "\n\n---\n\n".join(part for part in markdown_parts if part.strip()),
         }
+
+
+@app.post("/ocr/xlsx")
+def ocr_xlsx(file: UploadFile = File(...)) -> Response:
+    """Recognize scanned tables and return one XLSX workbook.
+
+    PP-StructureV3 may emit one or more workbooks per page/table. SolYan merges
+    those outputs into a single workbook while keeping each recognized table on
+    its own worksheet, which makes multi-page scanned PDFs usable as one download.
+    """
+    data, suffix = _read_upload(file)
+    with tempfile.TemporaryDirectory(prefix="solyan-xlsx-") as temp_dir:
+        root = Path(temp_dir)
+        input_path = root / f"input{suffix}"
+        output_dir = root / "tables"
+        output_dir.mkdir()
+        input_path.write_bytes(data)
+
+        results = _structure_results(input_path)
+        generated: list[tuple[int, Path]] = []
+        for page_index, result in enumerate(results, start=1):
+            saver = getattr(result, "save_to_xlsx", None)
+            if not callable(saver):
+                continue
+            page_dir = output_dir / f"page-{page_index:03d}"
+            page_dir.mkdir()
+            try:
+                saver(save_path=str(page_dir))
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"PP-StructureV3 XLSX export failed on page {page_index}: {exc}",
+                ) from exc
+            generated.extend((page_index, path) for path in sorted(page_dir.rglob("*.xlsx")))
+
+        if not generated:
+            raise HTTPException(status_code=422, detail="PP-StructureV3 found no exportable tables")
+
+        try:
+            workbook = _merge_xlsx_files(generated)
+        except Exception as exc:
+            traceback.print_exc()
+            generated_names = ", ".join(f"page={page_index}:{path.name}" for page_index, path in generated)
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Unable to assemble OCR XLSX workbook: {type(exc).__name__}: {exc}; "
+                    f"generated=[{generated_names}]"
+                ),
+            ) from exc
+
+        return Response(
+            content=workbook,
+            media_type=XLSX_MEDIA_TYPE,
+            headers={
+                "Content-Disposition": 'attachment; filename="solyan-ocr-tables.xlsx"',
+                "X-SolYan-OCR-Engine": "PP-StructureV3",
+                "X-SolYan-OCR-Pages": str(len(results)),
+                "X-SolYan-OCR-Table-Workbooks": str(len(generated)),
+            },
+        )

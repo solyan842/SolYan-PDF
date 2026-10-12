@@ -1,0 +1,218 @@
+name: PP-Structure scanned XLSX diagnostic
+
+on:
+  push:
+    branches:
+      - experiment/ppstructure-scanned-xlsx
+    paths:
+      - 'engines/ocr-service/**'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
+      - '.github/workflows/ppstructure-scanned-xlsx-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REAL_MANIFEST: benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json
+
+jobs:
+  scanned-xlsx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install diagnostic dependencies
+        run: pip install -r benchmarks/requirements.txt openpyxl==3.1.5
+
+      - name: Materialize pinned scanned transport-table PDF
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scan-xlsx/corpus
+          python benchmarks/fetch_pdf_to_office_real_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --case-id xlsx-transport-table \
+            --output-dir /tmp/scan-xlsx/corpus \
+            --output-inventory /tmp/scan-xlsx/inventory.json
+
+      - name: Build OCR and Office services
+        run: |
+          docker build -t solyan-ocr-scan-xlsx engines/ocr-service
+          docker build -t solyan-office-scan-xlsx engines/office-service
+
+      - name: Start isolated services
+        run: |
+          docker network create solyan-scan-xlsx
+          docker run -d --name ocr-scan-xlsx --network solyan-scan-xlsx -p 8010:8010 \
+            -e OCR_LANG=en \
+            -e PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
+            solyan-ocr-scan-xlsx
+          docker run -d --name office-scan-xlsx --network solyan-scan-xlsx -p 8020:8020 \
+            solyan-office-scan-xlsx
+
+      - name: Wait for services
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+
+          urls = ['http://127.0.0.1:8010/health', 'http://127.0.0.1:8020/health']
+          deadline = time.monotonic() + 180
+          for url in urls:
+              while True:
+                  try:
+                      with urllib.request.urlopen(url, timeout=5) as response:
+                          if 200 <= response.status < 300:
+                              print(url, response.read().decode('utf-8', 'replace'))
+                              break
+                  except Exception as exc:
+                      if time.monotonic() >= deadline:
+                          raise SystemExit(f'health timeout {url}: {exc}')
+                      time.sleep(3)
+          PY
+
+      - name: Recognize scanned tables and round-trip XLSX
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/scan-xlsx/logs
+          set +e
+          PYTHONPATH=benchmarks python - <<'PY' 2>&1 | tee /tmp/scan-xlsx/logs/diagnostic.log
+          import json
+          import time
+          from pathlib import Path
+
+          import httpx
+          import pypdfium2 as pdfium
+          from openpyxl import load_workbook
+
+          from pdf_to_office import visual_similarity
+
+          root = Path('/tmp/scan-xlsx')
+          source_path = root / 'corpus' / 'xlsx-transport-table.pdf'
+          source = source_path.read_bytes()
+
+          started = time.perf_counter()
+          with httpx.Client(timeout=httpx.Timeout(2400.0, connect=15.0)) as client:
+              response = client.post(
+                  'http://127.0.0.1:8010/ocr/xlsx',
+                  files={'file': (source_path.name, source, 'application/pdf')},
+              )
+          ocr_seconds = time.perf_counter() - started
+          print('OCR status', response.status_code, flush=True)
+          print('OCR headers', dict(response.headers), flush=True)
+          if response.status_code >= 400:
+              print(response.text[:12000], flush=True)
+              response.raise_for_status()
+
+          xlsx_path = root / 'recognized.xlsx'
+          xlsx_path.write_bytes(response.content)
+
+          wb = load_workbook(xlsx_path, data_only=False)
+          sheets = []
+          nonempty_total = 0
+          try:
+              for ws in wb.worksheets:
+                  nonempty = 0
+                  preview = []
+                  for row in ws.iter_rows():
+                      for cell in row:
+                          if cell.value is None or str(cell.value).strip() == '':
+                              continue
+                          nonempty += 1
+                          if len(preview) < 20:
+                              preview.append({'cell': cell.coordinate, 'value': str(cell.value)[:120]})
+                  nonempty_total += nonempty
+                  sheets.append({
+                      'title': ws.title,
+                      'max_row': ws.max_row,
+                      'max_column': ws.max_column,
+                      'nonempty_cells': nonempty,
+                      'preview': preview,
+                  })
+          finally:
+              wb.close()
+
+          if not sheets or nonempty_total == 0:
+              raise SystemExit(f'PP-Structure produced an empty workbook: {sheets!r}')
+
+          roundtrip_started = time.perf_counter()
+          with httpx.Client(timeout=httpx.Timeout(300.0, connect=15.0)) as client:
+              rt = client.post(
+                  'http://127.0.0.1:8020/convert/to-pdf',
+                  files={'file': ('recognized.xlsx', response.content, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+              )
+          roundtrip_seconds = time.perf_counter() - roundtrip_started
+          print('LibreOffice status', rt.status_code, flush=True)
+          if rt.status_code >= 400:
+              print(rt.text[:12000], flush=True)
+              rt.raise_for_status()
+
+          roundtrip_path = root / 'roundtrip.pdf'
+          roundtrip_path.write_bytes(rt.content)
+          pdf = pdfium.PdfDocument(rt.content)
+          try:
+              roundtrip_pages = len(pdf)
+          finally:
+              pdf.close()
+          if roundtrip_pages <= 0:
+              raise SystemExit('LibreOffice returned a zero-page PDF')
+
+          similarity = visual_similarity(source, rt.content)
+          report = {
+              'case': 'xlsx-transport-table',
+              'engine': response.headers.get('x-solyan-ocr-engine'),
+              'ocr_reported_pages': response.headers.get('x-solyan-ocr-pages'),
+              'ocr_table_workbooks': response.headers.get('x-solyan-ocr-table-workbooks'),
+              'ocr_seconds': ocr_seconds,
+              'xlsx_bytes': len(response.content),
+              'sheet_count': len(sheets),
+              'nonempty_cells': nonempty_total,
+              'sheets': sheets,
+              'roundtrip_seconds': roundtrip_seconds,
+              'roundtrip_pages': roundtrip_pages,
+              'similarity': similarity,
+          }
+          (root / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
+          PY
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > /tmp/scan-xlsx/logs/diagnostic.exitcode
+          exit "$status"
+
+      - name: Collect service logs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/scan-xlsx/logs
+          docker logs ocr-scan-xlsx > /tmp/scan-xlsx/logs/ocr-service.log 2>&1 || true
+          docker logs office-scan-xlsx > /tmp/scan-xlsx/logs/office-service.log 2>&1 || true
+
+      - name: Upload diagnostic artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ppstructure-scanned-xlsx-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/scan-xlsx/inventory.json
+            /tmp/scan-xlsx/recognized.xlsx
+            /tmp/scan-xlsx/roundtrip.pdf
+            /tmp/scan-xlsx/report.json
+            /tmp/scan-xlsx/logs/diagnostic.log
+            /tmp/scan-xlsx/logs/diagnostic.exitcode
+            /tmp/scan-xlsx/logs/ocr-service.log
+            /tmp/scan-xlsx/logs/office-service.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop services
+        if: always()
+        run: |
+          docker rm -f ocr-scan-xlsx office-scan-xlsx 2>/dev/null || true
+          docker network rm solyan-scan-xlsx 2>/dev/null || true

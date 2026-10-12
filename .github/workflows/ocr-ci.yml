@@ -36,10 +36,59 @@ jobs:
           sudo apt-get install -y tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng fonts-dejavu-core
 
       - name: Install lightweight API and fallback dependencies
-        run: pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1 pytesseract==0.3.13 pypdfium2==5.14.0 Pillow
+        run: pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1 pytesseract==0.3.13 pypdfium2==5.14.0 Pillow openpyxl==3.1.5
 
       - name: Compile service and benchmark harness
         run: python -m compileall app benchmark.py ../../benchmarks/fetch_vietnamese_ocr_real.py
+
+      - name: Guard cross-workbook XLSX style merge
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+
+          from openpyxl import Workbook, load_workbook
+          from openpyxl.styles import Alignment, Font, PatternFill
+
+          from app.main import _merge_xlsx_files
+
+          with TemporaryDirectory(prefix='solyan-xlsx-style-regression-') as tmp:
+              root = Path(tmp)
+              source = root / 'source.xlsx'
+
+              wb = Workbook()
+              ws = wb.active
+              ws.title = 'Styled source'
+              alignments = ['left', 'right', 'center', 'justify', 'fill']
+              for row, horizontal in enumerate(alignments, start=1):
+                  cell = ws.cell(row=row, column=1, value=f'value-{row}')
+                  cell.font = Font(name=f'SolYanFont{row}', bold=(row % 2 == 0), size=10 + row)
+                  cell.fill = PatternFill(fill_type='solid', fgColor=f'{row:02X}{row:02X}{row:02X}')
+                  cell.alignment = Alignment(horizontal=horizontal)
+                  cell.number_format = '0.00'
+              ws.column_dimensions['A'].width = 24
+              ws.row_dimensions[3].height = 31
+              wb.save(source)
+              wb.close()
+
+              merged_bytes = _merge_xlsx_files([(1, source)])
+              merged = root / 'merged.xlsx'
+              merged.write_bytes(merged_bytes)
+
+              check = load_workbook(merged, data_only=False)
+              try:
+                  out = check.worksheets[0]
+                  assert out['A5'].value == 'value-5'
+                  assert out['A5'].alignment.horizontal == 'fill'
+                  assert out['A4'].font.bold is True
+                  assert out['A1'].number_format == '0.00'
+                  assert out.column_dimensions['A'].width == 24
+                  assert out.row_dimensions[3].height == 31
+              finally:
+                  check.close()
+
+          print('cross-workbook XLSX style merge regression: PASS')
+          PY
 
       - name: Verify health without loading Paddle models
         run: |
