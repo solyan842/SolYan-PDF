@@ -66,14 +66,17 @@ jobs:
           PYTHONPATH=benchmarks python - <<'PY'
           from run_pdf_to_office_corpus import _summary
           sample = [
-              {'target': 'docx', 'average_similarity': 90, 'source_pages': 1, 'roundtrip_pages': 1, 'convert_seconds': 1, 'roundtrip_seconds': 1},
-              {'target': 'docx', 'average_similarity': 80, 'source_pages': 1, 'roundtrip_pages': 1, 'convert_seconds': 1, 'roundtrip_seconds': 1},
-              {'target': 'pptx', 'average_similarity': 70, 'source_pages': 1, 'roundtrip_pages': 1, 'convert_seconds': 1, 'roundtrip_seconds': 1},
+              {'target': 'docx', 'average_similarity': 90, 'source_pages': 1, 'roundtrip_pages': 1, 'page_count_match': True, 'unmatched_pages': 0, 'convert_seconds': 1, 'roundtrip_seconds': 1},
+              {'target': 'docx', 'average_similarity': 80, 'source_pages': 1, 'roundtrip_pages': 1, 'page_count_match': True, 'unmatched_pages': 0, 'convert_seconds': 1, 'roundtrip_seconds': 1},
+              {'target': 'pptx', 'average_similarity': 70, 'source_pages': 1, 'roundtrip_pages': 2, 'page_count_match': False, 'unmatched_pages': 1, 'convert_seconds': 1, 'roundtrip_seconds': 1},
           ]
           result = _summary(sample)
           assert result['cases'] == 3
           assert result['targets']['docx']['average_similarity'] == 85
           assert result['minimum_similarity'] == 70
+          assert result['page_count_mismatches'] == 1
+          assert result['unmatched_pages'] == 1
+          assert result['targets']['pptx']['page_count_mismatches'] == 1
           print(result)
           PY
 
@@ -96,5 +99,37 @@ jobs:
           result = module.visual_similarity(pdf, pdf)
           assert result['average_similarity'] == 100.0, result
           assert result['source_pages'] == result['roundtrip_pages'] == 1
+          assert result['page_count_match'] is True
+          assert result['unmatched_pages'] == 0
+          print(result)
+          PY
+
+      - name: Smoke test visual similarity penalizes extra pages
+        run: |
+          python - <<'PY'
+          import io
+          import importlib.util
+          from pypdf import PdfWriter
+
+          spec = importlib.util.spec_from_file_location('bench', 'benchmarks/pdf_to_office.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          def make_pdf(pages: int) -> bytes:
+              buffer = io.BytesIO()
+              writer = PdfWriter()
+              for _ in range(pages):
+                  writer.add_blank_page(width=595, height=842)
+              writer.write(buffer)
+              return buffer.getvalue()
+
+          result = module.visual_similarity(make_pdf(1), make_pdf(2))
+          assert result['source_pages'] == 1
+          assert result['roundtrip_pages'] == 2
+          assert result['compared_pages'] == 1
+          assert result['unmatched_pages'] == 1
+          assert result['page_count_match'] is False
+          assert result['page_similarity'] == [100.0, 0.0], result
+          assert result['average_similarity'] == 50.0, result
           print(result)
           PY

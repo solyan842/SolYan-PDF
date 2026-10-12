@@ -26,6 +26,7 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
     a_pages = render_pages(left)
     b_pages = render_pages(right)
     compared = min(len(a_pages), len(b_pages))
+    total_slots = max(len(a_pages), len(b_pages))
     scores = []
     try:
         for index in range(compared):
@@ -38,15 +39,23 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
             stat = ImageStat.Stat(diff)
             mean_delta = sum(stat.mean[:3]) / 3.0
             scores.append(max(0.0, 100.0 * (1.0 - mean_delta / 255.0)))
+
+        # Missing or extra round-trip pages are a structural fidelity failure.
+        # Represent each unmatched page as a zero-similarity slot so a conversion
+        # cannot score highly by reproducing only the first N matching pages.
+        scores.extend([0.0] * (total_slots - compared))
     finally:
         for image in [*a_pages, *b_pages]:
             image.close()
+
     return {
         'source_pages': len(a_pages),
         'roundtrip_pages': len(b_pages),
         'compared_pages': compared,
+        'unmatched_pages': abs(len(a_pages) - len(b_pages)),
+        'page_count_match': len(a_pages) == len(b_pages),
         'page_similarity': scores,
-        'average_similarity': sum(scores) / max(1, len(scores)),
+        'average_similarity': sum(scores) / max(1, total_slots),
     }
 
 
