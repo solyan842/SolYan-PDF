@@ -27,16 +27,24 @@ This keeps the upstream image and non-root runtime unchanged while placing tempo
 
 ## XLSX print-layout normalization
 
-The pinned Bloom XLSX exporter writes worksheet cells, row heights and column widths but does not emit print-page setup metadata. In the controlled `xlsx-financial` canary this caused a one-page PDF source to round-trip through XLSX/LibreOffice as two PDF pages even though the first page was visually close.
+The pinned Bloom XLSX exporter writes worksheet cells, row heights and column widths but does not emit print-page setup metadata. In the controlled `xlsx-financial` canary this caused a one-page PDF source to round-trip through XLSX/LibreOffice as two PDF pages even though the first page itself was visually close.
 
-SolYan therefore applies a conservative OpenXML post-process to Bloom XLSX results:
+SolYan does **not** assume A4 for every document. Before requesting Bloom conversion for XLSX, the backend uses its already-required qpdf engine to inspect page 1 of the original PDF:
+
+1. `qpdf --show-pages` identifies the first page object.
+2. qpdf JSON object inspection reads `/MediaBox` and inherited `/Rotate`, following `/Parent` where necessary.
+3. The effective page dimensions are matched, with a small producer-rounding tolerance, to a known standard paper size.
+4. Current recognized print sizes are Letter, Tabloid, Legal, A3, A4 and A5.
+5. Unknown/custom page sizes are left untouched; SolYan returns Bloom's XLSX without adding print setup.
+
+When a known page size is detected, SolYan applies a conservative OpenXML post-process to Bloom XLSX results:
 
 - if a worksheet already contains `<pageSetup>`, SolYan leaves it unchanged;
-- otherwise SolYan enables `fitToPage` and sets `fitToWidth=1`, `fitToHeight=0`;
+- otherwise SolYan enables `fitToPage`, preserves the source portrait/landscape orientation, writes the matching OOXML `paperSize`, and sets `fitToWidth=1`, `fitToHeight=0`;
 - cell values, formulas, styles, row/column geometry and existing page setup are not modified;
 - malformed/non-ZIP output is returned unchanged rather than rewritten.
 
-The Bloom canary requires the controlled XLSX case to preserve page count after the Office -> PDF round-trip. This is a compatibility guard, not a general XLSX fidelity guarantee.
+The Bloom canary requires the controlled XLSX case to preserve page count after the Office -> PDF round-trip. The visual-similarity benchmark separately penalizes missing/extra pages, so pagination errors cannot be hidden by a high first-page score.
 
 ## What the canary proves
 
