@@ -41,7 +41,7 @@ jobs:
           python-version: '3.13.16'
 
       - name: Regenerate hash locks
-        run: PYTHON_BIN=python ./scripts/generate-python-hash-locks.sh
+        run: PYTHON_BIN=python bash ./scripts/generate-python-hash-locks.sh
 
       - name: Upload regenerated hash locks
         if: always()
