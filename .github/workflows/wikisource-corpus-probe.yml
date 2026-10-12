@@ -26,7 +26,7 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          UA = {'User-Agent': 'SolYan-PDF OCR benchmark/0.1.2'}
+          UA = {'User-Agent': 'SolYan-PDF OCR benchmark/0.1.2 (https://github.com/solyan842/SolYan-PDF)'}
           API = 'https://vi.wikisource.org/w/api.php'
           sources = [
               {
@@ -45,33 +45,39 @@ jobs:
               },
           ]
 
-          def fetch_revision(file_name, number):
-              title = f'Trang:{file_name}/{number}'
+          def fetch_revisions(file_name, numbers):
+              titles = '|'.join(f'Trang:{file_name}/{n}' for n in numbers)
               query = urllib.parse.urlencode({
                   'action': 'query', 'format': 'json', 'formatversion': '2',
                   'prop': 'revisions', 'rvprop': 'ids|timestamp|content',
-                  'rvslots': 'main', 'titles': title,
+                  'rvslots': 'main', 'titles': titles,
               })
               req = urllib.request.Request(f'{API}?{query}', headers=UA)
               with urllib.request.urlopen(req, timeout=60) as response:
-                  page = json.load(response)['query']['pages'][0]
-              if page.get('missing'):
-                  raise RuntimeError(f'missing {title}')
-              rev = page['revisions'][0]
-              content = rev['slots']['main']['content']
-              q = re.search(r'<pagequality\s+level="(\d+)"', content)
-              return {
-                  'page': number,
-                  'title': page['title'],
-                  'revid': rev['revid'],
-                  'timestamp': rev['timestamp'],
-                  'quality': int(q.group(1)) if q else 0,
-                  'content_chars': len(content),
-              }
+                  payload = json.load(response)
+              records = []
+              for page in payload['query']['pages']:
+                  if page.get('missing'):
+                      raise RuntimeError(f"missing {page['title']}")
+                  rev = page['revisions'][0]
+                  content = rev['slots']['main']['content']
+                  q = re.search(r'<pagequality\s+level="(\d+)"', content)
+                  number = int(page['title'].rsplit('/', 1)[1])
+                  records.append({
+                      'page': number,
+                      'title': page['title'],
+                      'revid': rev['revid'],
+                      'timestamp': rev['timestamp'],
+                      'quality': int(q.group(1)) if q else 0,
+                      'content_chars': len(content),
+                  })
+              records.sort(key=lambda item: item['page'])
+              return records
 
           inventory = {'schema_version': 1, 'sources': []}
           for source in sources:
-              records = [fetch_revision(source['file'], n) for n in source['pages']]
+              records = fetch_revisions(source['file'], source['pages'])
+              assert [r['page'] for r in records] == source['pages'], records
               assert len(records) == 25
               assert all(r['quality'] >= 3 for r in records), [r for r in records if r['quality'] < 3]
               assert all(r['content_chars'] >= 150 for r in records), [r for r in records if r['content_chars'] < 150]
