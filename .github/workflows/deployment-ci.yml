@@ -1,0 +1,37 @@
+name: Deployment CI
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - '.env.example'
+      - 'frontend/Dockerfile'
+      - 'backend/Dockerfile'
+      - 'engines/**/Dockerfile'
+      - '.github/workflows/deployment-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docker-compose.yml'
+      - '.env.example'
+      - 'frontend/Dockerfile'
+      - 'backend/Dockerfile'
+      - 'engines/**/Dockerfile'
+      - '.github/workflows/deployment-ci.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Build frontend container
+        run: docker build --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 -t solyan-pdf-frontend-ci ./frontend
+
+      - name: Build backend container
+        run: docker build -t solyan-pdf-backend-ci ./backend

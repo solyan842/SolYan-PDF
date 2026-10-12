@@ -12,66 +12,70 @@
 
 ## Phase 1 — Core PDF utilities
 
-Target first because they are mature, testable and low-risk:
-
-- [ ] Merge PDF
-- [ ] Split PDF
-- [ ] Reorder pages
-- [ ] Remove pages
-- [ ] Rotate pages
-- [ ] Extract pages
-- [ ] Encrypt / protect PDF
-- [ ] Unlock/decrypt PDF where user supplies valid credentials
-- [ ] Watermark / stamp
-- [ ] Page numbers
-- [ ] Metadata viewer/editor
-- [ ] Basic repair / validation
-- [ ] Basic compression/optimization
+- [x] Merge PDF
+- [x] Split PDF
+- [x] Reorder pages
+- [x] Remove pages
+- [x] Rotate pages
+- [x] Extract pages
+- [x] Encrypt / protect PDF
+- [x] Unlock/decrypt PDF where user supplies valid credentials
+- [x] Watermark / stamp
+- [x] Page numbers
+- [x] Metadata viewer/editor
+- [x] Basic repair / validation
+- [x] Basic compression/optimization
 
 ## Phase 2 — Viewer and editor
 
-- [ ] PDF viewer
-- [ ] Page thumbnails / drag-and-drop organize
-- [ ] Add text
-- [ ] Add image
-- [ ] Draw / annotate
-- [ ] Highlight
-- [ ] Redact
-- [ ] Basic form support
-- [ ] Local/browser-side processing where practical
+- [x] PDF viewer
+- [x] Page thumbnails
+- [ ] Drag-and-drop page organizer UI
+- [x] Add text
+- [x] Add image
+- [x] Draw / annotate
+- [x] Highlight
+- [x] Redact
+- [x] Basic form support
+- [x] Local/browser-side processing where practical
 
 ## Phase 3 — OCR and document intelligence
 
-- [ ] Image OCR
-- [ ] Scanned PDF OCR
-- [ ] Vietnamese OCR benchmark
-- [ ] Layout recognition
-- [ ] Table recognition
-- [ ] Reading order
-- [ ] Structured Markdown/JSON export
+- [x] Image OCR
+- [x] Scanned PDF OCR
+- [ ] Vietnamese OCR benchmark suite
+- [x] Layout recognition
+- [x] Table recognition
+- [x] Reading order
+- [x] Structured Markdown/JSON export
 - [ ] Tesseract fallback path
 
 ## Phase 4 — Office conversion
 
-- [ ] Word → PDF
-- [ ] Excel → PDF
-- [ ] PowerPoint → PDF
-- [ ] Images → PDF
-- [ ] PDF → images
-- [ ] Research/benchmark PDF → DOCX
-- [ ] Research/benchmark PDF → XLSX
-- [ ] Research/benchmark PDF → PPTX
+- [x] Word → PDF
+- [x] Excel → PDF
+- [x] PowerPoint → PDF
+- [x] Images → PDF
+- [x] PDF → images
+- [x] Research PDF → DOCX engine/API candidate
+- [x] Research PDF → XLSX engine/API candidate
+- [x] Research PDF → PPTX engine/API candidate
+- [x] Add experimental adapter to pinned Bloom upstream API
+- [ ] Fidelity benchmark PDF → DOCX
+- [ ] Fidelity benchmark PDF → XLSX
+- [ ] Fidelity benchmark PDF → PPTX
 
-PDF-to-Office fidelity must be benchmarked before choosing an implementation.
+PDF-to-Office stays labelled **Experimental** until fidelity benchmarking is complete.
 
 ## Phase 5 — Advanced tools
 
-- [ ] PDF compare
-- [ ] Digital signing
-- [ ] Signature workflow research
-- [ ] PDF/A
-- [ ] Forms
-- [ ] Batch workflow builder
+- [x] PDF compare — text-level V1
+- [ ] Pixel/layout visual compare
+- [x] Digital signing with PKCS#12
+- [ ] Multi-party / remote signature workflow research
+- [x] PDF/A conversion
+- [x] Forms
+- [x] Local batch workflow builder
 - [ ] Cloud-storage connectors
 - [ ] AI document summarization (optional)
 - [ ] PDF translation (optional)
@@ -80,25 +84,42 @@ PDF-to-Office fidelity must be benchmarked before choosing an implementation.
 
 ### Văn bản
 
-- [ ] Đổi số tiền thành chữ
-- [ ] Bỏ dấu tiếng Việt
-- [ ] Chuyển chữ hoa / chữ thường
-- [ ] Đếm từ và ký tự
+- [x] Đổi số tiền thành chữ
+- [x] Bỏ dấu tiếng Việt
+- [x] Chuyển chữ hoa / chữ thường
+- [x] Đếm từ và ký tự
 
 ### Tính toán
 
-- [ ] Tính VAT xuôi / ngược
-- [ ] Tính phần trăm
-- [ ] Tính tuổi
-- [ ] BMI / cân nặng
-- [ ] Tính công suất điều hòa
+- [x] Tính VAT xuôi / ngược
+- [x] Tính phần trăm
+- [x] Tính tuổi
+- [x] BMI / cân nặng
+- [x] Tính công suất điều hòa
 
 ### Internet / Website
 
-- [ ] Kiểm tra vị trí từ khóa Google
-- [ ] Kiểm tra thứ hạng website / chọn metric thay Alexa
-- [ ] Xem địa chỉ IP Internet
-- [ ] Ping IP / website
+- [x] Kiểm tra vị trí từ khóa Google via configurable Custom Search API
+- [x] Kiểm tra thứ hạng website using a Tranco-compatible metric
+- [x] Xem địa chỉ IP Internet
+- [x] Ping IP / website
+
+## Deployment & verification
+
+- [x] Frontend Docker image
+- [x] Backend Docker image
+- [x] OCR service Docker image
+- [x] Office service Docker image
+- [x] Signature service Docker image
+- [x] PDF/A archive service Docker image
+- [x] Docker Compose stack
+- [x] Environment template
+- [x] Frontend production-build CI
+- [x] Backend/qpdf CI
+- [x] OCR service CI wiring
+- [x] Real LibreOffice DOCX → PDF smoke test
+- [x] Real PKCS#12 signing smoke test
+- [x] Real PDF/A smoke test
 
 ## Research rule for difficult features
 
