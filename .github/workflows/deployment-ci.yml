@@ -6,8 +6,14 @@ on:
       - 'docker-compose.yml'
       - '.env.example'
       - 'frontend/Dockerfile'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
       - 'backend/Dockerfile'
+      - 'backend/requirements.hashes'
       - 'engines/**/Dockerfile'
+      - 'engines/**/requirements.hashes'
+      - 'engines/**/requirements.lock'
+      - 'engines/**/paddle-requirements.lock'
       - '.github/workflows/deployment-ci.yml'
   push:
     branches:
@@ -16,13 +22,20 @@ on:
       - 'docker-compose.yml'
       - '.env.example'
       - 'frontend/Dockerfile'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
       - 'backend/Dockerfile'
+      - 'backend/requirements.hashes'
       - 'engines/**/Dockerfile'
+      - 'engines/**/requirements.hashes'
+      - 'engines/**/requirements.lock'
+      - 'engines/**/paddle-requirements.lock'
       - '.github/workflows/deployment-ci.yml'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +43,5 @@ jobs:
       - name: Validate Compose model
         run: docker compose --env-file .env.example config --quiet
 
-      - name: Build frontend container
-        run: docker build --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 -t solyan-pdf-frontend-ci ./frontend
-
-      - name: Build backend container
-        run: docker build -t solyan-pdf-backend-ci ./backend
+      - name: Build complete default stack
+        run: docker compose --env-file .env.example build
