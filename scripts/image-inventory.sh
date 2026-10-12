@@ -8,6 +8,16 @@ printf 'hostname=%s\n' "$(hostname 2>/dev/null || true)"
 printf '\n%s\n' '## /etc/os-release'
 cat /etc/os-release 2>/dev/null || true
 
+if [ -d /etc/apt/sources.list.d ] || [ -f /etc/apt/sources.list ]; then
+  printf '\n%s\n' '## APT sources'
+  cat /etc/apt/sources.list 2>/dev/null || true
+  for source in /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+    [ -f "$source" ] || continue
+    printf '\n### %s\n' "$source"
+    cat "$source"
+  done
+fi
+
 if command -v dpkg-query >/dev/null 2>&1; then
   printf '\n%s\n' '## dpkg packages'
   dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort
