@@ -4,9 +4,9 @@
 
 `engines/ocr-service/benchmark.py` measures Character Error Rate (CER) and Word Error Rate (WER) against a JSONL corpus.
 
-### Pinned real-scan corpus
+### Initial pinned real-scan corpus
 
-SolYan PDF now uses the `config=real` subset of `nrl-ai/nom-vn`'s `vn_documents_ocr_v2` evaluation set for an external real-world regression baseline.
+SolYan PDF retains the `config=real` subset of `nrl-ai/nom-vn`'s `vn_documents_ocr_v2` evaluation set as the original modern-government regression slice.
 
 - Upstream repo: `nrl-ai/nom-vn`
 - Pinned commit: `2c99458ff55d7aa6b8c97398e2f0b1282efbcb73`
@@ -15,45 +15,83 @@ SolYan PDF now uses the `config=real` subset of `nrl-ai/nom-vn`'s `vn_documents_
 - Samples: 9 single-page Vietnamese government-document scans
 - Dataset files are downloaded at benchmark time and are **not vendored** into SolYan PDF.
 
-Fetch the pinned corpus:
+Fetch that slice:
 
 ```bash
 python benchmarks/fetch_vietnamese_ocr_real.py --output .cache/vn-ocr-real
 ```
 
-Then, with the OCR service running:
+Its original Tesseract fallback baseline remains versioned in `benchmarks/baselines/vietnamese_real_tesseract_v0.1.json`: average CER **13.47%**, average WER **22.88%**.
+
+### Expanded 59-sample real-scan corpus
+
+The expanded regression corpus adds 50 proofread historical scan pages fetched from Vietnamese Wikisource and their original Wikimedia Commons scan files:
+
+- 25 pages from *Nam Hải dị nhân liệt truyện*
+- 25 pages from *Việt Nam phong tục*
+- plus the 9 modern public-domain government scans above
+- total: **59 real scanned pages/samples**
+
+The Wikisource slice is locked by `benchmarks/corpora/vietnamese_real_wikisource_v1.json`.
+
+For each historical source the manifest records:
+
+- the exact Commons PDF download/source URL;
+- a SHA-256 of the complete source PDF;
+- an exact Wikisource revision ID for every selected page;
+- a minimum ProofreadPage quality level of 3;
+- the scan-page number used when rendering the PDF page.
+
+The scan files are declared **Public Domain** on Wikimedia Commons. Human/proofread transcriptions are fetched at benchmark time from the exact pinned Vietnamese Wikisource revisions under **CC BY-SA 4.0**. Those transcriptions and generated page images are not committed into the Apache-2.0 SolYan PDF source tree. Runtime fetch output includes `ATTRIBUTION.json` with the source/revision references.
+
+Fetch and render the 50 pinned pages:
 
 ```bash
-python engines/ocr-service/benchmark.py .cache/vn-ocr-real/corpus.jsonl --url http://localhost:8010/ocr/text
+python benchmarks/fetch_vietnamese_ocr_wikisource.py \
+  --manifest benchmarks/corpora/vietnamese_real_wikisource_v1.json \
+  --output .cache/vn-ocr-wikisource
 ```
 
-### Baseline measured in CI — Tesseract fallback
+The fetcher verifies the complete PDF SHA-256 before rendering, validates that each pinned revision still belongs to the expected `Trang:` page, requires ProofreadPage quality >= 3, and renders the exact scan sequence page with PDFium.
 
-GitHub Actions run `38212926920` exercised all 9 images through the actual `/ocr/text` endpoint with PaddleOCR deliberately unavailable, therefore forcing SolYan's production fallback path.
+### Expanded baseline measured in CI — Tesseract fallback
+
+GitHub Actions run `38256543924` exercised all **59** images through the actual SolYan `/ocr/text` endpoint with PaddleOCR unavailable, forcing the production Tesseract fallback path.
 
 Environment:
 
 - Ubuntu 24.04 runner
 - Tesseract `5.3.4-1build5`
 - `vie+eng` language packs `1:4.1.0-2`
+- Wikisource scan render scale: 2.0
 - Normalization: Unicode NFC, lowercase, runs of whitespace collapsed
-- Aggregation: macro-average of per-document CER/WER
+- Aggregation: macro-average of per-sample CER/WER
 
 Measured result:
 
-| Metric | Baseline |
-|---|---:|
-| Samples | 9 |
-| Average CER | **13.47%** |
-| Average WER | **22.88%** |
-| Best document CER | **9.57%** |
-| Worst document CER | **21.85%** |
+| Slice | Samples | Average CER | Average WER |
+|---|---:|---:|---:|
+| Existing modern public-domain documents | 9 | **13.47%** | **22.88%** |
+| *Nam Hải dị nhân liệt truyện* | 25 | **9.63%** | **27.18%** |
+| *Việt Nam phong tục* | 25 | **7.74%** | **16.93%** |
+| **Combined** | **59** | **9.41%** | **22.18%** |
 
-Exact per-document values are versioned in `benchmarks/baselines/vietnamese_real_tesseract_v0.1.json`.
+The exact aggregate/source values, corpus provenance and regression budget are versioned in `benchmarks/baselines/vietnamese_real_expanded_tesseract_v0.2.json`. Per-sample measurements are retained as a CI artifact for diagnostic use.
 
-The CI regression gate is intentionally looser (`CER < 40%`, `WER < 70%`) so ordinary distro/engine variation does not break builds while catastrophic Vietnamese OCR regressions are still caught.
+### Regression policy
 
-Nine real scans are enough for a reproducible initial release/regression baseline, but not enough for broad quality claims. The next corpus expansion should target at least 50–100 diverse real pages across issuers, scan qualities, tables/forms and document dates.
+`.github/workflows/ocr-real-expanded-ci.yml` reconstructs the full 59-sample corpus from pinned sources and re-runs it through the production fallback endpoint.
+
+The gate requires:
+
+- exactly 59 samples and the expected source counts (9 / 25 / 25);
+- Tesseract fallback selected for every sample;
+- non-empty OCR output for every page;
+- overall and per-source CER/WER no worse than the committed measured baseline plus an absolute drift budget of `0.08` CER and `0.18` WER.
+
+The drift budget is intentionally a **regression guard**, not a quality target. It is loose enough for ordinary runner/Tesseract variation while detecting catastrophic OCR, page-mapping, source or language-pack regressions.
+
+The 59-sample set is materially broader than the initial 9-page baseline, but it still must not be presented as universal Vietnamese OCR accuracy. Future expansion should add more scan qualities, forms/tables, publishers, typefaces and document eras.
 
 ### Generic corpus format
 
