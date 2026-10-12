@@ -12,6 +12,9 @@ on:
       - 'engines/sign-service/requirements.lock'
       - 'engines/archive-service/requirements.lock'
 
+permissions:
+  contents: write
+
 jobs:
   generate:
     runs-on: ubuntu-latest
@@ -26,6 +29,22 @@ jobs:
 
       - name: Generate hash locks
         run: bash ./scripts/hash-python-locks.sh
+
+      - name: Commit generated hash locks
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            backend/requirements.hashed.lock \
+            engines/office-service/requirements.hashed.lock \
+            engines/sign-service/requirements.hashed.lock \
+            engines/archive-service/requirements.hashed.lock
+          if git diff --cached --quiet; then
+            echo 'Hash locks already match generated output.'
+          else
+            git commit -m 'build: add hash-verified Python locks'
+            git push origin HEAD:build/hash-python-locks
+          fi
 
       - name: Bundle hash locks
         run: |
