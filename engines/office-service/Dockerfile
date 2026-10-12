@@ -10,8 +10,8 @@ RUN apt-get update \
     && useradd --system --gid solyan --create-home --home-dir /home/solyan solyan \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt requirements.lock ./
-RUN pip install --no-cache-dir -r requirements.lock -r requirements.txt \
+COPY requirements.hashes ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.hashes \
     && pip check
 COPY app ./app
 RUN chown -R solyan:solyan /app /home/solyan
