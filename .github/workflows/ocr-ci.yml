@@ -28,7 +28,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.13.16'
 
       - name: Install Tesseract system fallback
         run: |
@@ -111,15 +111,16 @@ jobs:
           Path('/tmp/vn-ocr-real-baseline.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
           print(json.dumps(summary, ensure_ascii=False, indent=2))
 
-          # Generous regression gates: detect catastrophic Vietnamese OCR breakage,
-          # not small engine/version variance across runner images.
           assert avg_cer < 0.40, avg_cer
           assert avg_wer < 0.70, avg_wer
           PY
 
-      - name: Validate Dockerfile pins
+      - name: Validate OCR dependency lock model
         run: |
-          grep -q 'paddlepaddle==3.2.0' Dockerfile
-          grep -q 'paddleocr\[doc-parser\]==3.7.0' requirements.txt
-          grep -q 'pypdfium2==5.14.0' requirements.txt
+          grep -q 'paddleocr==3.7.0' requirements.lock
+          grep -q 'pypdfium2==5.14.0' requirements.lock
+          ! grep -q '^paddlepaddle==' requirements.lock
+          grep -q '^paddlepaddle==3.2.0$' paddle.lock
+          grep -q 'paddlepaddle.org.cn/packages/stable/cpu' paddle.lock
+          grep -q -- '--no-deps -r paddle.lock' Dockerfile
           grep -q 'tesseract-ocr-vie' Dockerfile
