@@ -1,0 +1,59 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SOLYAN_ALLOWED_ORIGINS: ${SOLYAN_ALLOWED_ORIGINS:-http://localhost:3000}
+      OCR_SERVICE_URL: ${OCR_SERVICE_URL:-http://ocr-service:8010}
+      OFFICE_SERVICE_URL: ${OFFICE_SERVICE_URL:-http://office-service:8020}
+      SIGN_SERVICE_URL: ${SIGN_SERVICE_URL:-http://sign-service:8030}
+      ARCHIVE_SERVICE_URL: ${ARCHIVE_SERVICE_URL:-http://archive-service:8040}
+      BLOOM_SERVICE_URL: ${BLOOM_SERVICE_URL:-http://bloom-service:8787}
+      BLOOM_API_KEY: ${BLOOM_API_KEY:-}
+      GOOGLE_CSE_API_KEY: ${GOOGLE_CSE_API_KEY:-}
+      GOOGLE_CSE_CX: ${GOOGLE_CSE_CX:-}
+      SITE_RANK_API_TEMPLATE: ${SITE_RANK_API_TEMPLATE:-https://tranco-list.eu/api/ranks/domain/{domain}}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ocr-service
+      - office-service
+      - sign-service
+      - archive-service
+
+  ocr-service:
+    build:
+      context: ./engines/ocr-service
+    expose:
+      - "8010"
+
+  office-service:
+    build:
+      context: ./engines/office-service
+    expose:
+      - "8020"
+
+  sign-service:
+    build:
+      context: ./engines/sign-service
+    expose:
+      - "8030"
+
+  archive-service:
+    build:
+      context: ./engines/archive-service
+    expose:
+      - "8040"
+
+# Experimental Bloom PDF -> Office is intentionally not bundled here.
+# Deploy the pinned upstream Bloom service separately and set BLOOM_SERVICE_URL.
