@@ -1,4 +1,7 @@
 const tools = [
+  { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
+  { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, redact và khung chú thích.', local: true },
+  { href: '/forms', title: 'Form PDF', description: 'Đọc và điền AcroForm trực tiếp trong trình duyệt.', local: true },
   { href: '/merge', title: 'Gộp PDF', description: 'Gộp nhiều file PDF theo đúng thứ tự.', local: true },
   { href: '/split', title: 'Tách PDF', description: 'Tách theo nhóm trang tùy chọn.', local: true },
   { href: '/organize', title: 'Sắp xếp trang', description: 'Đổi thứ tự, bỏ trang hoặc trích xuất trang.', local: true },
@@ -47,7 +50,7 @@ export default function HomePage() {
       </section>
       <section className="coming-soon">
         <h2>Tiếp theo</h2>
-        <p>OCR · Office conversion · Viewer/Editor · Compare · Digital Sign</p>
+        <p>OCR · Office conversion · Compare · Digital Sign · Workflow</p>
       </section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
