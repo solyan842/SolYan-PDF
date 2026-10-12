@@ -68,6 +68,8 @@ PaddlePaddle is distributed from a dedicated CPU wheel index, so OCR keeps it se
 - `engines/ocr-service/requirements.lock` pins the remaining PaddleOCR/Python transitive graph;
 - `engines/ocr-service/requirements.hashed.lock` records every published SHA-256 distribution digest for each exact PyPI release in that graph.
 
+The locked OCR graph explicitly includes `setuptools==84.0.0`, required at runtime by ModelScope 1.40.2; this avoids relying on build-environment bootstrap packages that may disappear when pip or the Python base image changes.
+
 `scripts/hash-pinned-pypi.py` queries PyPI metadata for the already-pinned versions and generates the multi-platform hash set without resolving dependencies again. The OCR image installs PaddlePaddle first from its dedicated CPU source, then installs the remaining PyPI graph with:
 
 ```text
