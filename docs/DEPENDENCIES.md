@@ -1,6 +1,8 @@
 # SolYan PDF — Dependency & License Register
 
-This document tracks third-party components used or evaluated by SolYan PDF. Exact versions, transitive dependencies, notices and deployment obligations must still be re-checked before a public production release.
+SolYan PDF project source is licensed under **Apache-2.0**. See the repository `LICENSE` and `NOTICE` files.
+
+This document tracks third-party components used or evaluated by SolYan PDF. Exact versions, transitive dependencies, notices and deployment obligations must be re-checked for each public production release. The V1 direct-dependency snapshot is recorded in `docs/RELEASE-MANIFEST.md`.
 
 ## Implemented components
 
@@ -17,7 +19,7 @@ This document tracks third-party components used or evaluated by SolYan PDF. Exa
 | LibreOffice | DOCX/XLSX/PPTX/OpenDocument/RTF → PDF | MPL-2.0 for LibreOffice product; includes separately licensed third-party code | Isolated headless conversion service |
 | pyHanko 0.37 | PKCS#12 cryptographic PDF signing | MIT | Isolated signing service |
 | OCRmyPDF 17.13 | PDF/A orchestration using internal non-Ghostscript backend | MPL-2.0 | Isolated archive service |
-| Bloom PDF Editor server | Experimental PDF → DOCX/XLSX/PPTX candidate | Apache-2.0 upstream at pinned commit; re-check exact dependencies before deployment | External optional service behind adapter; not bundled by default |
+| Bloom PDF Editor server | Experimental PDF → DOCX/XLSX/PPTX candidate | Apache-2.0 upstream at pinned deployment commit; re-check exact dependencies before deployment | External optional service behind adapter; not bundled by default |
 
 ## Approved architecture rules
 
@@ -48,12 +50,15 @@ This document tracks third-party components used or evaluated by SolYan PDF. Exa
 
 ## Release gate
 
-Before any public production release, create a pinned dependency manifest containing:
+For each public production release, record:
 
-- component name and exact version/commit;
+- component name and exact version/commit where pinned;
 - upstream repository/homepage;
 - exact license identifier;
-- license/NOTICE file path;
+- license/NOTICE obligations;
 - transitive dependency audit result;
 - whether code is linked, bundled, invoked as a process, or deployed as a separate service;
-- required attribution and source-distribution obligations, if any.
+- required attribution and source-distribution obligations, if any;
+- unresolved system-package/base-image versions where builds are not yet bit-for-bit reproducible.
+
+The current V1 snapshot is in `docs/RELEASE-MANIFEST.md`.
