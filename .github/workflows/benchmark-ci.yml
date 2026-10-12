@@ -66,9 +66,9 @@ jobs:
           PYTHONPATH=benchmarks python - <<'PY'
           from run_pdf_to_office_corpus import _summary
           sample = [
-              {'target': 'docx', 'average_similarity': 90, 'source_pages': 1, 'roundtrip_pages': 1, 'page_count_match': True, 'unmatched_pages': 0, 'convert_seconds': 1, 'roundtrip_seconds': 1},
-              {'target': 'docx', 'average_similarity': 80, 'source_pages': 1, 'roundtrip_pages': 1, 'page_count_match': True, 'unmatched_pages': 0, 'convert_seconds': 1, 'roundtrip_seconds': 1},
-              {'target': 'pptx', 'average_similarity': 70, 'source_pages': 1, 'roundtrip_pages': 2, 'page_count_match': False, 'unmatched_pages': 1, 'convert_seconds': 1, 'roundtrip_seconds': 1},
+              {'target': 'docx', 'average_similarity': 90, 'source_pages': 1, 'roundtrip_pages': 1, 'page_count_match': True, 'unmatched_pages': 0, 'geometry_normalized_pages': 1, 'geometry_mismatches': 0, 'convert_seconds': 1, 'roundtrip_seconds': 1},
+              {'target': 'docx', 'average_similarity': 80, 'source_pages': 1, 'roundtrip_pages': 1, 'page_count_match': True, 'unmatched_pages': 0, 'geometry_normalized_pages': 0, 'geometry_mismatches': 0, 'convert_seconds': 1, 'roundtrip_seconds': 1},
+              {'target': 'pptx', 'average_similarity': 70, 'source_pages': 1, 'roundtrip_pages': 2, 'page_count_match': False, 'unmatched_pages': 1, 'geometry_normalized_pages': 0, 'geometry_mismatches': 1, 'convert_seconds': 1, 'roundtrip_seconds': 1},
           ]
           result = _summary(sample)
           assert result['cases'] == 3
@@ -76,7 +76,10 @@ jobs:
           assert result['minimum_similarity'] == 70
           assert result['page_count_mismatches'] == 1
           assert result['unmatched_pages'] == 1
-          assert result['targets']['pptx']['page_count_mismatches'] == 1
+          assert result['geometry_normalized_pages'] == 1
+          assert result['geometry_mismatches'] == 1
+          assert result['targets']['docx']['geometry_normalized_pages'] == 1
+          assert result['targets']['pptx']['geometry_mismatches'] == 1
           print(result)
           PY
 
@@ -101,6 +104,8 @@ jobs:
           assert result['source_pages'] == result['roundtrip_pages'] == 1
           assert result['page_count_match'] is True
           assert result['unmatched_pages'] == 0
+          assert result['geometry_normalized_pages'] == 0
+          assert result['geometry_mismatches'] == 0
           print(result)
           PY
 
@@ -132,4 +137,34 @@ jobs:
           assert result['page_similarity'] == [100.0, 0.0], result
           assert result['average_similarity'] == 50.0, result
           print(result)
+          PY
+
+      - name: Smoke test visual similarity tolerates raster rounding only
+        run: |
+          python - <<'PY'
+          import io
+          import importlib.util
+          from pypdf import PdfWriter
+
+          spec = importlib.util.spec_from_file_location('bench', 'benchmarks/pdf_to_office.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          def make_pdf(width: float, height: float) -> bytes:
+              buffer = io.BytesIO()
+              writer = PdfWriter()
+              writer.add_blank_page(width=width, height=height)
+              writer.write(buffer)
+              return buffer.getvalue()
+
+          rounded = module.visual_similarity(make_pdf(595, 842), make_pdf(596, 842))
+          assert rounded['geometry_normalized_pages'] == 1, rounded
+          assert rounded['geometry_mismatches'] == 0, rounded
+          assert rounded['average_similarity'] == 100.0, rounded
+
+          rotated = module.visual_similarity(make_pdf(595, 842), make_pdf(842, 595))
+          assert rotated['geometry_normalized_pages'] == 0, rotated
+          assert rotated['geometry_mismatches'] == 1, rotated
+          assert rotated['average_similarity'] == 0.0, rotated
+          print({'rounded': rounded, 'rotated': rotated})
           PY
