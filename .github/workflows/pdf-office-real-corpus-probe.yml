@@ -1,0 +1,116 @@
+name: PDF-to-Office Real Corpus Probe
+
+on:
+  push:
+    branches:
+      - benchmark/pdf-office-real-diagnostic-v1
+    paths:
+      - '.github/workflows/pdf-office-real-corpus-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install PDF metadata dependency
+        run: pip install pypdf==6.1.1
+
+      - name: Download and fingerprint candidate corpus
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+          from pypdf import PdfReader
+
+          PY_PDF_COMMIT = '02b8203bf416db3db03438bc8278dfcb0555f3'
+          cases = [
+              {
+                  'id': 'docx-google-doc', 'target': 'docx', 'category': 'document',
+                  'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
+                  'url': f'https://raw.githubusercontent.com/py-pdf/sample-files/{PY_PDF_COMMIT}/011-google-doc-document/google-doc-document.pdf',
+              },
+              {
+                  'id': 'docx-multicolumn', 'target': 'docx', 'category': 'multi-column',
+                  'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
+                  'url': f'https://raw.githubusercontent.com/py-pdf/sample-files/{PY_PDF_COMMIT}/026-latex-multicolumn/multicolumn.pdf',
+              },
+              {
+                  'id': 'docx-libreoffice-images', 'target': 'docx', 'category': 'document-images',
+                  'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
+                  'url': f'https://raw.githubusercontent.com/py-pdf/sample-files/{PY_PDF_COMMIT}/028-image-references-deduplication/wrong-references.pdf',
+              },
+          ]
+
+          commons = [
+              ('xlsx-table-material', 'xlsx', 'table', 'NDL8818342 The table of material. Report No. 44a(4), USSBS Index Section 2.pdf', 'Public Domain'),
+              ('xlsx-unidentified-table', 'xlsx', 'table', 'NDL8816038 Unidentified table. Report No. 17g(9), USSBS Index Section 2.pdf', 'Public Domain'),
+              ('xlsx-transport-table', 'xlsx', 'table', 'NDL8820352 Comparative table on transportation plan and actual transportation results of "C" ships. Report No. 54tt(1), USSBS Index Section 2 part2.pdf', 'Public Domain'),
+              ('pptx-commons-copyright', 'pptx', 'slides', 'Presentation on Wikimedia Commons & Copyright.pdf', 'CC BY-SA 4.0'),
+              ('pptx-what-is-cc', 'pptx', 'slides', 'What is Creative Commons.pdf', 'CC BY-SA 4.0'),
+              ('pptx-copyright-laws', 'pptx', 'slides', '2.Introduction to copyright laws.pdf', 'CC BY-SA 4.0'),
+          ]
+          for case_id, target, category, filename, license_name in commons:
+              cases.append({
+                  'id': case_id,
+                  'target': target,
+                  'category': category,
+                  'license': license_name,
+                  'source': 'Wikimedia Commons',
+                  'commons_filename': filename,
+                  'url': 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + urllib.parse.quote(filename, safe=''),
+              })
+
+          out_dir = Path('/tmp/pdf-office-real-probe')
+          out_dir.mkdir(parents=True, exist_ok=True)
+          inventory = []
+          ua = {'User-Agent': 'SolYan-PDF PDF-to-Office benchmark/0.1.2 (https://github.com/solyan842/SolYan-PDF)'}
+          for case in cases:
+              req = urllib.request.Request(case['url'], headers=ua)
+              with urllib.request.urlopen(req, timeout=180) as response:
+                  data = response.read()
+                  final_url = response.geturl()
+              assert data[:5] == b'%PDF-', (case['id'], data[:20], final_url)
+              path = out_dir / f"{case['id']}.pdf"
+              path.write_bytes(data)
+              reader = PdfReader(path)
+              item = {
+                  **case,
+                  'filename': path.name,
+                  'bytes': len(data),
+                  'pages': len(reader.pages),
+                  'sha256': hashlib.sha256(data).hexdigest(),
+                  'resolved_url': final_url,
+              }
+              inventory.append(item)
+              print(case['id'], 'pages=', item['pages'], 'bytes=', item['bytes'], 'sha256=', item['sha256'])
+
+          assert len(inventory) == 9
+          assert {x['target'] for x in inventory} == {'docx', 'xlsx', 'pptx'}
+          assert all(x['pages'] >= 1 and x['bytes'] > 1000 for x in inventory)
+          Path('/tmp/pdf-office-real-inventory.json').write_text(
+              json.dumps({'schema_version': 1, 'cases': inventory}, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Upload candidate inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-office-real-corpus-inventory
+          path: /tmp/pdf-office-real-inventory.json
+          retention-days: 7
