@@ -1,0 +1,54 @@
+name: OCR Service CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/ocr-service/**'
+      - '.github/workflows/ocr-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/ocr-service/**'
+      - '.github/workflows/ocr-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engines/ocr-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install lightweight API dependencies
+        run: pip install fastapi==0.119.0 uvicorn==0.37.0 python-multipart==0.0.20 httpx==0.28.1
+
+      - name: Compile service
+        run: python -m compileall app
+
+      - name: Verify health without loading models
+        run: |
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from app.main import app
+          client = TestClient(app)
+          response = client.get('/health')
+          assert response.status_code == 200
+          body = response.json()
+          assert body['status'] == 'ok'
+          assert body['models_loaded'] == {'ocr': False, 'structure': False}
+          print(body)
+          PY
+
+      - name: Validate Dockerfile pins
+        run: |
+          grep -q 'paddlepaddle==3.2.0' Dockerfile
+          grep -q 'paddleocr\[doc-parser\]==3.7.0' requirements.txt
