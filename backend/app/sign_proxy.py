@@ -8,6 +8,17 @@ from fastapi.responses import Response
 
 router = APIRouter(prefix="/sign", tags=["Digital signing"])
 SIGN_SERVICE_URL = os.getenv("SIGN_SERVICE_URL", "http://sign-service:8030").rstrip("/")
+MAX_PDF_SIZE = int(os.getenv("SIGN_PROXY_MAX_PDF_SIZE", str(100 * 1024 * 1024)))
+MAX_CERT_SIZE = int(os.getenv("SIGN_PROXY_MAX_CERT_SIZE", str(10 * 1024 * 1024)))
+
+
+def _read_limited(upload: UploadFile, limit: int, label: str) -> bytes:
+    data = upload.file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(status_code=413, detail=f"{label} exceeds size limit")
+    if not data:
+        raise HTTPException(status_code=400, detail=f"Empty {label}")
+    return data
 
 
 @router.get("/health")
@@ -29,8 +40,10 @@ def sign_pkcs12(
     reason: str = Form(default="", max_length=500),
     location: str = Form(default="", max_length=500),
 ) -> Response:
-    pdf_data = file.file.read()
-    cert_data = certificate.file.read()
+    pdf_data = _read_limited(file, MAX_PDF_SIZE, "PDF")
+    cert_data = _read_limited(certificate, MAX_CERT_SIZE, "PKCS#12")
+    if not pdf_data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Uploaded document is not a PDF")
     try:
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
             response = client.post(

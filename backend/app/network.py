@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import re
+import socket
 import subprocess
 from urllib.parse import urlparse
 
@@ -28,6 +29,13 @@ class DomainRequest(BaseModel):
     domain: str = Field(min_length=1, max_length=253)
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def normalize_host(value: str) -> str:
     raw = value.strip().lower().rstrip(".")
     if "://" in raw:
@@ -42,16 +50,54 @@ def normalize_host(value: str) -> str:
     return raw
 
 
+def _is_public_address(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return ip.is_global
+
+
+def _guard_ping_target(host: str) -> None:
+    if _env_bool("ALLOW_PRIVATE_NETWORK_UTILITIES", False):
+        return
+
+    try:
+        direct = ipaddress.ip_address(host)
+    except ValueError:
+        direct = None
+    if direct is not None:
+        if not direct.is_global:
+            raise HTTPException(status_code=403, detail="Ping tới IP private/loopback/reserved bị chặn")
+        return
+
+    try:
+        resolved = {item[4][0] for item in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)}
+    except socket.gaierror as exc:
+        raise HTTPException(status_code=422, detail="Không phân giải được host") from exc
+    if not resolved:
+        raise HTTPException(status_code=422, detail="Không phân giải được host")
+    if any(not _is_public_address(address) for address in resolved):
+        raise HTTPException(status_code=403, detail="Host phân giải tới mạng private/loopback/reserved nên bị chặn")
+
+
 @router.get("/ip")
 def public_ip(request: Request) -> dict[str, str]:
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    ip = forwarded or (request.client.host if request.client else "unknown")
-    return {"ip": ip}
+    if _env_bool("TRUST_PROXY_HEADERS", False):
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            try:
+                ipaddress.ip_address(forwarded)
+                return {"ip": forwarded}
+            except ValueError:
+                pass
+    return {"ip": request.client.host if request.client else "unknown"}
 
 
 @router.post("/ping")
 def ping(payload: HostRequest) -> dict[str, object]:
     host = normalize_host(payload.host)
+    _guard_ping_target(host)
     try:
         result = subprocess.run(
             ["ping", "-c", "4", "-W", "2", host],
