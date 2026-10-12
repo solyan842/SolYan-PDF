@@ -1,0 +1,4 @@
+# Generated from a passing SolYan PDF OCR image inventory.
+# Keep PaddlePaddle on the official CPU wheel index used by the production image.
+--index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/
+paddlepaddle==3.2.0
