@@ -51,6 +51,7 @@
 - [x] Table recognition
 - [x] Reading order
 - [x] Structured Markdown/JSON export
+- [x] Scanned table → Excel (`.xlsx`) export with multi-page/table workbook merge and browser download flow
 - [x] Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 
 ## Phase 4 — Office conversion
@@ -128,6 +129,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Production npm high-severity audit gate
 - [x] Patched PostCSS transitive dependency override
 - [x] Backend/qpdf CI
+- [x] OCR XLSX binary proxy regression coverage
 - [x] Private-network Ping blocked by default
 - [x] Untrusted proxy IP headers ignored by default
 - [x] Signing/PDF-A proxy upload bounds
