@@ -11,7 +11,9 @@ The integration canary currently tests against:
 - upstream license at that commit: Apache-2.0
 - standalone server port: `8787`
 
-The canary pin is deliberately exact. Updating it requires a PR, a license re-check and a fresh end-to-end canary run.
+The canary pin is deliberately exact. Updating it requires a PR, a license re-check and fresh canary/full-benchmark runs.
+
+SolYan applies a repository-owned patch after checking out that exact upstream commit. The patch is visible under `patches/bloom/`; the upstream pin is not silently moved or replaced by a fork.
 
 ## Container storage requirement
 
@@ -44,9 +46,15 @@ When a known page size is detected, SolYan applies a conservative OpenXML post-p
 - cell values, formulas, styles, row/column geometry and existing page setup are not modified;
 - malformed/non-ZIP output is returned unchanged rather than rewritten.
 
-The Bloom canary requires the controlled XLSX case to preserve page count after the Office -> PDF round-trip. The visual-similarity benchmark separately penalizes missing/extra pages, so pagination errors cannot be hidden by a high first-page score.
+## Bloom table-candidate compatibility patch
 
-## What the canary proves
+The pinned Bloom table detector originally compared a new text node with only the last node appended to the current vertical cluster. A tall earlier cell can extend below a later short cell in the same logical row, so that comparison can create a false `>48pt` gap and fragment one logical source table into multiple `LogicalTable` objects and therefore multiple XLSX worksheets.
+
+SolYan's patch tracks the bottom edge of the whole current cluster instead. A dedicated Vitest regression reproduces the tall-cell case and requires the detector to keep the logical lattice intact.
+
+The 18-case benchmark then exposed a second issue in `xlsx-invoice`: sparse title/metadata text such as `Invoice table`, `INVOICE` and `INV-2026-1012` could be accepted as a separate borderless table. SolYan therefore adds a narrow borderless-table gate requiring repeated two-dimensional alignment support while preserving vector-bordered tables and legitimate two-row merged-cell layouts. A second regression test protects this behavior.
+
+## Three-case canary
 
 `.github/workflows/bloom-canary-ci.yml` builds the pinned Bloom standalone server plus the SolYan Office and backend images, then runs one controlled synthetic case for each target:
 
@@ -58,15 +66,29 @@ For each case the workflow exercises the whole path:
 
 `PDF -> SolYan backend adapter -> pinned Bloom -> Office file -> SolYan Office service -> PDF -> visual similarity report`
 
-The workflow requires successful conversion, non-empty output and a valid PDF round-trip. It records similarity scores but does **not** enforce broad product fidelity thresholds. The XLSX canary additionally requires page-count preservation for its controlled one-page source.
+The canary requires successful conversion, non-empty output and a valid PDF round-trip. It records similarity scores and checks controlled pagination/geometry behavior, but it does **not** claim broad real-world fidelity.
 
-## What the canary does not prove
+## 18-case controlled synthetic gate
 
-A three-case synthetic canary is an integration and compatibility gate, not a release-quality benchmark. It does not replace:
+`.github/workflows/bloom-full-benchmark-ci.yml` runs a controlled corpus of 18 cases: 6 DOCX, 6 XLSX and 6 PPTX. The full gate also runs Bloom TypeScript typecheck, the relevant upstream tests and SolYan-owned regressions before building the benchmark stack.
 
-- the 18-case controlled synthetic corpus;
-- representative real-world PDF -> Office corpora;
-- target-specific acceptance thresholds;
-- manual inspection of difficult tables, typography, charts and slide layouts.
+For the current pinned Bloom commit plus SolYan patch, the full controlled synthetic gate passes with:
 
-Broad quality claims remain blocked until the representative release-corpus items in `docs/ROADMAP.md` are completed.
+- zero page-count mismatches;
+- zero unmatched pages;
+- zero geometry mismatches;
+- successful round trips for all 18 cases.
+
+The benchmark includes XLSX package diagnostics (worksheet count, worksheet dimensions, row/column geometry, page setup and cell previews) so future pagination failures can be localized without weakening the acceptance gate.
+
+## What these gates do not prove
+
+The three-case canary and 18-case synthetic corpus are compatibility/regression gates, not a representative product-quality benchmark. They do not replace:
+
+- representative real-world PDF -> DOCX corpora;
+- representative real-world PDF -> XLSX corpora;
+- representative real-world PDF -> PPTX corpora;
+- agreed target-specific acceptance thresholds;
+- manual inspection of difficult typography, tables, charts and slide layouts.
+
+PDF -> Office therefore remains labelled **Experimental** until the representative release-corpus items in `docs/ROADMAP.md` are completed and accepted.

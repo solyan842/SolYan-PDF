@@ -2,6 +2,32 @@
 
 All notable changes to SolYan PDF are documented here.
 
+## [0.1.2] - 2026-10-12
+
+Patch release focused on hardening the experimental PDF -> Office path and making its compatibility gates reproducible and explicit.
+
+### PDF -> Office experimental integration
+- Added an exact pinned Bloom canary for DOCX, XLSX and PPTX round trips.
+- Added a controlled 18-case synthetic corpus: 6 DOCX, 6 XLSX and 6 PPTX cases.
+- Added full end-to-end synthetic validation requiring zero page-count mismatches, zero unmatched pages and zero geometry mismatches across all 18 controlled cases.
+- Added conservative XLSX print-layout normalization that derives known paper size/orientation from the source PDF and preserves existing worksheet page setup.
+- Added geometry comparison tolerance for sub-percent renderer rounding drift while retaining hard failures for meaningful paper-size/orientation mismatch.
+- Added XLSX worksheet diagnostics to expose sheet count, dimensions, row/column geometry and cell previews during benchmark failures.
+- Patched the pinned Bloom table candidate detector to avoid false vertical fragmentation when an earlier tall cell extends below the last short cell in a row.
+- Rejected sparse borderless heading/metadata groups being misclassified as standalone worksheets while preserving legitimate merged-cell tables.
+- Added focused regression tests for both table-fragmentation and sparse-heading false-positive cases.
+
+### Verification status
+- Bloom 3-case canary passes on the pinned upstream commit plus SolYan-owned patch.
+- Bloom relevant upstream tests, SolYan regressions and TypeScript typecheck pass under Node 22.
+- The 18-case controlled synthetic PDF -> Office -> PDF benchmark passes its compatibility gate for DOCX/XLSX/PPTX.
+
+### Known limitations
+- PDF -> DOCX/XLSX/PPTX remains labelled **Experimental**. Synthetic compatibility success is not a substitute for representative real-world release corpora or agreed target-specific fidelity thresholds.
+- The Vietnamese OCR real-scan corpus is still only 9 documents; broader quality claims remain blocked until 50–100+ diverse verified pages are available.
+- PaddlePaddle is source/version locked on its dedicated CPU index but not yet architecture-wide hash-pinned.
+- Cloud connectors, multi-party remote signing, AI summarization and PDF translation still require separate product/provider decisions.
+
 ## [0.1.1] - 2026-10-12
 
 Patch release focused on reproducibility, dependency integrity, OCR release validation and deployment verification. No user-facing PDF workflow was intentionally changed.

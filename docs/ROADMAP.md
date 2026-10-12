@@ -64,11 +64,15 @@
 - [x] Research PDF → PPTX engine/API candidate
 - [x] Add experimental adapter to pinned Bloom upstream API
 - [x] Add round-trip visual-fidelity benchmark harness
+- [x] Add pinned 3-case DOCX/XLSX/PPTX end-to-end canary
+- [x] Add controlled 18-case synthetic corpus (6 DOCX / 6 XLSX / 6 PPTX)
+- [x] Pass the 18-case synthetic compatibility gate with zero page-count, unmatched-page and geometry mismatches
+- [x] Add XLSX print-layout normalization and table-fragmentation regressions
 - [ ] Run representative PDF → DOCX release corpus
 - [ ] Run representative PDF → XLSX release corpus
 - [ ] Run representative PDF → PPTX release corpus
 
-PDF-to-Office stays labelled **Experimental** until representative corpus results meet an agreed threshold.
+PDF-to-Office stays labelled **Experimental** until representative corpus results meet an agreed threshold. Passing the synthetic gate is a compatibility milestone, not a broad fidelity claim.
 
 ## Phase 5 — Advanced tools
 
@@ -151,6 +155,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Pin Debian package sources to snapshot `20261012T000000Z` for all Python images
 - [x] Publish hardened patch release `v0.1.1`
 - [x] Remove completed one-shot release publisher workflows after successful publication
+- [ ] Publish PDF-to-Office compatibility patch release `v0.1.2`
 
 ## Release decisions / external inputs still required
 
