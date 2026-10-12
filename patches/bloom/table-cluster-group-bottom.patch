@@ -204,3 +204,71 @@ diff --git a/server/src/engines/exporter/pptx/pptx-exporter.ts b/server/src/engi
 +  }
 +  return xml10Text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
  }
+diff --git a/server/src/engines/parser/document-parser.ts b/server/src/engines/parser/document-parser.ts
+--- a/server/src/engines/parser/document-parser.ts
++++ b/server/src/engines/parser/document-parser.ts
+@@ -407,10 +407,11 @@ function walkPages(
+     return;
+   }
+ 
+-  // Page node
+-  const media = rectFrom(node, objects, 'MediaBox') ?? [0, 0, 612, 792];
+-  const crop = rectFrom(node, objects, 'CropBox') ?? media;
+-  const rotate = node.getNumber('Rotate') ?? 0;
++  // Page node. MediaBox, CropBox and Rotate are inheritable page attributes
++  // and may live on any ancestor /Pages node rather than the leaf /Page.
++  const media = inheritedRectFrom(node, objects, 'MediaBox') ?? [0, 0, 612, 792];
++  const crop = inheritedRectFrom(node, objects, 'CropBox') ?? media;
++  const rotate = inheritedNumberFrom(node, objects, 'Rotate') ?? 0;
+ 
+   const contentRefs: PdfRef[] = [];
+   const contents = node.get('Contents');
+@@ -435,4 +436,48 @@ function walkPages(
+   });
+ }
+ 
++function inheritedRectFrom(
++  dict: PdfDict,
++  objects: Map<string, PdfPrimitive>,
++  key: string,
++): [number, number, number, number] | null {
++  let current: PdfDict | null = dict;
++  const seen = new Set<string>();
++
++  while (current) {
++    const direct = rectFrom(current, objects, key);
++    if (direct) return direct;
++
++    const parentRef = current.getRef('Parent');
++    if (!parentRef || seen.has(parentRef.key)) return null;
++    seen.add(parentRef.key);
++
++    const parent = resolve(objects, parentRef);
++    current = parent instanceof PdfDict ? parent : null;
++  }
++  return null;
++}
++
++function inheritedNumberFrom(
++  dict: PdfDict,
++  objects: Map<string, PdfPrimitive>,
++  key: string,
++): number | null {
++  let current: PdfDict | null = dict;
++  const seen = new Set<string>();
++
++  while (current) {
++    const direct = current.getNumber(key);
++    if (direct != null) return direct;
++
++    const parentRef = current.getRef('Parent');
++    if (!parentRef || seen.has(parentRef.key)) return null;
++    seen.add(parentRef.key);
++
++    const parent = resolve(objects, parentRef);
++    current = parent instanceof PdfDict ? parent : null;
++  }
++  return null;
++}
++
+ function rectFrom(
