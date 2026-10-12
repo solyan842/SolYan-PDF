@@ -1,0 +1,70 @@
+name: Python Hash Lock CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/requirements.txt'
+      - 'backend/requirements.hashes'
+      - 'engines/office-service/requirements.txt'
+      - 'engines/office-service/requirements.hashes'
+      - 'engines/sign-service/requirements.txt'
+      - 'engines/sign-service/requirements.hashes'
+      - 'engines/archive-service/requirements.txt'
+      - 'engines/archive-service/requirements.hashes'
+      - 'scripts/generate-python-hash-locks.sh'
+      - '.github/workflows/python-hash-lock-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/requirements.txt'
+      - 'backend/requirements.hashes'
+      - 'engines/office-service/requirements.txt'
+      - 'engines/office-service/requirements.hashes'
+      - 'engines/sign-service/requirements.txt'
+      - 'engines/sign-service/requirements.hashes'
+      - 'engines/archive-service/requirements.txt'
+      - 'engines/archive-service/requirements.hashes'
+      - 'scripts/generate-python-hash-locks.sh'
+      - '.github/workflows/python-hash-lock-ci.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup exact Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Regenerate hash locks
+        run: PYTHON_BIN=python ./scripts/generate-python-hash-locks.sh
+
+      - name: Upload regenerated hash locks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-hash-locks
+          path: |
+            backend/requirements.hashes
+            engines/office-service/requirements.hashes
+            engines/sign-service/requirements.hashes
+            engines/archive-service/requirements.hashes
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Verify committed locks are current
+        run: |
+          status="$(git status --porcelain -- \
+            backend/requirements.hashes \
+            engines/office-service/requirements.hashes \
+            engines/sign-service/requirements.hashes \
+            engines/archive-service/requirements.hashes)"
+          if [ -n "$status" ]; then
+            echo "$status"
+            echo 'Hash locks are missing or stale. Regenerate with scripts/generate-python-hash-locks.sh.' >&2
+            exit 1
+          fi
