@@ -54,16 +54,17 @@ jobs:
           import zipfile
           from app.xlsx_print import _match_paper_size, apply_fit_to_width, detect_pdf_print_setup
 
-          def make_xlsx(sheet_xml: str) -> bytes:
+          def make_xlsx(sheet_xml: str, sheets: int = 1) -> bytes:
               buf = io.BytesIO()
               with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as archive:
-                  archive.writestr('xl/worksheets/sheet1.xml', sheet_xml)
+                  for index in range(1, sheets + 1):
+                      archive.writestr(f'xl/worksheets/sheet{index}.xml', sheet_xml)
                   archive.writestr('[Content_Types].xml', '<Types/>')
               return buf.getvalue()
 
-          def sheet(data: bytes) -> str:
+          def sheet(data: bytes, index: int = 1) -> str:
               with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                  return archive.read('xl/worksheets/sheet1.xml').decode()
+                  return archive.read(f'xl/worksheets/sheet{index}.xml').decode()
 
           # Standard-paper mapping is orientation independent and custom sizes
           # are deliberately not normalized.
@@ -82,25 +83,37 @@ jobs:
               '</worksheet>'
           )
           bare = make_xlsx(bare_xml)
-          patched = apply_fit_to_width(bare, 9, 'portrait')
+
+          # One-page PDF + one worksheet: preserve the source's one-page height.
+          patched = apply_fit_to_width(bare, 9, 'portrait', 1)
           patched_xml = sheet(patched)
           assert patched != bare
           assert '<pageSetUpPr fitToPage="1"/>' in patched_xml, patched_xml
-          assert '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' in patched_xml, patched_xml
-          assert apply_fit_to_width(patched, 9, 'portrait') == patched
+          assert '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="1"/>' in patched_xml, patched_xml
+          assert apply_fit_to_width(patched, 9, 'portrait', 1) == patched
 
-          landscape = apply_fit_to_width(bare, 9, 'landscape')
+          landscape = apply_fit_to_width(bare, 9, 'landscape', 1)
           assert 'paperSize="9" orientation="landscape"' in sheet(landscape)
+          assert 'fitToHeight="1"' in sheet(landscape)
+
+          # Multi-page input or multiple worksheets must not be squeezed to one
+          # page high; only width normalization remains.
+          multi_page = apply_fit_to_width(bare, 9, 'portrait', 2)
+          assert 'fitToHeight="0"' in sheet(multi_page)
+          multi_sheet = apply_fit_to_width(make_xlsx(bare_xml, sheets=2), 9, 'portrait', 1)
+          assert 'fitToHeight="0"' in sheet(multi_sheet, 1)
+          assert 'fitToHeight="0"' in sheet(multi_sheet, 2)
 
           existing_xml = bare_xml.replace(
               '</worksheet>',
               '<pageSetup paperSize="1" orientation="landscape" fitToWidth="2"/></worksheet>',
           )
           existing = make_xlsx(existing_xml)
-          assert apply_fit_to_width(existing, 9, 'portrait') == existing
-          assert apply_fit_to_width(b'not-a-zip', 9, 'portrait') == b'not-a-zip'
-          assert apply_fit_to_width(bare, 0, 'portrait') == bare
-          assert apply_fit_to_width(bare, 9, 'diagonal') == bare
+          assert apply_fit_to_width(existing, 9, 'portrait', 1) == existing
+          assert apply_fit_to_width(b'not-a-zip', 9, 'portrait', 1) == b'not-a-zip'
+          assert apply_fit_to_width(bare, 0, 'portrait', 1) == bare
+          assert apply_fit_to_width(bare, 9, 'diagonal', 1) == bare
+          assert apply_fit_to_width(bare, 9, 'portrait', 0) == bare
           print('xlsx source-aware print normalization ok')
           PY
 
