@@ -17,6 +17,14 @@ The Dockerfiles are pinned to OCI multi-architecture index digests so future bui
 
 The multi-arch index digest is intentionally used instead of an amd64-only manifest digest, preserving Docker's architecture selection for supported platforms.
 
+## Debian package snapshot
+
+All five Python/Debian images use the fixed Debian snapshot ID **`20261012T000000Z`** for both the main Debian archive and `debian-security`. Their deb822 sources point to `snapshot.debian.org`, use `trixie`, `trixie-updates` and `trixie-security`, and set `Check-Valid-Until: no` as required for historical snapshot use.
+
+Image Inventory CI rejects Debian runtime images that no longer contain the expected snapshot URLs or that still reference `deb.debian.org`. The snapshot timestamp is also recorded as an image label.
+
+The frontend image uses the already-pinned Alpine base image and performs no `apk add`, so there is no additional live Alpine package-resolution step in the frontend Dockerfile.
+
 ## Dependency lock coverage
 
 | Runtime | Lock state |
@@ -52,8 +60,8 @@ OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently re
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | httpx | 0.28.1 | BSD-3-Clause | Python runtime dependency |
-| qpdf | distro package | Apache-2.0 | CLI in backend/archive containers |
-| iputils-ping | distro package | BSD/GPL-family package licensing; verify image package metadata at release build | CLI for network utility |
+| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI in backend/archive containers |
+| iputils-ping | snapshot-resolved distro package | BSD/GPL-family package licensing; verify image package metadata at release build | CLI for network utility |
 
 ## OCR service
 
@@ -63,8 +71,8 @@ OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently re
 | PaddleOCR | 3.7.0 | Apache-2.0 | primary OCR/document intelligence |
 | pytesseract | 0.3.13 | Apache-2.0 | Python adapter |
 | pypdfium2 | 5.14.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering |
-| Tesseract OCR | distro package | Apache-2.0 | fallback OCR binary |
-| Vietnamese Tesseract data | distro package | upstream tessdata licensing applies | `vie` recognition data |
+| Tesseract OCR | snapshot-resolved distro package | Apache-2.0 | fallback OCR binary |
+| Vietnamese Tesseract data | snapshot-resolved distro package | upstream tessdata licensing applies | `vie` recognition data |
 
 ## Office service
 
@@ -73,8 +81,8 @@ OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently re
 | FastAPI | 0.119.0 | MIT | Python runtime dependency |
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
-| LibreOffice Writer/Calc/Impress | distro package | MPL-2.0 for LibreOffice plus separately licensed bundled code | isolated headless conversion service |
-| DejaVu / Liberation fonts | distro package | respective font licenses | conversion fonts |
+| LibreOffice Writer/Calc/Impress | snapshot-resolved distro package | MPL-2.0 for LibreOffice plus separately licensed bundled code | isolated headless conversion service |
+| DejaVu / Liberation fonts | snapshot-resolved distro package | respective font licenses | conversion fonts |
 
 ## Signature service
 
@@ -94,8 +102,8 @@ OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently re
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | OCRmyPDF | 17.13.0 | MPL-2.0 | PDF/A orchestration |
 | pypdfium2 | 5.14.0 in transitive lock | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering |
-| qpdf | distro package | Apache-2.0 | PDF engine |
-| Tesseract OCR | distro package | Apache-2.0 | OCR engine |
+| qpdf | snapshot-resolved distro package | Apache-2.0 | PDF engine |
+| Tesseract OCR | snapshot-resolved distro package | Apache-2.0 | OCR engine |
 
 ## Optional / external
 
@@ -107,15 +115,15 @@ OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently re
 
 ## Resolved image inventory
 
-`.github/workflows/image-inventory-ci.yml` builds all six default images and stores a 30-day artifact for each image. The artifact records the resolved OS package list, Python/npm dependency graph where applicable, core binary versions and Docker image metadata. The same workflow also rejects root runtime users and verifies that each image has a writable runtime HOME.
+`.github/workflows/image-inventory-ci.yml` builds all six default images and stores a 30-day artifact for each image. The artifact records Docker metadata/labels, APT sources where applicable, the resolved OS package list, Python/npm dependency graph, and core binary versions. The same workflow rejects root runtime users, verifies a writable runtime HOME, and enforces the pinned Debian snapshot on all Debian images.
 
 See `docs/REPRODUCIBILITY.md` for the exact inventory/lock model and limitations.
 
 ## Reproducibility note
 
-Application-level npm and Python dependency graphs are version-locked, including the PaddleOCR/PaddlePaddle special case. Backend, Office, signing and PDF/A Python distributions are additionally SHA-256 hash-verified. Docker base-image indexes are pinned and resolved image package inventories are captured by CI.
+Application-level npm and Python dependency graphs are version-locked, including the PaddleOCR/PaddlePaddle special case. Backend, Office, signing and PDF/A Python distributions are additionally SHA-256 hash-verified. Docker base-image indexes are pinned, Debian OS-package resolution uses a fixed snapshot, and resolved image inventories are captured by CI.
 
-The containers are still **not bit-for-bit reproducible** because distro packages are installed from live Debian repositories without exact package-version/snapshot pinning, the OCR/Paddle special-index graph is not yet hash-verified, and build timestamps/tool metadata can vary.
+The containers are still **not claimed bit-for-bit reproducible** because the OCR/Paddle special-index graph is not yet hash-verified and timestamps/build-tool metadata can vary. Repeat-build byte identity has not been established as a release guarantee.
 
 ## License compliance rule
 
