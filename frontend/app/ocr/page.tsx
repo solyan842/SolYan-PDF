@@ -80,13 +80,13 @@ export default function OcrPage() {
 
       if (mode === 'xlsx') {
         if (!response.ok) {
-          let message = `HTTP ${response.status}`;
+          const raw = await response.text();
+          let message = raw || `HTTP ${response.status}`;
           try {
-            const payload = await response.json();
+            const payload = JSON.parse(raw) as { detail?: string };
             message = payload.detail ?? message;
           } catch {
-            const text = await response.text();
-            if (text) message = text;
+            // Keep the plain response body when the API did not return JSON.
           }
           throw new Error(message);
         }
