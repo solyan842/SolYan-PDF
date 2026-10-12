@@ -1,0 +1,32 @@
+diff --git a/server/src/engines/exporter/docx/ooxml/xml.ts b/server/src/engines/exporter/docx/ooxml/xml.ts
+index 6e40d9c..0000000 100644
+--- a/server/src/engines/exporter/docx/ooxml/xml.ts
++++ b/server/src/engines/exporter/docx/ooxml/xml.ts
+@@ -1,11 +1,27 @@
+ /** XML helpers for OOXML generation. */
+ 
++function isXml10Char(codePoint: number): boolean {
++  return (
++    codePoint === 0x09 ||
++    codePoint === 0x0a ||
++    codePoint === 0x0d ||
++    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
++    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
++    (codePoint >= 0x10000 && codePoint <= 0x10ffff)
++  );
++}
++
+ export function esc(text: string): string {
+-  return text
++  let xml10Text = '';
++  for (const char of text) {
++    const codePoint = char.codePointAt(0);
++    if (codePoint !== undefined && isXml10Char(codePoint)) xml10Text += char;
++  }
++
++  return xml10Text
+     .replace(/&/g, '&amp;')
+     .replace(/</g, '&lt;')
+     .replace(/>/g, '&gt;')
+     .replace(/"/g, '&quot;');
+ }
