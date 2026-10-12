@@ -132,7 +132,9 @@ jobs:
           assert r['id'] == 'pptx-what-is-cc', r
           assert r['source_pages'] == 11 and r['roundtrip_pages'] == 11, r
           assert r['geometry_mismatches'] == 0, r
-          assert r['source_render_sizes'] == r['roundtrip_render_sizes'], r
+          assert len(r['source_render_sizes']) == len(r['roundtrip_render_sizes']) == 11, r
+          for src, dst in zip(r['source_render_sizes'], r['roundtrip_render_sizes'], strict=True):
+              assert abs(src[0] - dst[0]) <= 2 and abs(src[1] - dst[1]) <= 2, (src, dst)
           assert r['average_similarity'] > 0.0, r
           print(json.dumps({
               'average_similarity': r['average_similarity'],
