@@ -6,6 +6,17 @@ Project license: **Apache-2.0** (`LICENSE`)
 
 This manifest records the main directly declared runtime dependencies and system engines used by the default V1 stack. Transitive dependencies remain governed by their own licenses.
 
+## Container base images
+
+The Dockerfiles are pinned to OCI multi-architecture index digests so future builds cannot silently move to a different base image while retaining the same tag.
+
+| Base image | Pinned digest | Resolved image line |
+|---|---|---|
+| `node:22.13-alpine` | `sha256:e2b39f7b64281324929257d0f8004fb6cb4bf0fdfb9aa8cedb235a766aec31da` | Node 22.13 / Alpine 3.21 |
+| `python:3.13-slim` | `sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f` | Python 3.13.16 / Debian Trixie slim |
+
+The multi-arch index digest is intentionally used instead of an amd64-only manifest digest, preserving Docker's architecture selection for supported platforms.
+
 ## Frontend
 
 | Component | Version | License | Integration |
@@ -81,9 +92,11 @@ This manifest records the main directly declared runtime dependencies and system
 
 ## Reproducibility note
 
-The application-level npm/Python dependencies are pinned. The current Dockerfiles use moving tags such as `python:3.13-slim` and Debian package names without exact apt version pins, so qpdf, LibreOffice, Tesseract and other system packages are resolved at image build time. Therefore **v0.1.0 is not yet bit-for-bit reproducible**.
+Application-level direct npm/Python dependencies and the Docker base-image indexes are pinned. However, the Dockerfiles still run `apt-get update` and install Debian packages without exact version constraints, and Python/npm transitive dependency graphs are not yet represented by a fully locked, hash-verified build manifest across all services.
 
-A later reproducible-release hardening pass should pin container image digests and record resolved OS package versions/SBOM for every published image.
+Therefore the containers are **more reproducible but not yet bit-for-bit reproducible**. qpdf, LibreOffice, Tesseract, fonts and other distro packages can still change when repository metadata changes even though the Debian base image itself is fixed.
+
+The next hardening step is to record the resolved OS/Python package inventory (SBOM) for built images and, where practical, pin release package versions or use a dated package snapshot.
 
 ## License compliance rule
 
