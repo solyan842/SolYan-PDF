@@ -5,6 +5,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+import httpx
+
 from pdf_to_office import benchmark_pdf
 
 
@@ -49,6 +51,21 @@ def _summary(results: list[dict]) -> dict:
     }
 
 
+def _case_metadata(case: dict) -> dict:
+    metadata = {
+        'id': case['id'],
+        'category': case['category'],
+    }
+    for key in ('title', 'template', 'selected_pages'):
+        if key in case:
+            metadata[key] = case[key]
+    source = case.get('source')
+    if isinstance(source, dict):
+        metadata['source_provider'] = source.get('provider')
+        metadata['source_license'] = source.get('license')
+    return metadata
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description='Run the versioned SolYan PDF PDF-to-Office benchmark corpus.')
     parser.add_argument('--manifest', type=Path, default=Path('benchmarks/corpora/pdf_to_office_synthetic_v1.json'))
@@ -65,12 +82,18 @@ def main() -> None:
     for case in manifest['cases']:
         pdf_path = args.corpus_dir / case['filename']
         source = pdf_path.read_bytes()
-        report, _, _ = benchmark_pdf(source, pdf_path.name, case['target'], args.api)
-        report.update({
-            'id': case['id'],
-            'category': case['category'],
-            'template': case['template'],
-        })
+        print(f"RUN {case['id']} target={case['target']} source={pdf_path.name} bytes={len(source)}", flush=True)
+        try:
+            report, _, _ = benchmark_pdf(source, pdf_path.name, case['target'], args.api)
+        except httpx.HTTPStatusError as exc:
+            response = exc.response
+            print(
+                f"FAIL {case['id']} HTTP {response.status_code} {response.request.method} {response.request.url} "
+                f"body={response.text[:4000]!r}",
+                flush=True,
+            )
+            raise
+        report.update(_case_metadata(case))
         results.append(report)
         print(
             f"{case['id']}: {report['average_similarity']:.2f}% "
@@ -90,7 +113,8 @@ def main() -> None:
 
     payload = {
         'manifest_version': manifest['version'],
-        'corpus_kind': 'controlled-synthetic',
+        'corpus_kind': manifest.get('corpus_kind', 'controlled-synthetic'),
+        'release_gate': bool(manifest.get('release_gate', False)),
         'thresholds': thresholds,
         'summary': summary,
         'results': results,
