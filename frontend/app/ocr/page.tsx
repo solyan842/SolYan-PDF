@@ -79,8 +79,8 @@ export default function OcrPage() {
       <button className="merge-button" type="button" onClick={runOcr} disabled={!file || busy}>{busy ? 'Đang nhận dạng…' : mode === 'text' ? 'Nhận dạng văn bản' : 'Phân tích tài liệu'}</button>
     </section>
 
-    {result && <section className="workspace ocr-output">
-      <div className="workspace-head"><div><h2>Kết quả</h2><p>{result.pages?.length ?? 0} trang/kết quả</p></div><div className="row-actions text-actions"><button type="button" onClick={()=>downloadText(primaryOutput, mode === 'structured' ? 'solyan-ocr.md' : 'solyan-ocr.txt', 'text/plain;charset=utf-8')}>TXT/MD</button><button type="button" onClick={()=>downloadText(JSON.stringify(result.pages ?? [], null, 2), 'solyan-ocr.json', 'application/json')}>JSON</button></div></div>
+    {result && <section className="workspace network-output">
+      <div className="workspace-head"><div><h2>Kết quả</h2><p>{result.pages?.length ?? 0} trang/kết quả</p></div><div className="inline-controls"><button className="ghost" type="button" onClick={()=>downloadText(primaryOutput, mode === 'structured' ? 'solyan-ocr.md' : 'solyan-ocr.txt', 'text/plain;charset=utf-8')}>TXT/MD</button><button className="ghost" type="button" onClick={()=>downloadText(JSON.stringify(result.pages ?? [], null, 2), 'solyan-ocr.json', 'application/json')}>JSON</button></div></div>
       <pre>{primaryOutput || 'Không tìm thấy nội dung văn bản.'}</pre>
     </section>}
   </main>;
