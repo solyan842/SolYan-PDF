@@ -69,25 +69,27 @@ jobs:
               'commons_url': 'https://commons.wikimedia.org/wiki/File:Nam_Hai_di_nhan_liet_truyen.pdf',
               'wikisource_index': 'Mục lục:Nam Hai di nhan liet truyen.pdf',
               'scan_license': 'Public Domain',
-              'transcription_license': 'CC BY-SA (Vietnamese Wikisource site content)',
+              'transcription_license': 'CC BY-SA 4.0 / Wikisource terms',
               'pages': pages,
           }
           Path('/tmp/wikisource-pages.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
           print('PAGES', len(pages))
           print('QUALITY_COUNTS', {q: sum(item['quality'] == q for item in pages) for q in sorted({item['quality'] for item in pages})})
           print('REVISION_RANGE', pages[0]['revid'], pages[-1]['revid'])
-          print(json.dumps(pages[:2] + pages[-2:], ensure_ascii=False, indent=2))
           PY
 
           curl --fail --location --silent --show-error \
             'https://commons.wikimedia.org/wiki/Special:Redirect/file/Nam_Hai_di_nhan_liet_truyen.pdf' \
             -o /tmp/source.pdf
           python - <<'PY'
+          import hashlib
           from pathlib import Path
           p=Path('/tmp/source.pdf')
-          assert p.read_bytes()[:5] == b'%PDF-'
-          assert p.stat().st_size > 1_000_000
-          print('PDF_BYTES', p.stat().st_size)
+          data=p.read_bytes()
+          assert data[:5] == b'%PDF-'
+          assert len(data) > 1_000_000
+          print('PDF_BYTES', len(data))
+          print('PDF_SHA256', hashlib.sha256(data).hexdigest())
           PY
 
       - name: Upload locked page inventory
