@@ -3,6 +3,10 @@ name: Bloom Full Synthetic Benchmark
 on:
   pull_request:
     paths:
+      - 'backend/app/bloom_proxy.py'
+      - 'backend/app/xlsx_print.py'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
       - '.github/workflows/bloom-full-benchmark-ci.yml'
   workflow_dispatch:
   schedule:
