@@ -73,12 +73,23 @@ jobs:
           docker run --rm --entrypoint /bin/sh "$image" -c 'test -n "${HOME:-}" && test -d "$HOME" && test -w "$HOME"'
           echo "runtime_uid=$uid"
 
+      - name: Verify pinned Debian snapshot
+        run: |
+          image="solyan-${{ matrix.name }}:inventory"
+          if docker run --rm --entrypoint /bin/sh "$image" -c 'test -f /etc/debian_version'; then
+            docker run --rm --entrypoint /bin/sh "$image" -c '
+              grep -R -q "snapshot.debian.org/archive/debian/20261012T000000Z/" /etc/apt/sources.list.d &&
+              grep -R -q "snapshot.debian.org/archive/debian-security/20261012T000000Z/" /etc/apt/sources.list.d &&
+              ! grep -R -q "deb.debian.org" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
+            '
+          fi
+
       - name: Capture image metadata
         run: |
           mkdir -p inventory
           {
             echo '# Docker image metadata'
-            docker image inspect "solyan-${{ matrix.name }}:inventory" --format 'id={{.Id}} created={{.Created}} architecture={{.Architecture}} os={{.Os}} size={{.Size}}'
+            docker image inspect "solyan-${{ matrix.name }}:inventory" --format 'id={{.Id}} created={{.Created}} architecture={{.Architecture}} os={{.Os}} size={{.Size}} labels={{json .Config.Labels}}'
             echo
           } > "inventory/${{ matrix.name }}.txt"
 
