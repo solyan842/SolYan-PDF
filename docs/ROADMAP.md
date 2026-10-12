@@ -155,7 +155,8 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Pin Debian package sources to snapshot `20261012T000000Z` for all Python images
 - [x] Publish hardened patch release `v0.1.1`
 - [x] Remove completed one-shot release publisher workflows after successful publication
-- [ ] Publish PDF-to-Office compatibility patch release `v0.1.2`
+- [x] Publish PDF-to-Office compatibility patch release `v0.1.2`
+- [x] Remove completed `v0.1.2` one-shot publisher after successful publication
 
 ## Release decisions / external inputs still required
 
