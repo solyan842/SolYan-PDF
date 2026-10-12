@@ -9,6 +9,8 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from .network import router as network_router
+
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
 app = FastAPI(title="SolYan PDF API", version="0.1.0")
@@ -19,6 +21,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+app.include_router(network_router)
 
 
 def _require_qpdf() -> None:
