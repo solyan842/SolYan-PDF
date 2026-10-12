@@ -33,9 +33,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qpdf tesseract-ocr tesseract-ocr-vie
 
-      - name: Install locked dependencies
+      - name: Install hash-verified production dependencies
+        run: pip install --require-hashes -r requirements.hashes
+
+      - name: Install test-only dependencies
         run: |
-          pip install -r requirements.lock -r requirements.txt httpx==0.28.1 pypdf==6.1.1
+          pip install httpx==0.28.1 pypdf==6.1.1
           pip check
 
       - name: Compile service
