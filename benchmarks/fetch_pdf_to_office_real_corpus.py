@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import io
 import json
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -12,6 +14,37 @@ from pypdf import PdfReader, PdfWriter
 
 
 USER_AGENT = 'SolYan-PDF PDF-to-Office real-world diagnostic corpus/1'
+RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+MAX_DOWNLOAD_ATTEMPTS = 5
+
+
+def _retry_delay(error: urllib.error.HTTPError, attempt: int) -> float:
+    retry_after = error.headers.get('Retry-After') if error.headers else None
+    if retry_after:
+        try:
+            return min(60.0, max(1.0, float(retry_after)))
+        except ValueError:
+            pass
+    return min(30.0, float(2 ** attempt))
+
+
+def _read_url(url: str, headers: dict[str, str]) -> tuple[bytes, str]:
+    for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=240) as response:
+                return response.read(), response.geturl()
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRYABLE_HTTP_STATUS or attempt == MAX_DOWNLOAD_ATTEMPTS:
+                raise
+            delay = _retry_delay(error, attempt)
+            print(
+                f'RETRY http={error.code} attempt={attempt}/{MAX_DOWNLOAD_ATTEMPTS} '
+                f'after={delay:.0f}s url={url}',
+                flush=True,
+            )
+            time.sleep(delay)
+    raise RuntimeError('unreachable download retry state')
 
 
 def _download(case: dict) -> tuple[bytes, str]:
@@ -29,17 +62,20 @@ def _download(case: dict) -> tuple[bytes, str]:
             'X-GitHub-Api-Version': '2022-11-28',
         })
     elif provider == 'Wikimedia Commons':
-        filename = urllib.parse.quote(source['commons_filename'], safe='')
-        url = f'https://commons.wikimedia.org/wiki/Special:Redirect/file/{filename}'
+        # Prefer a manifest-pinned direct upload URL to avoid repeated redirect
+        # traffic through Special:Redirect. SHA-256 remains the source of truth.
+        if source.get('url'):
+            url = str(source['url'])
+        else:
+            filename = urllib.parse.quote(source['commons_filename'], safe='')
+            url = f'https://commons.wikimedia.org/wiki/Special:Redirect/file/{filename}'
+        # Be deliberately polite to Wikimedia even when using upload.wikimedia.org.
+        time.sleep(1.0)
     else:
         raise ValueError(f"Unsupported source provider: {provider}")
 
     print(f"FETCH {case['id']} {url}", flush=True)
-    request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=240) as response:
-        data = response.read()
-        resolved_url = response.geturl()
-    return data, resolved_url
+    return _read_url(url, headers)
 
 
 def _validate_source(case: dict, data: bytes) -> PdfReader:
