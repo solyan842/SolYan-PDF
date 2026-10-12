@@ -56,18 +56,13 @@ def _download(case: dict) -> tuple[bytes, str]:
         repository = source['repository']
         commit = source['commit']
         path = '/'.join(urllib.parse.quote(part, safe='') for part in source['path'].split('/'))
-        # The raw endpoint is commit-addressed and avoids GitHub Contents API
-        # availability/rate-limit variance. The manifest SHA-256 is still authoritative.
         url = f'https://raw.githubusercontent.com/{repository}/{commit}/{path}'
     elif provider == 'Wikimedia Commons':
-        # Prefer a manifest-pinned direct upload URL to avoid repeated redirect
-        # traffic through Special:Redirect. SHA-256 remains the source of truth.
         if source.get('url'):
             url = str(source['url'])
         else:
             filename = urllib.parse.quote(source['commons_filename'], safe='')
             url = f'https://commons.wikimedia.org/wiki/Special:Redirect/file/{filename}'
-        # Be deliberately polite to Wikimedia even when using upload.wikimedia.org.
         time.sleep(1.0)
     else:
         raise ValueError(f"Unsupported source provider: {provider}")
@@ -146,14 +141,22 @@ def main() -> None:
         type=Path,
         default=Path('benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json'),
     )
+    parser.add_argument('--case-id', help='Materialize only one manifest case; useful for isolated CI jobs.')
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--output-inventory', type=Path)
     args = parser.parse_args()
 
     manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
-    cases = manifest['cases']
-    if len(cases) != 9:
-        raise ValueError(f'Expected 9 diagnostic cases, got {len(cases)}')
+    all_cases = manifest['cases']
+    if len(all_cases) != 9:
+        raise ValueError(f'Expected 9 diagnostic cases, got {len(all_cases)}')
+
+    if args.case_id:
+        cases = [case for case in all_cases if case['id'] == args.case_id]
+        if len(cases) != 1:
+            raise ValueError(f'Unknown or duplicate case id: {args.case_id}')
+    else:
+        cases = all_cases
 
     inventory = []
     for case in cases:
@@ -174,7 +177,7 @@ def main() -> None:
             flush=True,
         )
 
-    if sum(item['output_pages'] for item in inventory) != 50:
+    if not args.case_id and sum(item['output_pages'] for item in inventory) != 50:
         raise ValueError('Diagnostic corpus must materialize exactly 50 pages')
 
     if args.output_inventory:
