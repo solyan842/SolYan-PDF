@@ -1,0 +1,54 @@
+name: Wikisource OCR corpus probe
+
+on:
+  push:
+    branches:
+      - benchmark/vietnamese-real-ocr-60-wikisource
+    paths:
+      - '.github/workflows/wikisource-corpus-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Wikisource revision API and Commons scan
+        run: |
+          set -euo pipefail
+          api='https://vi.wikisource.org/w/api.php'
+          title='Trang:Nam Hai di nhan liet truyen.pdf/50'
+          curl --fail --silent --show-error --get "$api" \
+            --data-urlencode 'action=query' \
+            --data-urlencode 'format=json' \
+            --data-urlencode 'formatversion=2' \
+            --data-urlencode 'prop=revisions' \
+            --data-urlencode 'rvprop=ids|timestamp|content' \
+            --data-urlencode 'rvslots=main' \
+            --data-urlencode "titles=$title" \
+            -o /tmp/page.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/page.json',encoding='utf-8'))['query']['pages'][0]
+          r=p['revisions'][0]
+          text=r['slots']['main']['content']
+          print('PAGE', p['title'])
+          print('REVID', r['revid'])
+          print('TIMESTAMP', r['timestamp'])
+          print('CONTENT_START', repr(text[:800]))
+          assert '— 50 —' in text or '- 50 -' in text or '50' in text
+          PY
+
+          curl --fail --location --silent --show-error \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Nam_Hai_di_nhan_liet_truyen.pdf' \
+            -o /tmp/source.pdf
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/source.pdf')
+          print('PDF_BYTES', p.stat().st_size)
+          print('PDF_HEADER', p.read_bytes()[:5])
+          assert p.read_bytes()[:5] == b'%PDF-'
+          assert p.stat().st_size > 1_000_000
+          PY
