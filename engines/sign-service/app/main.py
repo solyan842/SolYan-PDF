@@ -47,6 +47,7 @@ def sign_pkcs12(
     try:
         signer = signers.SimpleSigner.load_pkcs12_data(
             p12_data,
+            other_certs=[],
             passphrase=passphrase.encode("utf-8") if passphrase else None,
         )
     except Exception as exc:
