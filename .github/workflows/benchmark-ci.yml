@@ -1,0 +1,55 @@
+name: Benchmark Tooling CI
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+      - 'engines/ocr-service/benchmark.py'
+      - '.github/workflows/benchmark-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'benchmarks/**'
+      - 'engines/ocr-service/benchmark.py'
+      - '.github/workflows/benchmark-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install benchmark dependencies
+        run: pip install -r benchmarks/requirements.txt
+
+      - name: Compile benchmark tools
+        run: python -m compileall benchmarks engines/ocr-service/benchmark.py
+
+      - name: Smoke test visual similarity on identical PDF
+        run: |
+          python - <<'PY'
+          import io
+          import importlib.util
+          from pypdf import PdfWriter
+
+          spec = importlib.util.spec_from_file_location('bench', 'benchmarks/pdf_to_office.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          buffer = io.BytesIO()
+          writer = PdfWriter()
+          writer.add_blank_page(width=595, height=842)
+          writer.write(buffer)
+          pdf = buffer.getvalue()
+          result = module.visual_similarity(pdf, pdf)
+          assert result['average_similarity'] == 100.0, result
+          assert result['source_pages'] == result['roundtrip_pages'] == 1
+          print(result)
+          PY

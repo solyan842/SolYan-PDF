@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 import threading
 from pathlib import Path
@@ -11,8 +12,9 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 
 MAX_FILE_SIZE = int(os.getenv("OCR_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
 SUPPORTED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
+IMAGE_SUFFIXES = SUPPORTED_SUFFIXES - {".pdf"}
 
-app = FastAPI(title="SolYan OCR Service", version="0.1.0")
+app = FastAPI(title="SolYan OCR Service", version="0.2.0")
 
 _ocr_pipeline: Any | None = None
 _structure_pipeline: Any | None = None
@@ -112,12 +114,57 @@ def _extract_text(payloads: list[dict[str, Any]]) -> str:
     return "\n".join(dict.fromkeys(lines))
 
 
+def _tesseract_enabled() -> bool:
+    return os.getenv("OCR_TESSERACT_FALLBACK", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _tesseract_text(input_path: Path, suffix: str) -> tuple[str, list[dict[str, Any]]]:
+    import pytesseract
+    from PIL import Image
+
+    lang = os.getenv("TESSERACT_LANG", "vie+eng")
+    images: list[Any] = []
+    if suffix == ".pdf":
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(str(input_path))
+        try:
+            for index in range(len(pdf)):
+                page = pdf[index]
+                bitmap = page.render(scale=2.2)
+                images.append(bitmap.to_pil())
+        finally:
+            pdf.close()
+    else:
+        images.append(Image.open(input_path).convert("RGB"))
+
+    pages: list[dict[str, Any]] = []
+    texts: list[str] = []
+    try:
+        for index, image in enumerate(images, start=1):
+            text = pytesseract.image_to_string(image, lang=lang).strip()
+            texts.append(text)
+            pages.append({"page": index, "text": text, "engine": "tesseract", "language": lang})
+    finally:
+        for image in images:
+            closer = getattr(image, "close", None)
+            if callable(closer):
+                closer()
+    return "\n\n".join(text for text in texts if text), pages
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {
         "status": "ok",
         "engine": "PaddleOCR",
         "models_loaded": {"ocr": _ocr_pipeline is not None, "structure": _structure_pipeline is not None},
+        "fallback": {
+            "enabled": _tesseract_enabled(),
+            "engine": "Tesseract",
+            "binary_available": shutil.which("tesseract") is not None,
+            "language": os.getenv("TESSERACT_LANG", "vie+eng"),
+        },
     }
 
 
@@ -129,10 +176,26 @@ def ocr_text(file: UploadFile = File(...)) -> dict[str, Any]:
         input_path.write_bytes(data)
         try:
             results = list(_load_ocr().predict(str(input_path)))
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail=f"OCR failed: {exc}") from exc
-        pages = [_result_json(result) for result in results]
-        return {"mode": "text", "pages": pages, "text": _extract_text(pages)}
+            pages = [_result_json(result) for result in results]
+            return {"mode": "text", "engine": "PaddleOCR", "pages": pages, "text": _extract_text(pages), "fallback_used": False}
+        except Exception as paddle_exc:
+            if not _tesseract_enabled():
+                raise HTTPException(status_code=422, detail=f"OCR failed: {paddle_exc}") from paddle_exc
+            try:
+                text, pages = _tesseract_text(input_path, suffix)
+                return {
+                    "mode": "text",
+                    "engine": "Tesseract",
+                    "pages": pages,
+                    "text": text,
+                    "fallback_used": True,
+                    "primary_error": str(paddle_exc)[:1200],
+                }
+            except Exception as fallback_exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"PaddleOCR failed ({paddle_exc}); Tesseract fallback failed ({fallback_exc})",
+                ) from fallback_exc
 
 
 @app.post("/ocr/structured")
@@ -163,6 +226,7 @@ def ocr_structured(file: UploadFile = File(...)) -> dict[str, Any]:
 
         return {
             "mode": "structured",
+            "engine": "PP-StructureV3",
             "pages": payloads,
             "markdown": "\n\n---\n\n".join(part for part in markdown_parts if part.strip()),
         }

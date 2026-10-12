@@ -30,7 +30,7 @@
 
 - [x] PDF viewer
 - [x] Page thumbnails
-- [ ] Drag-and-drop page organizer UI
+- [x] Drag-and-drop page organizer UI
 - [x] Add text
 - [x] Add image
 - [x] Draw / annotate
@@ -43,12 +43,13 @@
 
 - [x] Image OCR
 - [x] Scanned PDF OCR
-- [ ] Vietnamese OCR benchmark suite
+- [x] Vietnamese OCR CER/WER benchmark harness
+- [ ] Establish release baseline on a representative Vietnamese corpus
 - [x] Layout recognition
 - [x] Table recognition
 - [x] Reading order
 - [x] Structured Markdown/JSON export
-- [ ] Tesseract fallback path
+- [x] Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 
 ## Phase 4 — Office conversion
 
@@ -61,24 +62,25 @@
 - [x] Research PDF → XLSX engine/API candidate
 - [x] Research PDF → PPTX engine/API candidate
 - [x] Add experimental adapter to pinned Bloom upstream API
-- [ ] Fidelity benchmark PDF → DOCX
-- [ ] Fidelity benchmark PDF → XLSX
-- [ ] Fidelity benchmark PDF → PPTX
+- [x] Add round-trip visual-fidelity benchmark harness
+- [ ] Run representative PDF → DOCX release corpus
+- [ ] Run representative PDF → XLSX release corpus
+- [ ] Run representative PDF → PPTX release corpus
 
-PDF-to-Office stays labelled **Experimental** until fidelity benchmarking is complete.
+PDF-to-Office stays labelled **Experimental** until representative corpus results meet an agreed threshold.
 
 ## Phase 5 — Advanced tools
 
-- [x] PDF compare — text-level V1
-- [ ] Pixel/layout visual compare
+- [x] PDF compare — text-level
+- [x] Pixel/layout visual compare
 - [x] Digital signing with PKCS#12
-- [ ] Multi-party / remote signature workflow research
+- [ ] Multi-party / remote signature workflow product decision
 - [x] PDF/A conversion
 - [x] Forms
 - [x] Local batch workflow builder
-- [ ] Cloud-storage connectors
-- [ ] AI document summarization (optional)
-- [ ] PDF translation (optional)
+- [ ] Cloud-storage connectors — requires provider/credential decision
+- [ ] AI document summarization — optional, requires model/provider decision
+- [ ] PDF translation — optional, requires translation/model provider decision
 
 ## Tiện ích Việt Nam — V1
 
@@ -117,9 +119,11 @@ PDF-to-Office stays labelled **Experimental** until fidelity benchmarking is com
 - [x] Frontend production-build CI
 - [x] Backend/qpdf CI
 - [x] OCR service CI wiring
+- [x] Real Vietnamese Tesseract fallback smoke test
 - [x] Real LibreOffice DOCX → PDF smoke test
 - [x] Real PKCS#12 signing smoke test
 - [x] Real PDF/A smoke test
+- [x] Compose validation + frontend/backend container build CI
 
 ## Research rule for difficult features
 
