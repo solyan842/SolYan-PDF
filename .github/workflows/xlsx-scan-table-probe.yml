@@ -1,0 +1,73 @@
+name: XLSX Scan Table Probe
+
+on:
+  push:
+    branches:
+      - experiment/xlsx-scan-table-img2table
+    paths:
+      - 'benchmarks/probe_xlsx_scan_tables.py'
+      - '.github/workflows/xlsx-scan-table-probe.yml'
+      - 'benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json'
+      - 'benchmarks/fetch_pdf_to_office_real_corpus.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install native OCR runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng libgl1 libglib2.0-0
+
+      - name: Install pinned probe dependencies
+        run: |
+          python -m pip install --upgrade pip==26.2.1
+          python -m pip install img2table==2.0.0 pypdf==6.1.1 cryptography==46.0.3
+          python -m pip check
+
+      - name: Materialize three pinned scan-table PDFs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/xlsx-scan-corpus /tmp/xlsx-scan-inventory
+          for case_id in xlsx-table-material xlsx-unidentified-table xlsx-transport-table; do
+            python benchmarks/fetch_pdf_to_office_real_corpus.py \
+              --manifest benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json \
+              --case-id "$case_id" \
+              --output-dir /tmp/xlsx-scan-corpus \
+              --output-inventory "/tmp/xlsx-scan-inventory/$case_id.json"
+          done
+
+      - name: Probe img2table plus Tesseract extraction
+        env:
+          XLSX_SCAN_TESSERACT_LANG: eng
+        run: |
+          python benchmarks/probe_xlsx_scan_tables.py \
+            --corpus-dir /tmp/xlsx-scan-corpus \
+            --output-dir /tmp/xlsx-scan-output \
+            --report /tmp/xlsx-scan-report.json \
+            --min-confidence 30 \
+            --psm 11
+
+      - name: Upload probe report and XLSX outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xlsx-scan-table-probe
+          path: |
+            /tmp/xlsx-scan-report.json
+            /tmp/xlsx-scan-output/*.xlsx
+          if-no-files-found: warn
+          retention-days: 14
