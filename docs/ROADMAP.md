@@ -147,7 +147,7 @@ PDF-to-Office stays labelled **Experimental** until representative corpus result
 - [x] Lock backend / Office / signing / PDF-A Python transitive graphs with `requirements.lock`
 - [x] Generate resolved OS/Python/npm package inventories for all six release images in CI artifacts
 - [x] Add dedicated PaddleOCR/PaddlePaddle transitive lock preserving the CPU wheel index
-- [ ] Add hash-verified Python locks where practical
+- [x] Add hash-verified Python locks where practical (backend / Office / signing / PDF-A)
 - [ ] Pin/snapshot distro packages for stricter image reproducibility
 
 ## Release decisions / external inputs still required

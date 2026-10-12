@@ -1,0 +1,81 @@
+name: Python Hash Lock CI
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/hash-python-locks.sh'
+      - 'backend/requirements.lock'
+      - 'backend/requirements.hashed.lock'
+      - 'backend/Dockerfile'
+      - 'engines/office-service/requirements.lock'
+      - 'engines/office-service/requirements.hashed.lock'
+      - 'engines/office-service/Dockerfile'
+      - 'engines/sign-service/requirements.lock'
+      - 'engines/sign-service/requirements.hashed.lock'
+      - 'engines/sign-service/Dockerfile'
+      - 'engines/archive-service/requirements.lock'
+      - 'engines/archive-service/requirements.hashed.lock'
+      - 'engines/archive-service/Dockerfile'
+      - '.github/workflows/hash-lock-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/hash-python-locks.sh'
+      - 'backend/requirements.lock'
+      - 'backend/requirements.hashed.lock'
+      - 'backend/Dockerfile'
+      - 'engines/office-service/requirements.lock'
+      - 'engines/office-service/requirements.hashed.lock'
+      - 'engines/office-service/Dockerfile'
+      - 'engines/sign-service/requirements.lock'
+      - 'engines/sign-service/requirements.hashed.lock'
+      - 'engines/sign-service/Dockerfile'
+      - 'engines/archive-service/requirements.lock'
+      - 'engines/archive-service/requirements.hashed.lock'
+      - 'engines/archive-service/Dockerfile'
+      - '.github/workflows/hash-lock-ci.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup exact Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Regenerate hash locks
+        run: bash ./scripts/hash-python-locks.sh
+
+      - name: Verify committed locks are reproducible
+        run: |
+          git diff --exit-code -- \
+            backend/requirements.hashed.lock \
+            engines/office-service/requirements.hashed.lock \
+            engines/sign-service/requirements.hashed.lock \
+            engines/archive-service/requirements.hashed.lock
+
+      - name: Verify hash enforcement in production Dockerfiles
+        run: |
+          for file in \
+            backend/Dockerfile \
+            engines/office-service/Dockerfile \
+            engines/sign-service/Dockerfile \
+            engines/archive-service/Dockerfile; do
+            grep -q -- '--require-hashes' "$file"
+            grep -q 'requirements.hashed.lock' "$file"
+          done
+
+      - name: Verify SHA-256 entries exist
+        run: |
+          for file in \
+            backend/requirements.hashed.lock \
+            engines/office-service/requirements.hashed.lock \
+            engines/sign-service/requirements.hashed.lock \
+            engines/archive-service/requirements.hashed.lock; do
+            grep -q -- '--hash=sha256:' "$file"
+          done
