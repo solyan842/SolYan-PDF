@@ -46,13 +46,16 @@ export default function OrganizePage() {
     sync(pages.filter((_, pageIndex) => pageIndex !== index));
   }
 
-  function resetPages() {
+  async function resetPages() {
     if (!file) return;
-    PDFDocument.load(file.arrayBuffer()).then((doc) => {
+    try {
+      const doc = await PDFDocument.load(await file.arrayBuffer());
       const next = Array.from({ length: doc.getPageCount() }, (_, index) => index + 1);
       setPages(next);
       setOrder('');
-    }).catch(() => undefined);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể đặt lại danh sách trang.');
+    }
   }
 
   async function organize() {
