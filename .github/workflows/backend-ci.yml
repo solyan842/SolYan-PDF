@@ -26,7 +26,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.13.16'
 
       - name: Install system engines
         run: |
@@ -35,8 +35,10 @@ jobs:
           qpdf --version
           ping -V
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install locked dependencies
+        run: |
+          pip install -r requirements.lock -r requirements.txt
+          pip check
 
       - name: Compile Python
         run: python -m compileall app
