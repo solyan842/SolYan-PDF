@@ -22,13 +22,13 @@ The multi-arch index digest is intentionally used instead of an amd64-only manif
 | Runtime | Lock state |
 |---|---|
 | Frontend | Full npm graph committed in `frontend/package-lock.json`; Docker/CI use `npm ci` |
-| Backend | Full Python transitive graph in `backend/requirements.lock` |
-| Office service | Full Python transitive graph in `engines/office-service/requirements.lock` |
-| Signature service | Full Python transitive graph in `engines/sign-service/requirements.lock` |
-| PDF/A archive service | Full Python transitive graph in `engines/archive-service/requirements.lock` |
+| Backend | Full Python graph + SHA-256 distribution hashes in `backend/requirements.hashes`; Docker/CI use `--require-hashes` |
+| Office service | Full Python graph + SHA-256 distribution hashes in `engines/office-service/requirements.hashes`; Docker/CI use `--require-hashes` |
+| Signature service | Full Python graph + SHA-256 distribution hashes in `engines/sign-service/requirements.hashes`; Docker/CI use `--require-hashes` |
+| PDF/A archive service | Full Python graph + SHA-256 distribution hashes in `engines/archive-service/requirements.hashes`; Docker/CI use `--require-hashes` |
 | OCR service | PaddlePaddle 3.2.0 is locked separately in `paddle-requirements.lock` with the official CPU wheel index; the remaining PaddleOCR/Python graph is locked in `requirements.lock` |
 
-Python lockfiles are generated in a clean Python 3.13.16 environment by `scripts/lock-python-deps.sh` with pip 26.2.1 pinned for lock generation. OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently resolve PaddlePaddle from a different source. Production Docker builds install the lockfiles and run `pip check`.
+Standard Python hash-locks are generated in a clean Python 3.13.16 environment by `scripts/generate-python-hash-locks.sh`, with pip 26.2.1 and pip-tools 7.6.2 pinned for generation. `Python Hash Lock CI` regenerates and diffs the committed files. OCR keeps the PaddlePaddle CPU index isolated so regeneration cannot silently resolve PaddlePaddle from a different source; that special graph is version/source locked but is not yet claimed hash-verified.
 
 ## Frontend
 
@@ -111,7 +111,7 @@ See `docs/REPRODUCIBILITY.md` for the exact inventory/lock model and limitations
 
 ## Reproducibility note
 
-Application-level npm and Python dependency graphs are now version-locked, including the PaddleOCR/PaddlePaddle special case; Docker base-image indexes are pinned; resolved image package inventories are captured by CI. Dockerfiles still run `apt-get update` and install Debian packages without exact version constraints, and Python locks are version-pinned rather than hash-verified.
+Application-level npm dependencies and the four standard Python service graphs are locked; the standard Python graphs are additionally hash-verified during install. The PaddleOCR/PaddlePaddle graph is source-constrained and version-locked. Docker base-image indexes are pinned and resolved image package inventories are captured by CI. Dockerfiles still run `apt-get update` and install Debian packages without exact version/snapshot constraints.
 
 Therefore the containers are **traceable and substantially more reproducible, but not yet bit-for-bit reproducible**.
 
