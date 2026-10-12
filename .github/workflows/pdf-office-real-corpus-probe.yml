@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PY_PDF_COMMIT: 02b8203bf416db3db03438bc8278dfcb0555f3
+
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -26,33 +29,45 @@ jobs:
       - name: Install PDF metadata dependency
         run: pip install pypdf==6.1.1
 
+      - name: Fetch exact py-pdf sample-files commit
+        run: |
+          set -euo pipefail
+          git init /tmp/sample-files
+          git -C /tmp/sample-files remote add origin https://github.com/py-pdf/sample-files.git
+          git -C /tmp/sample-files fetch --depth=1 origin "$PY_PDF_COMMIT"
+          git -C /tmp/sample-files checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/sample-files rev-parse HEAD)" = "$PY_PDF_COMMIT"
+          test -f /tmp/sample-files/011-google-doc-document/google-doc-document.pdf
+          test -f /tmp/sample-files/026-latex-multicolumn/multicolumn.pdf
+          test -f /tmp/sample-files/028-image-references-deduplication/wrong-references.pdf
+
       - name: Download and fingerprint candidate corpus
         run: |
           set -euo pipefail
           python - <<'PY'
           import hashlib
           import json
+          import shutil
           import urllib.parse
           import urllib.request
           from pathlib import Path
           from pypdf import PdfReader
 
-          PY_PDF_COMMIT = '02b8203bf416db3db03438bc8278dfcb0555f3'
           cases = [
               {
                   'id': 'docx-google-doc', 'target': 'docx', 'category': 'document',
                   'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
-                  'url': f'https://raw.githubusercontent.com/py-pdf/sample-files/{PY_PDF_COMMIT}/011-google-doc-document/google-doc-document.pdf',
+                  'upstream_path': '011-google-doc-document/google-doc-document.pdf',
               },
               {
                   'id': 'docx-multicolumn', 'target': 'docx', 'category': 'multi-column',
                   'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
-                  'url': f'https://raw.githubusercontent.com/py-pdf/sample-files/{PY_PDF_COMMIT}/026-latex-multicolumn/multicolumn.pdf',
+                  'upstream_path': '026-latex-multicolumn/multicolumn.pdf',
               },
               {
                   'id': 'docx-libreoffice-images', 'target': 'docx', 'category': 'document-images',
                   'license': 'CC BY-SA 4.0', 'source': 'py-pdf/sample-files',
-                  'url': f'https://raw.githubusercontent.com/py-pdf/sample-files/{PY_PDF_COMMIT}/028-image-references-deduplication/wrong-references.pdf',
+                  'upstream_path': '028-image-references-deduplication/wrong-references.pdf',
               },
           ]
 
@@ -77,17 +92,27 @@ jobs:
 
           out_dir = Path('/tmp/pdf-office-real-probe')
           out_dir.mkdir(parents=True, exist_ok=True)
+          upstream_root = Path('/tmp/sample-files')
           inventory = []
           ua = {'User-Agent': 'SolYan-PDF PDF-to-Office benchmark/0.1.2 (https://github.com/solyan842/SolYan-PDF)'}
+
           for case in cases:
-              print('FETCH', case['id'], case['url'], flush=True)
-              req = urllib.request.Request(case['url'], headers=ua)
-              with urllib.request.urlopen(req, timeout=180) as response:
-                  data = response.read()
-                  final_url = response.geturl()
-              assert data[:5] == b'%PDF-', (case['id'], data[:20], final_url)
               path = out_dir / f"{case['id']}.pdf"
-              path.write_bytes(data)
+              if case['source'] == 'py-pdf/sample-files':
+                  source_path = upstream_root / case['upstream_path']
+                  print('COPY', case['id'], source_path, flush=True)
+                  shutil.copyfile(source_path, path)
+                  data = path.read_bytes()
+                  resolved_url = f"https://github.com/py-pdf/sample-files/blob/02b8203bf416db3db03438bc8278dfcb0555f3/{case['upstream_path']}"
+              else:
+                  print('FETCH', case['id'], case['url'], flush=True)
+                  req = urllib.request.Request(case['url'], headers=ua)
+                  with urllib.request.urlopen(req, timeout=180) as response:
+                      data = response.read()
+                      resolved_url = response.geturl()
+                  path.write_bytes(data)
+
+              assert data[:5] == b'%PDF-', (case['id'], data[:20], resolved_url)
               reader = PdfReader(path)
               item = {
                   **case,
@@ -95,7 +120,7 @@ jobs:
                   'bytes': len(data),
                   'pages': len(reader.pages),
                   'sha256': hashlib.sha256(data).hexdigest(),
-                  'resolved_url': final_url,
+                  'resolved_url': resolved_url,
               }
               inventory.append(item)
               print(case['id'], 'pages=', item['pages'], 'bytes=', item['bytes'], 'sha256=', item['sha256'], flush=True)
