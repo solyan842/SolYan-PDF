@@ -7,7 +7,10 @@ from pathlib import Path
 
 import httpx
 import pypdfium2 as pdfium
-from PIL import ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageStat
+
+_GEOMETRY_DIMENSION_TOLERANCE = 0.01
+_GEOMETRY_ASPECT_TOLERANCE = 0.005
 
 
 def render_pages(pdf_bytes: bytes, scale: float = 1.25):
@@ -22,23 +25,60 @@ def render_pages(pdf_bytes: bytes, scale: float = 1.25):
     return pages
 
 
+def _geometry_is_equivalent(left: tuple[int, int], right: tuple[int, int]) -> bool:
+    if left == right:
+        return True
+    lw, lh = left
+    rw, rh = right
+    if min(lw, lh, rw, rh) <= 0:
+        return False
+
+    width_delta = abs(lw - rw) / max(lw, rw)
+    height_delta = abs(lh - rh) / max(lh, rh)
+    left_aspect = lw / lh
+    right_aspect = rw / rh
+    aspect_delta = abs(left_aspect - right_aspect) / max(left_aspect, right_aspect)
+    return (
+        width_delta <= _GEOMETRY_DIMENSION_TOLERANCE
+        and height_delta <= _GEOMETRY_DIMENSION_TOLERANCE
+        and aspect_delta <= _GEOMETRY_ASPECT_TOLERANCE
+    )
+
+
 def visual_similarity(left: bytes, right: bytes) -> dict:
     a_pages = render_pages(left)
     b_pages = render_pages(right)
+    source_render_sizes = [list(image.size) for image in a_pages]
+    roundtrip_render_sizes = [list(image.size) for image in b_pages]
     compared = min(len(a_pages), len(b_pages))
     total_slots = max(len(a_pages), len(b_pages))
     scores = []
+    geometry_normalized_pages = 0
+    geometry_mismatches = 0
     try:
         for index in range(compared):
             a = a_pages[index]
             b = b_pages[index]
+            comparison = b
+            resized = None
+
             if a.size != b.size:
-                scores.append(0.0)
-                continue
-            diff = ImageChops.difference(a, b)
-            stat = ImageStat.Stat(diff)
-            mean_delta = sum(stat.mean[:3]) / 3.0
-            scores.append(max(0.0, 100.0 * (1.0 - mean_delta / 255.0)))
+                if not _geometry_is_equivalent(a.size, b.size):
+                    geometry_mismatches += 1
+                    scores.append(0.0)
+                    continue
+                resized = b.resize(a.size, resample=Image.Resampling.LANCZOS)
+                comparison = resized
+                geometry_normalized_pages += 1
+
+            try:
+                diff = ImageChops.difference(a, comparison)
+                stat = ImageStat.Stat(diff)
+                mean_delta = sum(stat.mean[:3]) / 3.0
+                scores.append(max(0.0, 100.0 * (1.0 - mean_delta / 255.0)))
+            finally:
+                if resized is not None:
+                    resized.close()
 
         # Missing or extra round-trip pages are a structural fidelity failure.
         # Represent each unmatched page as a zero-similarity slot so a conversion
@@ -54,6 +94,10 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
         'compared_pages': compared,
         'unmatched_pages': abs(len(a_pages) - len(b_pages)),
         'page_count_match': len(a_pages) == len(b_pages),
+        'source_render_sizes': source_render_sizes,
+        'roundtrip_render_sizes': roundtrip_render_sizes,
+        'geometry_normalized_pages': geometry_normalized_pages,
+        'geometry_mismatches': geometry_mismatches,
         'page_similarity': scores,
         'average_similarity': sum(scores) / max(1, total_slots),
     }

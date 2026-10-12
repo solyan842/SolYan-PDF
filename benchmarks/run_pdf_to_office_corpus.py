@@ -31,6 +31,8 @@ def _summary(results: list[dict]) -> dict:
             'roundtrip_pages': sum(int(item['roundtrip_pages']) for item in items),
             'page_count_mismatches': sum(1 for item in items if not bool(item.get('page_count_match', True))),
             'unmatched_pages': sum(int(item.get('unmatched_pages', 0)) for item in items),
+            'geometry_normalized_pages': sum(int(item.get('geometry_normalized_pages', 0)) for item in items),
+            'geometry_mismatches': sum(int(item.get('geometry_mismatches', 0)) for item in items),
             'convert_seconds': sum(float(item['convert_seconds']) for item in items),
             'roundtrip_seconds': sum(float(item['roundtrip_seconds']) for item in items),
         }
@@ -41,6 +43,8 @@ def _summary(results: list[dict]) -> dict:
         'minimum_similarity': min(all_scores) if all_scores else 0.0,
         'page_count_mismatches': sum(1 for item in results if not bool(item.get('page_count_match', True))),
         'unmatched_pages': sum(int(item.get('unmatched_pages', 0)) for item in results),
+        'geometry_normalized_pages': sum(int(item.get('geometry_normalized_pages', 0)) for item in results),
+        'geometry_mismatches': sum(int(item.get('geometry_mismatches', 0)) for item in results),
         'targets': targets,
     }
 
@@ -70,7 +74,9 @@ def main() -> None:
         results.append(report)
         print(
             f"{case['id']}: {report['average_similarity']:.2f}% "
-            f"pages={report['source_pages']}->{report['roundtrip_pages']}"
+            f"pages={report['source_pages']}->{report['roundtrip_pages']} "
+            f"geometry_normalized={report.get('geometry_normalized_pages', 0)} "
+            f"geometry_mismatches={report.get('geometry_mismatches', 0)}"
         )
 
     summary = _summary(results)
