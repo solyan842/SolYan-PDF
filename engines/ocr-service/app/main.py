@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 import threading
+import traceback
 from copy import copy
 from pathlib import Path
 from typing import Any
@@ -353,7 +354,15 @@ def ocr_xlsx(file: UploadFile = File(...)) -> Response:
         try:
             workbook = _merge_xlsx_files(generated)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=f"Unable to assemble OCR XLSX workbook: {exc}") from exc
+            traceback.print_exc()
+            generated_names = ", ".join(f"page={page_index}:{path.name}" for page_index, path in generated)
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Unable to assemble OCR XLSX workbook: {type(exc).__name__}: {exc}; "
+                    f"generated=[{generated_names}]"
+                ),
+            ) from exc
 
         return Response(
             content=workbook,
