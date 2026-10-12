@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone https://github.com/py-pdf/sample-files.git /tmp/sample-files
-          git -C /tmp/sample-files checkout --detach "$PY_PDF_COMMIT"
+          git -C /tmp/sample-files switch --detach "$PY_PDF_COMMIT"
           test "$(git -C /tmp/sample-files rev-parse HEAD)" = "$PY_PDF_COMMIT"
           test -f /tmp/sample-files/011-google-doc-document/google-doc-document.pdf
           test -f /tmp/sample-files/026-latex-multicolumn/multicolumn.pdf
