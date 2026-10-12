@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from .archive_proxy import router as archive_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
@@ -28,6 +29,7 @@ app.include_router(network_router)
 app.include_router(ocr_router)
 app.include_router(office_router)
 app.include_router(sign_router)
+app.include_router(archive_router)
 
 
 def _require_qpdf() -> None:
