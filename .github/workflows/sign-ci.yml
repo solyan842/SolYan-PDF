@@ -28,9 +28,12 @@ jobs:
         with:
           python-version: '3.13.16'
 
-      - name: Install locked dependencies
+      - name: Install hash-verified production dependencies
+        run: pip install --require-hashes -r requirements.hashes
+
+      - name: Install test-only dependencies
         run: |
-          pip install -r requirements.lock -r requirements.txt httpx==0.28.1 pypdf==6.1.1
+          pip install httpx==0.28.1 pypdf==6.1.1
           pip check
 
       - name: Compile service
