@@ -26,8 +26,8 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install PDF metadata dependency
-        run: pip install pypdf==6.1.1 cryptography==46.0.3
+      - name: Install PDF probe dependencies
+        run: pip install pypdf==6.1.1 cryptography==46.0.3 pypdfium2==5.14.0 Pillow==12.3.0
 
       - name: Download and fingerprint candidate corpus
         run: |
@@ -104,9 +104,59 @@ jobs:
           )
           PY
 
+      - name: Render page contact sheets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pypdfium2 as pdfium
+          from PIL import Image, ImageDraw, ImageFont
+
+          root = Path('/tmp/pdf-office-real-probe')
+          out = Path('/tmp/pdf-office-real-contact-sheets')
+          out.mkdir(parents=True, exist_ok=True)
+          targets = sorted(root.glob('xlsx-*.pdf')) + sorted(root.glob('pptx-*.pdf'))
+          font = ImageFont.load_default()
+          thumb_w, thumb_h = 240, 180
+          label_h = 24
+          cols = 4
+          margin = 10
+
+          for pdf_path in targets:
+              doc = pdfium.PdfDocument(str(pdf_path))
+              thumbs = []
+              for index in range(len(doc)):
+                  page = doc[index]
+                  bitmap = page.render(scale=0.35)
+                  image = bitmap.to_pil().convert('RGB')
+                  image.thumbnail((thumb_w, thumb_h))
+                  tile = Image.new('RGB', (thumb_w, thumb_h + label_h), 'white')
+                  x = (thumb_w - image.width) // 2
+                  y = (thumb_h - image.height) // 2
+                  tile.paste(image, (x, y))
+                  draw = ImageDraw.Draw(tile)
+                  draw.text((6, thumb_h + 4), f'Page {index + 1}', font=font, fill='black')
+                  thumbs.append(tile)
+
+              rows = (len(thumbs) + cols - 1) // cols
+              sheet = Image.new('RGB', (cols * thumb_w + (cols + 1) * margin, rows * (thumb_h + label_h) + (rows + 1) * margin), 'white')
+              for i, tile in enumerate(thumbs):
+                  row, col = divmod(i, cols)
+                  sheet.paste(tile, (margin + col * (thumb_w + margin), margin + row * (thumb_h + label_h + margin)))
+              path = out / f'{pdf_path.stem}.png'
+              sheet.save(path, optimize=True)
+              print(path, 'pages=', len(thumbs), 'size=', sheet.size)
+          PY
+
       - name: Upload candidate inventory
         uses: actions/upload-artifact@v4
         with:
           name: pdf-office-real-corpus-inventory
           path: /tmp/pdf-office-real-inventory.json
+          retention-days: 7
+
+      - name: Upload contact sheets
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-office-real-contact-sheets
+          path: /tmp/pdf-office-real-contact-sheets/*.png
           retention-days: 7
