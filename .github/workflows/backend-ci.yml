@@ -35,9 +35,9 @@ jobs:
           qpdf --version
           ping -V
 
-      - name: Install locked dependencies
+      - name: Install hash-verified production dependencies
         run: |
-          pip install -r requirements.lock -r requirements.txt
+          pip install --require-hashes -r requirements.hashes
           pip check
 
       - name: Compile Python
