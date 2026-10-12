@@ -18,6 +18,8 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 - JSON/Markdown/text exports
 - CER/WER benchmark harness for Vietnamese OCR quality measurement
+- Reproducible 59-sample real-scan Tesseract regression corpus: 9 public-domain modern documents plus 50 proofread historical scan pages from two public-domain works
+- Expanded real-scan baseline: average CER **9.41%**, average WER **22.18%** on the pinned corpus/environment
 
 ### Conversion
 - Word/Excel/PowerPoint/OpenDocument/RTF -> PDF through LibreOffice headless
@@ -86,6 +88,7 @@ GitHub Actions currently verifies:
 - FastAPI/qpdf backend and hardened network routes
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
+- 59-sample Vietnamese real-scan Tesseract regression gate with source-level CER/WER checks
 - Real LibreOffice DOCX -> PDF conversion
 - Real PKCS#12 PDF signing
 - Real PDF/A conversion using the internal non-Ghostscript backend
@@ -96,11 +99,12 @@ The frontend also sends baseline `nosniff`, frame-denial, referrer and permissio
 ## Benchmarking
 
 See `docs/BENCHMARKING.md` for:
-- Vietnamese OCR CER/WER measurement
+- Vietnamese OCR CER/WER measurement and pinned real-scan provenance
 - PDF -> Office round-trip visual-fidelity testing
 
 ## Known boundaries
 
+- The 59-sample OCR corpus is a regression baseline, not a claim of universal Vietnamese OCR accuracy across every scan style or document class.
 - PDF -> DOCX/XLSX/PPTX remains **Experimental** until representative corpus results establish a fidelity baseline.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
