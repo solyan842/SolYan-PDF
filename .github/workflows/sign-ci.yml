@@ -1,0 +1,73 @@
+name: Signature Service CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/sign-service/**'
+      - '.github/workflows/sign-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/sign-service/**'
+      - '.github/workflows/sign-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engines/sign-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt httpx==0.28.1 pypdf==6.1.1
+
+      - name: Compile service
+        run: python -m compileall app
+
+      - name: Generate test certificate and PKCS12
+        run: |
+          openssl req -x509 -newkey rsa:2048 -keyout test-key.pem -out test-cert.pem -days 1 -nodes -subj '/CN=SolYan PDF CI'
+          openssl pkcs12 -export -out test.p12 -inkey test-key.pem -in test-cert.pem -passout pass:secret
+
+      - name: Sign PDF through API
+        run: |
+          python - <<'PY'
+          import io
+          from pypdf import PdfWriter
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          pdf = io.BytesIO()
+          writer = PdfWriter()
+          writer.add_blank_page(width=595, height=842)
+          writer.write(pdf)
+
+          client = TestClient(app)
+          health = client.get('/health')
+          assert health.status_code == 200, health.text
+          with open('test.p12', 'rb') as p12:
+              response = client.post(
+                  '/sign/pkcs12',
+                  files={
+                      'file': ('test.pdf', pdf.getvalue(), 'application/pdf'),
+                      'certificate': ('test.p12', p12.read(), 'application/x-pkcs12'),
+                  },
+                  data={'passphrase': 'secret', 'field_name': 'Signature1', 'reason': 'CI test'},
+              )
+          assert response.status_code == 200, response.text
+          data = response.content
+          assert data.startswith(b'%PDF-')
+          assert b'/ByteRange' in data and b'/Contents' in data
+          assert len(data) > len(pdf.getvalue())
+          print('digital signature ok', len(data))
+          PY
