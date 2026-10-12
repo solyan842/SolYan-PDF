@@ -8,6 +8,7 @@ on:
       - 'backend/Dockerfile'
       - 'engines/office-service/**'
       - 'benchmarks/**'
+      - 'patches/bloom/**'
       - 'docs/PDF-TO-OFFICE-EXPERIMENTAL.md'
       - '.github/workflows/bloom-canary-ci.yml'
   push:
@@ -19,6 +20,7 @@ on:
       - 'backend/Dockerfile'
       - 'engines/office-service/**'
       - 'benchmarks/**'
+      - 'patches/bloom/**'
       - 'docs/PDF-TO-OFFICE-EXPERIMENTAL.md'
       - '.github/workflows/bloom-canary-ci.yml'
   workflow_dispatch:
@@ -29,6 +31,7 @@ permissions:
 env:
   BLOOM_REPO: https://github.com/stemlen/bloom-pdf-editor.git
   BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
+  BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
 
 jobs:
   canary:
@@ -46,7 +49,7 @@ jobs:
       - name: Install benchmark dependencies
         run: pip install -r benchmarks/requirements.txt
 
-      - name: Fetch pinned Bloom source
+      - name: Fetch pinned Bloom source and apply experimental patch
         run: |
           git clone --filter=blob:none --no-checkout "$BLOOM_REPO" /tmp/bloom
           git -C /tmp/bloom fetch --depth=1 origin "$BLOOM_COMMIT"
@@ -54,6 +57,10 @@ jobs:
           test "$(git -C /tmp/bloom rev-parse HEAD)" = "$BLOOM_COMMIT"
           grep -q 'Apache License' /tmp/bloom/LICENSE
           grep -q 'BLOOM_STORAGE_ROOT' /tmp/bloom/server/src/utils/config.ts
+          git -C /tmp/bloom apply --check "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          git -C /tmp/bloom apply "$GITHUB_WORKSPACE/$BLOOM_PATCH"
+          grep -q 'currentBottom' /tmp/bloom/server/src/engines/table/candidates.ts
+          test -f /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
 
       - name: Build Bloom, Office and backend images
         run: |
