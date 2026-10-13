@@ -20,6 +20,7 @@ from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
 from .remove_annotations import router as remove_annotations_router
 from .remove_blank_pages import router as remove_blank_pages_router
+from .remove_images import router as remove_images_router
 from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
 
@@ -40,6 +41,7 @@ app.add_middleware(
         "X-SolYan-OCR-Pages",
         "X-SolYan-OCR-Table-Workbooks",
         "X-SolYan-Extracted-Images",
+        "X-SolYan-Images-Removed",
         "X-SolYan-Blank-Pages-Removed",
         "X-SolYan-Blank-Pages",
         "X-SolYan-Blank-Threshold",
@@ -61,6 +63,7 @@ app.include_router(sign_router)
 app.include_router(archive_router)
 app.include_router(bloom_router)
 app.include_router(extract_images_router)
+app.include_router(remove_images_router)
 app.include_router(remove_blank_pages_router)
 app.include_router(attachments_router)
 app.include_router(sanitize_router)
