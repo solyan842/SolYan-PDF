@@ -64,29 +64,32 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
+          import textwrap
           from PIL import Image, ImageDraw, ImageFont
           from app.orientation import analyze_orientation_file, detect_image_orientation
 
           root = Path('/tmp/auto-rotate')
           root.mkdir(parents=True, exist_ok=True)
-          font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 42)
+          font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf', 34)
           image = Image.new('RGB', (1600, 2200), 'white')
           draw = ImageDraw.Draw(image)
-          lines = [
-              'THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG',
-              'DOCUMENT ORIENTATION DETECTION MUST BE RELIABLE',
-              'SOLYAN PDF KEEPS TEXT AND VECTOR CONTENT INTACT',
-              'AUTOMATIC ROTATION USES A CONSERVATIVE CONFIDENCE GATE',
-              'SCANNED PAGES MAY ARRIVE SIDEWAYS OR UPSIDE DOWN',
-              'TESSERACT OSD RETURNS THE CLOCKWISE CORRECTION ANGLE',
-              'THIS FIXTURE CONTAINS MANY DIFFERENT LATIN WORD SHAPES',
-              'PAGE CONTENT SHOULD READ NORMALLY AFTER THE CORRECTION',
+          paragraphs = [
+              'Automatic page rotation should work on ordinary scanned documents, not only on ideal test images. The detector must recognize natural word shapes, punctuation, ascenders and descenders before deciding how a page should be turned.',
+              'SolYan PDF keeps the original document content intact while using a temporary raster preview only for orientation analysis. When confidence is too low, the page should remain unchanged instead of being rotated on a weak guess.',
+              'This regression fixture intentionally contains mixed case English prose, several sentence lengths, commas, periods, digits such as 2026 and 48, and enough independent words for Tesseract orientation and script detection to make a stable decision.',
+              'A reliable test should also cover pages turned left, pages turned right, and pages that are upside down. After analysis, the reported correction is applied later as relative PDF page rotation rather than rebuilding the page as an image.',
           ]
-          y = 90
+          y = 100
           for repeat in range(3):
-              for line in lines:
-                  draw.text((80, y), f'{repeat + 1} {line}', font=font, fill='black')
-                  y += 78
+              for paragraph in paragraphs:
+                  for line in textwrap.wrap(paragraph, width=72):
+                      draw.text((110, y), line, font=font, fill='black')
+                      y += 50
+                  y += 30
+                  if y > 2050:
+                      break
+              if y > 2050:
+                  break
 
           upright = image.copy()
           ccw90 = image.rotate(90, expand=True, fillcolor='white')
@@ -95,14 +98,13 @@ jobs:
           blank = Image.new('RGB', (1200, 1600), 'white')
 
           expected = [(upright, 0), (ccw90, 90), (upside, 180), (cw90, 270)]
-          detections = []
           for test_image, correction in expected:
               result = detect_image_orientation(test_image)
               print('image OSD:', result)
               assert result['resolved'] is True, result
               assert result['correction'] == correction, (correction, result)
-              assert result['confidence'] > 0, result
-              detections.append(result)
+              assert result['confidence'] >= 14.0, result
+              assert result['script'] == 'Latin', result
 
           blank_result = detect_image_orientation(blank)
           print('blank OSD:', blank_result)
@@ -121,6 +123,8 @@ jobs:
           assert len(pages) == 4, pages
           assert [item['correction'] for item in pages] == [0, 90, 180, 270], pages
           assert all(item['resolved'] for item in pages), pages
+          assert all(item['confidence'] >= 14.0 for item in pages), pages
+          assert all(item['script'] == 'Latin' for item in pages), pages
 
           for item in [image, upright, ccw90, upside, cw90, blank]:
               item.close()
