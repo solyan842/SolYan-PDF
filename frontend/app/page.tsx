@@ -8,6 +8,7 @@ const tools = [
   { href: '/images-to-pdf', title: 'Ảnh → PDF', description: 'Ghép PNG/JPG thành PDF ngay trên thiết bị.', local: true },
   { href: '/pdf-to-images', title: 'PDF → Ảnh', description: 'Render các trang thành PNG/JPEG và tải ZIP.', local: true },
   { href: '/extract-images', title: 'Trích xuất ảnh nhúng', description: 'Lấy ảnh raster nhúng nguyên bản khi có thể và tải thành ZIP.', local: false, badge: 'Poppler' },
+  { href: '/remove-blank-pages', title: 'Xóa trang trắng', description: 'Giữ chắc trang có text; đo raster với ngưỡng tùy chỉnh cho trang không text.', local: false, badge: 'Poppler + qpdf' },
   { href: '/ocr', title: 'OCR tài liệu', description: 'PP-OCRv6 và PP-StructureV3 cho ảnh/PDF scan.', local: false, badge: 'PaddleOCR' },
   { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
   { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, che nội dung và khung chú thích.', local: true },
