@@ -116,3 +116,36 @@ def compress_pdf(file: UploadFile = File(...)) -> Response:
         ["--object-streams=generate", "--compress-streams=y", "--recompress-flate", "--compression-level=9"],
         "solyan-compressed.pdf",
     )
+
+
+@app.post("/pdf/web-optimize")
+def web_optimize_pdf(file: UploadFile = File(...)) -> Response:
+    data = _read_pdf(file)
+    return _run_qpdf(data, ["--linearize"], "solyan-web-optimized.pdf")
+
+
+@app.post("/pdf/flatten")
+def flatten_pdf(file: UploadFile = File(...)) -> Response:
+    data = _read_pdf(file)
+    return _run_qpdf(
+        data,
+        ["--generate-appearances", "--flatten-annotations=all"],
+        "solyan-flattened.pdf",
+    )
+
+
+@app.post("/pdf/compress-images")
+def compress_images_pdf(file: UploadFile = File(...)) -> Response:
+    data = _read_pdf(file)
+    return _run_qpdf(
+        data,
+        [
+            "--compress-streams=y",
+            "--decode-level=generalized",
+            "--recompress-flate",
+            "--compression-level=9",
+            "--optimize-images",
+            "--object-streams=generate",
+        ],
+        "solyan-image-compressed.pdf",
+    )
