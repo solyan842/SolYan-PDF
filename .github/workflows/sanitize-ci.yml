@@ -1,0 +1,306 @@
+name: PDF Sanitization CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/sanitize.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/sanitize/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/sanitize-ci.yml'
+      - 'docs/ROADMAP.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/sanitize.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/sanitize/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/sanitize-ci.yml'
+      - 'docs/ROADMAP.md'
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install qpdf 11.9-compatible tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf poppler-utils
+          qpdf --version
+          qpdf --help=--json-output >/dev/null
+          qpdf --help=--update-from-json >/dev/null
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Build active-content fixture
+        run: |
+          cat >/tmp/malicious.json <<'JSON'
+          {
+            "qpdf": [
+              {
+                "jsonversion": 2,
+                "pdfversion": "1.7"
+              },
+              {
+                "obj:1 0 R": {
+                  "value": {
+                    "/Type": "/Catalog",
+                    "/Pages": "2 0 R",
+                    "/OpenAction": "5 0 R",
+                    "/AA": {"/WC": "5 0 R"},
+                    "/Names": {
+                      "/JavaScript": "10 0 R",
+                      "/EmbeddedFiles": "11 0 R"
+                    },
+                    "/Metadata": "8 0 R",
+                    "/AcroForm": {"/XFA": "8 0 R"},
+                    "/AF": ["7 0 R"]
+                  }
+                },
+                "obj:2 0 R": {
+                  "value": {
+                    "/Type": "/Pages",
+                    "/Count": 1,
+                    "/Kids": ["3 0 R"]
+                  }
+                },
+                "obj:3 0 R": {
+                  "value": {
+                    "/Type": "/Page",
+                    "/Parent": "2 0 R",
+                    "/MediaBox": [0, 0, 612, 792],
+                    "/AA": {"/O": "5 0 R"},
+                    "/Annots": ["4 0 R", "6 0 R"]
+                  }
+                },
+                "obj:4 0 R": {
+                  "value": {
+                    "/Type": "/Annot",
+                    "/Subtype": "/Link",
+                    "/Rect": [10, 10, 200, 40],
+                    "/A": {
+                      "/S": "/URI",
+                      "/URI": "u:https://evil.example/"
+                    }
+                  }
+                },
+                "obj:5 0 R": {
+                  "value": {
+                    "/S": "/JavaScript",
+                    "/JS": "u:app.alert('owned')"
+                  }
+                },
+                "obj:6 0 R": {
+                  "value": {
+                    "/Type": "/Annot",
+                    "/Subtype": "/FileAttachment",
+                    "/Rect": [10, 50, 30, 70],
+                    "/FS": "7 0 R"
+                  }
+                },
+                "obj:7 0 R": {
+                  "value": {
+                    "/Type": "/Filespec",
+                    "/F": "u:payload.bin",
+                    "/UF": "u:payload.bin",
+                    "/EF": {"/F": "9 0 R"}
+                  }
+                },
+                "obj:8 0 R": {
+                  "stream": {
+                    "dict": {
+                      "/Type": "/Metadata",
+                      "/Subtype": "/XML"
+                    },
+                    "data": "PHg6eG1wbWV0YT5FVklMPC94OnhtcG1ldGE+"
+                  }
+                },
+                "obj:9 0 R": {
+                  "stream": {
+                    "dict": {
+                      "/Type": "/EmbeddedFile",
+                      "/Subtype": "/application#2foctet-stream"
+                    },
+                    "data": "UEFZTE9BRA=="
+                  }
+                },
+                "obj:10 0 R": {
+                  "value": {
+                    "/Names": ["u:doc-js", "5 0 R"]
+                  }
+                },
+                "obj:11 0 R": {
+                  "value": {
+                    "/Names": ["u:payload.bin", "7 0 R"]
+                  }
+                },
+                "obj:12 0 R": {
+                  "value": {
+                    "/Title": "u:Sensitive title",
+                    "/Author": "u:Sensitive author",
+                    "/Keywords": "u:secret metadata"
+                  }
+                },
+                "trailer": {
+                  "value": {
+                    "/Root": "1 0 R",
+                    "/Info": "12 0 R"
+                  }
+                }
+              }
+            ]
+          }
+          JSON
+          qpdf --json-input /tmp/malicious.json /tmp/malicious.pdf
+          qpdf --check /tmp/malicious.pdf
+          qpdf --list-attachments /tmp/malicious.pdf | grep -q 'payload.bin'
+          qpdf --json-output /tmp/malicious.pdf /tmp/before.json
+          python <<'PY'
+          import json
+          data = json.load(open('/tmp/before.json', encoding='utf-8'))
+          objs = data['qpdf'][1]
+          root_ref = objs['trailer']['value']['/Root']
+          root = objs[f'obj:{root_ref}']['value']
+          assert '/OpenAction' in root and '/AA' in root and '/Metadata' in root and '/AF' in root
+          assert '/JavaScript' in root['/Names'] and '/EmbeddedFiles' in root['/Names']
+          assert '/Info' in objs['trailer']['value']
+          page = next(v['value'] for k, v in objs.items() if k.startswith('obj:') and isinstance(v, dict) and isinstance(v.get('value'), dict) and v['value'].get('/Type') == '/Page')
+          assert len(page['/Annots']) == 2
+          print('active-content fixture verified')
+          PY
+
+      - name: Sanitize and verify every removal category
+        env:
+          PYTHONPATH: backend
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+          from app.sanitize import SanitizeOptions, _sanitize_pdf
+
+          src = Path('/tmp/malicious.pdf')
+          out = Path('/tmp/sanitized.pdf')
+          stats = _sanitize_pdf(
+              src,
+              out,
+              SanitizeOptions(
+                  remove_actions=True,
+                  remove_links=True,
+                  remove_metadata=True,
+                  remove_embedded_files=True,
+              ),
+          )
+          assert stats.actions_removed >= 4, stats
+          assert stats.links_removed >= 1, stats
+          assert stats.metadata_removed >= 2, stats
+          assert stats.embedded_files_removed >= 3, stats
+          print(stats)
+          PY
+
+          qpdf --check /tmp/sanitized.pdf
+          test "$(pdfinfo /tmp/sanitized.pdf | awk '/^Pages:/ {print $2}')" = "1"
+          test -z "$(qpdf --list-attachments /tmp/sanitized.pdf)"
+          qpdf --json-output /tmp/sanitized.pdf /tmp/after.json
+
+          python <<'PY'
+          import json
+          data = json.load(open('/tmp/after.json', encoding='utf-8'))
+          objs = data['qpdf'][1]
+          trailer = objs['trailer']['value']
+          assert '/Info' not in trailer
+          root = objs[f"obj:{trailer['/Root']}"]['value']
+          for key in ('/OpenAction', '/AA', '/Metadata', '/AF'):
+              assert key not in root, (key, root)
+          names = root.get('/Names', {})
+          assert '/JavaScript' not in names
+          assert '/EmbeddedFiles' not in names
+          acro = root.get('/AcroForm', {})
+          assert '/XFA' not in acro
+
+          def resolve(value):
+              if isinstance(value, str) and value.endswith(' R'):
+                  entry = objs.get(f'obj:{value}', {})
+                  return entry.get('value') if isinstance(entry, dict) else None
+              return value if isinstance(value, dict) else None
+
+          action_types = {
+              '/GoTo','/GoToR','/GoToE','/Launch','/Thread','/URI','/Sound','/Movie','/Hide','/Named',
+              '/SubmitForm','/ResetForm','/ImportData','/JavaScript','/SetOCGState','/Rendition','/Trans','/GoTo3DView'
+          }
+          forbidden_keys = {'/A','/AA','/OpenAction','/JavaScript','/JS','/XFA','/Metadata','/EmbeddedFiles','/AF'}
+
+          def walk(value):
+              if isinstance(value, dict):
+                  assert not (forbidden_keys & set(value)), value
+                  assert value.get('/S') not in action_types, value
+                  for child in value.values():
+                      walk(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      walk(child)
+
+          for entry in objs.values():
+              if not isinstance(entry, dict):
+                  continue
+              if isinstance(entry.get('value'), (dict, list)):
+                  walk(entry['value'])
+              stream = entry.get('stream')
+              if isinstance(stream, dict) and isinstance(stream.get('dict'), dict):
+                  walk(stream['dict'])
+
+          pages = [v['value'] for k, v in objs.items() if k.startswith('obj:') and isinstance(v, dict) and isinstance(v.get('value'), dict) and v['value'].get('/Type') == '/Page']
+          assert len(pages) == 1
+          annots = pages[0].get('/Annots', [])
+          for ref in annots:
+              annot = resolve(ref)
+              assert not annot or annot.get('/Subtype') not in {'/Link','/FileAttachment','/RichMedia','/Screen','/Movie','/Sound','/3D'}
+          print('sanitized object graph contains no tested active-content vectors')
+          PY
+
+      - name: Verify selective mode does not over-remove
+        env:
+          PYTHONPATH: backend
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+          from app.sanitize import SanitizeOptions, _sanitize_pdf
+
+          out = Path('/tmp/metadata-only.pdf')
+          stats = _sanitize_pdf(
+              Path('/tmp/malicious.pdf'),
+              out,
+              SanitizeOptions(False, False, True, False),
+          )
+          assert stats.metadata_removed >= 2
+          assert stats.actions_removed == 0
+          assert stats.links_removed == 0
+          assert stats.embedded_files_removed == 0
+          PY
+          qpdf --list-attachments /tmp/metadata-only.pdf | grep -q 'payload.bin'
+          qpdf --json-output /tmp/metadata-only.pdf /tmp/metadata-only.json
+          python <<'PY'
+          import json
+          data = json.load(open('/tmp/metadata-only.json', encoding='utf-8'))
+          objs = data['qpdf'][1]
+          trailer = objs['trailer']['value']
+          root = objs[f"obj:{trailer['/Root']}"]['value']
+          assert '/Info' not in trailer
+          assert '/Metadata' not in root
+          assert '/OpenAction' in root
+          assert '/JavaScript' in root['/Names']
+          assert '/EmbeddedFiles' in root['/Names']
+          print('selective mode preserves unselected categories')
+          PY
