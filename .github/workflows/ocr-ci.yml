@@ -41,7 +41,7 @@ jobs:
       - name: Compile service and benchmark harness
         run: python -m compileall app benchmark.py ../../benchmarks/fetch_vietnamese_ocr_real.py
 
-      - name: Guard cross-workbook XLSX merge and source-page print layout
+      - name: Guard cross-workbook XLSX merge, print layout and raster page fallback
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -49,13 +49,16 @@ jobs:
 
           from openpyxl import Workbook, load_workbook
           from openpyxl.styles import Alignment, Font, PatternFill
+          from PIL import Image, ImageDraw
 
-          from app.main import _merge_xlsx_files
+          from app.main import _merge_xlsx_files, _workbook_has_values
 
           with TemporaryDirectory(prefix='solyan-xlsx-style-regression-') as tmp:
               root = Path(tmp)
               source = root / 'source.xlsx'
               source_two = root / 'source-two.xlsx'
+              empty_source = root / 'empty-source.xlsx'
+              raster = root / 'page-2.png'
 
               wb = Workbook()
               ws = wb.active
@@ -82,16 +85,35 @@ jobs:
               wb.save(source_two)
               wb.close()
 
+              wb = Workbook()
+              ws = wb.active
+              ws.title = 'No recognized cells'
+              ws.column_dimensions['A'].width = 22
+              ws.row_dimensions[1].height = 30
+              wb.save(empty_source)
+              wb.close()
+
+              image = Image.new('RGB', (640, 480), 'white')
+              draw = ImageDraw.Draw(image)
+              draw.rectangle((60, 70, 580, 410), outline='black', width=4)
+              draw.text((90, 100), 'source page preserved as raster', fill='black')
+              image.save(raster)
+              image.close()
+
+              assert _workbook_has_values(source) is True
+              assert _workbook_has_values(empty_source) is False
+
               merged_bytes = _merge_xlsx_files(
-                  [(1, source), (1, source_two)],
-                  page_sizes={1: (1400.0, 1000.0)},
+                  [(1, source), (1, source_two), (2, empty_source)],
+                  page_sizes={1: (1400.0, 1000.0), 2: (1400.0, 1000.0)},
+                  raster_fallbacks={2: raster},
               )
               merged = root / 'merged.xlsx'
               merged.write_bytes(merged_bytes)
 
               check = load_workbook(merged, data_only=False)
               try:
-                  assert len(check.worksheets) == 1
+                  assert len(check.worksheets) == 2
                   out = check.worksheets[0]
                   assert out.title == 'Page 1'
                   assert out['A5'].value == 'value-5'
@@ -107,13 +129,26 @@ jobs:
                   assert out.page_setup.fitToWidth == 1
                   assert out.page_setup.fitToHeight == 1
                   assert out.sheet_properties.pageSetUpPr.fitToPage is True
-                  assert out.page_setup.paperWidth == '14.0000in'
-                  assert out.page_setup.paperHeight == '10.0000in'
+                  # LibreOffice applies orientation after custom dimensions, so
+                  # landscape sheets store portrait-basis paper dimensions.
+                  assert out.page_setup.paperWidth == '10.0000in'
+                  assert out.page_setup.paperHeight == '14.0000in'
                   assert str(out.print_area) == "'Page 1'!$A$1:$D$9"
+
+                  fallback = check.worksheets[1]
+                  assert fallback.title == 'Page 2'
+                  assert len(fallback._images) == 1
+                  assert fallback.sheet_view.showGridLines is False
+                  assert fallback.page_setup.orientation == 'landscape'
+                  assert fallback.page_setup.paperWidth == '10.0000in'
+                  assert fallback.page_setup.paperHeight == '14.0000in'
+                  assert fallback.page_setup.fitToWidth == 1
+                  assert fallback.page_setup.fitToHeight == 1
+                  assert fallback.print_area is not None
               finally:
                   check.close()
 
-          print('cross-workbook XLSX grouping/style/print-layout regression: PASS')
+          print('cross-workbook XLSX grouping/style/print-layout/raster-fallback regression: PASS')
           PY
 
       - name: Verify health without loading Paddle models

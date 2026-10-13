@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -19,6 +20,7 @@ SUPPORTED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff",
 IMAGE_SUFFIXES = SUPPORTED_SUFFIXES - {".pdf"}
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PRINT_LONG_EDGE_INCHES = 14.0
+RASTER_FALLBACK_LONG_EDGE_PIXELS = 1200
 TABLE_GAP_ROWS = 2
 
 app = FastAPI(title="SolYan OCR Service", version="0.3.0")
@@ -273,6 +275,85 @@ def _source_page_sizes(input_path: Path, suffix: str) -> dict[int, tuple[float, 
         return {}
 
 
+def _workbook_has_values(path: Path) -> bool:
+    """Return whether a PP-Structure workbook contains any printable cell value."""
+
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path, read_only=True, data_only=False)
+    try:
+        for sheet in workbook.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                if any(value is not None and str(value).strip() for value in row):
+                    return True
+        return False
+    finally:
+        workbook.close()
+
+
+def _render_source_page_image(input_path: Path, suffix: str, page_index: int, output_path: Path) -> None:
+    """Render one source page for a visual fallback when table OCR yields no cells."""
+
+    from PIL import Image
+
+    if suffix == ".pdf":
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(str(input_path))
+        try:
+            page = pdf[page_index - 1]
+            width = float(page.get_width())
+            height = float(page.get_height())
+            scale = RASTER_FALLBACK_LONG_EDGE_PIXELS / max(width, height, 1.0)
+            bitmap = page.render(scale=max(scale, 0.01))
+            image = bitmap.to_pil().convert("RGB")
+            try:
+                image.save(output_path, format="PNG", optimize=True)
+            finally:
+                image.close()
+        finally:
+            pdf.close()
+        return
+
+    with Image.open(input_path) as source:
+        image = source.convert("RGB")
+        try:
+            image.thumbnail(
+                (RASTER_FALLBACK_LONG_EDGE_PIXELS, RASTER_FALLBACK_LONG_EDGE_PIXELS),
+                Image.Resampling.LANCZOS,
+            )
+            image.save(output_path, format="PNG", optimize=True)
+        finally:
+            image.close()
+
+
+def _attach_raster_fallback(target: Any, image_path: Path) -> None:
+    """Embed an unrecognized source page so the XLSX never silently drops it."""
+
+    from openpyxl.drawing.image import Image as SpreadsheetImage
+    from openpyxl.utils import get_column_letter
+
+    image = SpreadsheetImage(str(image_path))
+    long_edge = max(float(image.width), float(image.height), 1.0)
+    if long_edge > RASTER_FALLBACK_LONG_EDGE_PIXELS:
+        scale = RASTER_FALLBACK_LONG_EDGE_PIXELS / long_edge
+        image.width = int(round(float(image.width) * scale))
+        image.height = int(round(float(image.height) * scale))
+
+    target.add_image(image, "A1")
+    target.sheet_view.showGridLines = False
+    target.page_margins.left = 0.05
+    target.page_margins.right = 0.05
+    target.page_margins.top = 0.05
+    target.page_margins.bottom = 0.05
+
+    # Approximate Excel's default cell pixel footprint so the print area hugs the
+    # image instead of shrinking it into a large blank grid during PDF export.
+    columns = max(1, math.ceil(float(image.width) / 64.0))
+    rows = max(1, math.ceil(float(image.height) / 20.0))
+    target.print_area = f"A1:{get_column_letter(columns)}{rows}"
+
+
 def _configure_page_print_layout(target: Any, page_size: tuple[float, float] | None) -> None:
     """Keep one recognized source page printable as one aspect-correct sheet."""
 
@@ -292,9 +373,17 @@ def _configure_page_print_layout(target: Any, page_size: tuple[float, float] | N
             paper_width = PRINT_LONG_EDGE_INCHES * width / long_edge
             paper_height = PRINT_LONG_EDGE_INCHES * height / long_edge
             target.page_setup.paperSize = None
-            target.page_setup.paperWidth = f"{paper_width:.4f}in"
-            target.page_setup.paperHeight = f"{paper_height:.4f}in"
-            target.page_setup.orientation = "landscape" if width > height else "portrait"
+            if width > height:
+                # LibreOffice applies the landscape rotation after custom paper
+                # dimensions. Store portrait-basis dimensions so exported PDFs
+                # retain the source page's physical landscape orientation.
+                target.page_setup.paperWidth = f"{paper_height:.4f}in"
+                target.page_setup.paperHeight = f"{paper_width:.4f}in"
+                target.page_setup.orientation = "landscape"
+            else:
+                target.page_setup.paperWidth = f"{paper_width:.4f}in"
+                target.page_setup.paperHeight = f"{paper_height:.4f}in"
+                target.page_setup.orientation = "portrait"
 
     target.print_area = target.calculate_dimension()
 
@@ -302,13 +391,16 @@ def _configure_page_print_layout(target: Any, page_size: tuple[float, float] | N
 def _merge_xlsx_files(
     generated: list[tuple[int, Path]],
     page_sizes: dict[int, tuple[float, float]] | None = None,
+    raster_fallbacks: dict[int, Path] | None = None,
 ) -> bytes:
     """Merge PP-Structure XLSX outputs into one worksheet per source page.
 
     PP-Structure may emit multiple workbooks/tables for one page. Keeping those
     tables on separate worksheets makes a single scanned page print as multiple
     pages. SolYan instead stacks tables from the same source page vertically,
-    preserves their styles/merged cells, and applies one-page print scaling.
+    preserves their styles/merged cells, applies one-page print scaling, and can
+    embed the source page raster when PP-Structure produced no usable cells for
+    that page while other pages in the same document did yield tables.
     """
 
     from openpyxl import Workbook, load_workbook
@@ -317,12 +409,15 @@ def _merge_xlsx_files(
     output.remove(output.active)
     used_names: set[str] = set()
     page_sizes = page_sizes or {}
+    raster_fallbacks = raster_fallbacks or {}
 
     grouped: dict[int, list[Path]] = {}
     for page_index, path in generated:
         grouped.setdefault(page_index, []).append(path)
 
-    for page_index, paths in grouped.items():
+    page_indices = sorted(set(grouped) | set(raster_fallbacks))
+    for page_index in page_indices:
+        paths = grouped.get(page_index, [])
         target_sheet = output.create_sheet(_safe_sheet_name(f"Page {page_index}", used_names))
         row_offset = 0
 
@@ -336,6 +431,9 @@ def _merge_xlsx_files(
                 source_book.close()
 
         _configure_page_print_layout(target_sheet, page_sizes.get(page_index))
+        fallback_image = raster_fallbacks.get(page_index)
+        if fallback_image is not None:
+            _attach_raster_fallback(target_sheet, fallback_image)
 
     if not output.worksheets:
         raise ValueError("PP-StructureV3 produced no table worksheets")
@@ -440,6 +538,8 @@ def ocr_xlsx(file: UploadFile = File(...)) -> Response:
     PP-StructureV3 may emit one or more workbooks per page/table. SolYan merges
     those outputs into one worksheet per source page, stacking multiple detected
     tables on the same page while preserving source-page print orientation/aspect.
+    If some pages yield no usable table cells while other pages do, those pages
+    are preserved as raster-backed worksheets instead of being silently dropped.
     """
     data, suffix = _read_upload(file)
     with tempfile.TemporaryDirectory(prefix="solyan-xlsx-") as temp_dir:
@@ -469,8 +569,40 @@ def ocr_xlsx(file: UploadFile = File(...)) -> Response:
         if not generated:
             raise HTTPException(status_code=422, detail="PP-StructureV3 found no exportable tables")
 
+        page_sizes = _source_page_sizes(input_path, suffix)
+        meaningful_pages = {
+            page_index
+            for page_index, path in generated
+            if _workbook_has_values(path)
+        }
+        if not meaningful_pages:
+            raise HTTPException(status_code=422, detail="PP-StructureV3 found no exportable tables")
+
+        source_page_count = max(
+            len(results),
+            max(page_sizes, default=0),
+            max((page_index for page_index, _ in generated), default=0),
+        )
+        raster_fallbacks: dict[int, Path] = {}
+        raster_dir = root / "raster-fallbacks"
+        raster_dir.mkdir()
+        for page_index in range(1, source_page_count + 1):
+            if page_index in meaningful_pages:
+                continue
+            raster_path = raster_dir / f"page-{page_index:03d}.png"
+            try:
+                _render_source_page_image(input_path, suffix, page_index, raster_path)
+            except Exception:
+                traceback.print_exc()
+                continue
+            raster_fallbacks[page_index] = raster_path
+
         try:
-            workbook = _merge_xlsx_files(generated, page_sizes=_source_page_sizes(input_path, suffix))
+            workbook = _merge_xlsx_files(
+                generated,
+                page_sizes=page_sizes,
+                raster_fallbacks=raster_fallbacks,
+            )
         except Exception as exc:
             traceback.print_exc()
             generated_names = ", ".join(f"page={page_index}:{path.name}" for page_index, path in generated)
@@ -482,13 +614,19 @@ def ocr_xlsx(file: UploadFile = File(...)) -> Response:
                 ),
             ) from exc
 
+        headers = {
+            "Content-Disposition": 'attachment; filename="solyan-ocr-tables.xlsx"',
+            "X-SolYan-OCR-Engine": "PP-StructureV3",
+            "X-SolYan-OCR-Pages": str(len(results)),
+            "X-SolYan-OCR-Table-Workbooks": str(len(generated)),
+        }
+        if raster_fallbacks:
+            headers["X-SolYan-OCR-Raster-Fallback-Pages"] = ",".join(
+                str(page_index) for page_index in sorted(raster_fallbacks)
+            )
+
         return Response(
             content=workbook,
             media_type=XLSX_MEDIA_TYPE,
-            headers={
-                "Content-Disposition": 'attachment; filename="solyan-ocr-tables.xlsx"',
-                "X-SolYan-OCR-Engine": "PP-StructureV3",
-                "X-SolYan-OCR-Pages": str(len(results)),
-                "X-SolYan-OCR-Table-Workbooks": str(len(generated)),
-            },
+            headers=headers,
         )
