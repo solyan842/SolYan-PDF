@@ -109,14 +109,14 @@ Core product areas include:
 - OCR with Vietnamese support;
 - Office/OpenDocument/RTF/images to PDF;
 - PDF to image;
-- experimental PDF to DOCX/XLSX/PPTX through the pinned Bloom integration;
+- V1-gated multi-engine PDF to DOCX/XLSX/PPTX routing: LibreOffice PDF import first for DOCX/PPTX with pinned Bloom as best-effort fallback, and Bloom primary for XLSX with PP-StructureV3 fallback for scanned/no-logical-table cases;
 - Vietnamese utility tools.
 
 Do not silently expand scope into cloud connectors, remote signing, AI summarization, translation, or other major product families unless explicitly requested.
 
 ## 6. BLOOM / PDF→OFFICE RULES
 
-The Bloom integration is experimental and must stay evidence-driven.
+The PDF→Office surface is release-gated and evidence-driven. The pinned Bloom component remains an optional/external engine inside that multi-engine routing architecture; it is not the universal source of truth for every target or document class.
 
 Rules:
 
@@ -124,9 +124,9 @@ Rules:
 - prefer minimal patches over broad rewrites;
 - add a regression test for every reproducible bug before or with the fix;
 - separate upstream defects from SolYan patches;
-- keep synthetic benchmark and real-world diagnostic corpus results distinct;
-- do not call PDF→DOCX/XLSX/PPTX production-ready merely because synthetic cases pass;
-- do not weaken a quality/page-count/geometry gate just to make a run green.
+- keep synthetic benchmark and real-world corpus results distinct;
+- do not make universal PDF→DOCX/XLSX/PPTX fidelity claims merely because the current V1 corpus passes;
+- do not weaken a quality/page-count/geometry/editability gate just to make a run green.
 
 A gate may only be adjusted when evidence proves the old gate measures noise rather than correctness; document the exact before/after measurement and preserve the underlying invariant.
 
@@ -140,6 +140,8 @@ For Office roundtrip failures, distinguish at least:
 6. true visual/layout fidelity regression.
 
 Do not patch the wrong layer.
+
+The permanent `pdf-to-office-release-v1` policy is the release source of truth for accepted V1 corpus thresholds. It currently combines 18 controlled synthetic cases with 9 pinned public real-world cases (27 cases / 68 source pages total) and must not be weakened without measured evidence.
 
 ## 7. OCR / REAL-WORLD CORPUS RULES
 
@@ -184,7 +186,7 @@ Before release:
 6. create/check tag and release against the exact intended `main` commit;
 7. re-fetch the release and verify it is neither draft nor prerelease unless explicitly intended.
 
-Experimental subsystems remain labeled experimental until representative real-world evidence supports promotion.
+Subsystem status must follow representative real-world evidence and the permanent release policies in the repository, not stale labels from older release notes.
 
 ## 10. EXECUTION CONVENTION FOR THIS PROJECT
 
@@ -249,7 +251,7 @@ Prefer this order:
 2. route to the strongest available engine for that class;
 3. validate output with real corpus/roundtrip metrics;
 4. fall back to a safer engine or visual-preservation path when editable fidelity is insufficient;
-5. keep the weaker/editable path labeled experimental until evidence supports promotion.
+5. keep any weaker or unvalidated path explicitly limited until evidence supports promotion.
 
 For V1, do not delay the whole release solely to chase perfect editability on every PDF→Office case when a clearly labeled, high-fidelity fallback provides correct user-visible output.
 
