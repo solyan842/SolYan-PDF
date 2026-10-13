@@ -2,6 +2,7 @@ const tools = [
   { href: '/compare', title: 'So sánh PDF', description: 'So sánh nội dung văn bản giữa hai PDF ngay trên thiết bị.', local: true },
   { href: '/sign', title: 'Ký số PDF', description: 'Ký cryptographic bằng chứng thư PKCS#12 với pyHanko.', local: false, badge: 'pyHanko' },
   { href: '/verify-signature', title: 'Kiểm tra chữ ký số', description: 'Xác minh integrity, crypto validity, trust chain và thay đổi sau ký bằng pyHanko.', local: false, badge: 'pyHanko' },
+  { href: '/active-content', title: 'Kiểm tra Active Content', description: 'Xem JavaScript, actions, triggers, active annotations và attachment refs mà không thực thi code.', local: false, badge: 'qpdf JSON' },
   { href: '/sanitize', title: 'Làm sạch PDF', description: 'Loại JavaScript/actions, link, metadata và file đính kèm theo gate regression qpdf JSON.', local: false, badge: 'qpdf JSON' },
   { href: '/remove-annotations', title: 'Xóa comment / annotation', description: 'Xóa comment/markup an toàn, giữ Widget/Form; tùy chọn xóa mọi annotation trừ form.', local: false, badge: 'qpdf JSON' },
   { href: '/bookmarks', title: 'Bookmark / Mục lục PDF', description: 'Đọc, thêm, lồng cấp, sắp xếp và gán trang đích cho outline ngay trên thiết bị.', local: true },
