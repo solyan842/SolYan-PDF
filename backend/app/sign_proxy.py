@@ -4,7 +4,7 @@ import os
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 router = APIRouter(prefix="/sign", tags=["Digital signing"])
 SIGN_SERVICE_URL = os.getenv("SIGN_SERVICE_URL", "http://sign-service:8030").rstrip("/")
@@ -19,6 +19,14 @@ def _read_limited(upload: UploadFile, limit: int, label: str) -> bytes:
     if not data:
         raise HTTPException(status_code=400, detail=f"Empty {label}")
     return data
+
+
+def _upstream_error(response: httpx.Response) -> HTTPException:
+    try:
+        detail = response.json().get("detail", response.text)
+    except ValueError:
+        detail = response.text
+    return HTTPException(status_code=response.status_code, detail=str(detail)[:2000])
 
 
 @router.get("/health")
@@ -63,14 +71,35 @@ def sign_pkcs12(
         raise HTTPException(status_code=503, detail="Signature service is unavailable") from exc
 
     if response.status_code >= 400:
-        try:
-            detail = response.json().get("detail", response.text)
-        except ValueError:
-            detail = response.text
-        raise HTTPException(status_code=response.status_code, detail=str(detail)[:2000])
+        raise _upstream_error(response)
 
     return Response(
         content=response.content,
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="solyan-signed.pdf"'},
     )
+
+
+@router.post("/validate")
+def validate_pdf_signatures(file: UploadFile = File(...)) -> JSONResponse:
+    pdf_data = _read_limited(file, MAX_PDF_SIZE, "PDF")
+    if not pdf_data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Uploaded document is not a PDF")
+    try:
+        with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
+            response = client.post(
+                f"{SIGN_SERVICE_URL}/validate",
+                files={
+                    "file": (file.filename or "document.pdf", pdf_data, file.content_type or "application/pdf"),
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Signature service is unavailable") from exc
+
+    if response.status_code >= 400:
+        raise _upstream_error(response)
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Signature service returned invalid JSON") from exc
+    return JSONResponse(payload)
