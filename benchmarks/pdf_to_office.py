@@ -15,6 +15,8 @@ from PIL import Image, ImageChops, ImageStat
 _GEOMETRY_DIMENSION_TOLERANCE = 0.01
 _GEOMETRY_ASPECT_TOLERANCE = 0.005
 _SHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+_WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+_DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 _NS = {'x': _SHEET_NS}
 _MODES = {'auto', 'bloom', 'libreoffice'}
 
@@ -193,6 +195,70 @@ def _xlsx_diagnostics(xlsx_bytes: bytes) -> dict:
         return {'error': 'unable to inspect XLSX package'}
 
 
+def _ooxml_editability_diagnostics(package_bytes: bytes, target: str) -> dict:
+    """Measure native OOXML text separately from visual round-trip fidelity.
+
+    PDF import can score very highly by embedding page images. That is useful for
+    visual preservation but is not equivalent to an editable Word/PowerPoint
+    conversion. Count actual OOXML text nodes and media so routing decisions can
+    use both signals without guessing from rendered similarity alone.
+    """
+
+    if target == 'docx':
+        text_tag = f'{{{_WORD_NS}}}t'
+        xml_prefix = 'word/'
+        primary_xml = lambda name: (
+            name == 'word/document.xml'
+            or name.startswith('word/header')
+            or name.startswith('word/footer')
+        ) and name.endswith('.xml')
+        media_prefix = 'word/media/'
+    elif target == 'pptx':
+        text_tag = f'{{{_DRAWING_NS}}}t'
+        xml_prefix = 'ppt/slides/'
+        primary_xml = lambda name: name.startswith(xml_prefix) and name.endswith('.xml')
+        media_prefix = 'ppt/media/'
+    else:
+        raise ValueError(f'OOXML editability diagnostics do not support {target}')
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(package_bytes), 'r') as archive:
+            names = archive.namelist()
+            xml_paths = sorted(name for name in names if primary_xml(name))
+            media_paths = sorted(name for name in names if name.startswith(media_prefix) and not name.endswith('/'))
+            text_values: list[str] = []
+            parsed_parts = 0
+            for path in xml_paths:
+                try:
+                    root = ET.fromstring(archive.read(path))
+                except ET.ParseError:
+                    continue
+                parsed_parts += 1
+                for node in root.iter(text_tag):
+                    value = (node.text or '').strip()
+                    if value:
+                        text_values.append(value)
+
+            return {
+                'xml_parts': parsed_parts,
+                'text_nodes': len(text_values),
+                'text_characters': sum(len(value) for value in text_values),
+                'editable_text_present': bool(text_values),
+                'embedded_media_files': len(media_paths),
+                'text_preview': text_values[:16],
+            }
+    except (zipfile.BadZipFile, OSError):
+        return {
+            'error': f'unable to inspect {target.upper()} package',
+            'xml_parts': 0,
+            'text_nodes': 0,
+            'text_characters': 0,
+            'editable_text_present': False,
+            'embedded_media_files': 0,
+            'text_preview': [],
+        }
+
+
 def benchmark_pdf(
     source: bytes,
     filename: str,
@@ -243,6 +309,8 @@ def benchmark_pdf(
     }
     if target == 'xlsx':
         report['xlsx_diagnostics'] = _xlsx_diagnostics(office_bytes)
+    else:
+        report['ooxml_diagnostics'] = _ooxml_editability_diagnostics(office_bytes, target)
     return report, office_bytes, roundtrip_pdf
 
 
