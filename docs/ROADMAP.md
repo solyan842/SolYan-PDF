@@ -124,6 +124,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add form-safe qpdf JSON comment/annotation removal: safe mode removes standard markup/comment subtypes while preserving Widget/AcroForm, Link and FileAttachment; optional all-non-widget mode removes every annotation except Widget
 - [x] Add browser-local PDF bookmark/outline editor with Unicode titles, nested hierarchy, sibling reordering, page destinations, bounded extraction/writing and deterministic outline replacement/removal
 - [x] Add browser-local split-by-bookmark/chapter ZIP export with selectable outline depth, physical-page ranges, duplicate-start handling and bounded real-PDF regression coverage
+- [x] Add browser-local Poster PDF tiling with X×Y grids, A3/A4/A5/Letter/Legal/Tabloid sheets, RTL ordering and CropBox/rotation-aware visible-page normalization
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
@@ -173,6 +174,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Real conservative blank-page removal gate across blank, vector-content and text-content pages
 - [x] Real browser-local N-up gate with A4 geometry, ordering, RTL, source rotation and retained text checks
 - [x] Real browser-local booklet gate with saddle-stitch order, blank padding, duplex/spine behavior, source rotation and retained text checks
+- [x] Real browser-local Poster PDF gate covering RTL tile order, real LTR/RTL text placement, target-paper geometry, offset CropBox, 90° rotation and qpdf validity
 - [x] Real browser-local crop/resize geometry gate with selective page boxes, rotated sources, A4/custom target sizes, qpdf validation and retained text checks
 - [x] Real browser-local overlay/single-page gate with qpdf validity, page geometry, rotation handling and retained-text checks
 - [x] Real browser-local advanced-split gate with exact page grouping, bounded target-size estimation, qpdf validity and retained-text checks
