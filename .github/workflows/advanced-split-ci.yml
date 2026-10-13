@@ -1,0 +1,116 @@
+name: Advanced Split CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/lib/pdf-client.ts'
+      - 'frontend/lib/advanced-split.ts'
+      - 'frontend/app/split/**'
+      - '.github/workflows/advanced-split-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/lib/pdf-client.ts'
+      - 'frontend/lib/advanced-split.ts'
+      - 'frontend/app/split/**'
+      - '.github/workflows/advanced-split-ci.yml'
+
+jobs:
+  advanced-split:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Install PDF verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf poppler-utils
+          qpdf --version
+
+      - name: Compile advanced split helper
+        run: |
+          rm -rf .tmp-advanced-split
+          npx tsc lib/pdf-client.ts lib/advanced-split.ts \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --esModuleInterop \
+            --skipLibCheck \
+            --noEmit false \
+            --outDir .tmp-advanced-split
+
+      - name: Verify page-count and best-effort size splitting
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { PDFDocument, StandardFonts } = require('pdf-lib');
+          const { splitByApproxSize, splitByPageCount } = require('./.tmp-advanced-split/advanced-split.js');
+
+          (async () => {
+            const source = await PDFDocument.create();
+            const font = await source.embedFont(StandardFonts.Helvetica);
+            for (let i = 0; i < 7; i += 1) {
+              const page = source.addPage([240 + i * 3, 320]);
+              page.drawText(`SPLIT PAGE ${i + 1}`, { x: 20, y: 40, size: 14, font });
+              page.drawText('X'.repeat(30 + i * 20), { x: 20, y: 80, size: 8, font });
+            }
+            const bytes = await source.save();
+
+            const byCount = await splitByPageCount(bytes, 3);
+            assert.deepEqual(byCount.map((part) => part.indexes), [[0,1,2],[3,4,5],[6]]);
+            assert.deepEqual(byCount.map((part) => part.indexes.length), [3,3,1]);
+            for (let i = 0; i < byCount.length; i += 1) {
+              const path = `/tmp/solyan-count-${i + 1}.pdf`;
+              fs.writeFileSync(path, Buffer.from(byCount[i].bytes));
+              const doc = await PDFDocument.load(byCount[i].bytes);
+              assert.equal(doc.getPageCount(), byCount[i].indexes.length);
+            }
+
+            const tinyTarget = await splitByApproxSize(bytes, 1);
+            assert.equal(tinyTarget.length, 7);
+            assert.ok(tinyTarget.every((part) => part.indexes.length === 1));
+            assert.deepEqual(tinyTarget.flatMap((part) => part.indexes), [0,1,2,3,4,5,6]);
+            for (let i = 0; i < tinyTarget.length; i += 1) {
+              const path = `/tmp/solyan-size-${i + 1}.pdf`;
+              fs.writeFileSync(path, Buffer.from(tinyTarget[i].bytes));
+              assert.ok((tinyTarget[i].estimatedBytes ?? 0) > 0);
+            }
+
+            const onePart = await splitByApproxSize(bytes, 100 * 1024 * 1024);
+            assert.equal(onePart.length, 1);
+            assert.deepEqual(onePart[0].indexes, [0,1,2,3,4,5,6]);
+            await assert.rejects(() => splitByPageCount(bytes, 0), /Số trang mỗi phần/);
+            console.log('advanced split generation ok');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+          for file in /tmp/solyan-count-*.pdf /tmp/solyan-size-*.pdf; do qpdf --check "$file"; done
+          pdftotext /tmp/solyan-count-1.pdf /tmp/count-1.txt
+          grep -q 'SPLIT PAGE 1' /tmp/count-1.txt
+          grep -q 'SPLIT PAGE 2' /tmp/count-1.txt
+          grep -q 'SPLIT PAGE 3' /tmp/count-1.txt
+          pdftotext /tmp/solyan-count-3.pdf /tmp/count-3.txt
+          grep -q 'SPLIT PAGE 7' /tmp/count-3.txt
+          for page in 1 2 3 4 5 6 7; do
+            pdftotext "/tmp/solyan-size-${page}.pdf" "/tmp/size-${page}.txt"
+            grep -q "SPLIT PAGE ${page}" "/tmp/size-${page}.txt"
+          done
+
+      - name: Remove temporary compiled helper
+        if: always()
+        run: rm -rf .tmp-advanced-split
