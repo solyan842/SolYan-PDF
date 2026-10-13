@@ -16,6 +16,7 @@ _GEOMETRY_DIMENSION_TOLERANCE = 0.01
 _GEOMETRY_ASPECT_TOLERANCE = 0.005
 _SHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 _NS = {'x': _SHEET_NS}
+_MODES = {'auto', 'bloom', 'libreoffice'}
 
 
 def render_pages(pdf_bytes: bytes, scale: float = 1.25):
@@ -85,9 +86,6 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
                 if resized is not None:
                     resized.close()
 
-        # Missing or extra round-trip pages are a structural fidelity failure.
-        # Represent each unmatched page as a zero-similarity slot so a conversion
-        # cannot score highly by reproducing only the first N matching pages.
         scores.extend([0.0] * (total_slots - compared))
     finally:
         for image in [*a_pages, *b_pages]:
@@ -195,21 +193,30 @@ def _xlsx_diagnostics(xlsx_bytes: bytes) -> dict:
         return {'error': 'unable to inspect XLSX package'}
 
 
-def benchmark_pdf(source: bytes, filename: str, target: str, api: str) -> tuple[dict, bytes, bytes]:
+def benchmark_pdf(
+    source: bytes,
+    filename: str,
+    target: str,
+    api: str,
+    mode: str = 'auto',
+) -> tuple[dict, bytes, bytes]:
     if not source.startswith(b'%PDF-'):
         raise ValueError('Input is not a PDF')
     if target not in {'docx', 'xlsx', 'pptx'}:
         raise ValueError(f'Unsupported target: {target}')
+    if mode not in _MODES:
+        raise ValueError(f'Unsupported conversion mode: {mode}')
 
     start = time.perf_counter()
     with httpx.Client(timeout=360.0) as client:
         converted = client.post(
             f"{api.rstrip('/')}/experimental/pdf-to-office",
             files={'file': (filename, source, 'application/pdf')},
-            data={'target': target},
+            data={'target': target, 'mode': mode},
         )
         converted.raise_for_status()
         office_bytes = converted.content
+        conversion_engine = converted.headers.get('x-solyan-conversion-engine', 'unknown')
         convert_seconds = time.perf_counter() - start
 
         roundtrip_start = time.perf_counter()
@@ -225,6 +232,8 @@ def benchmark_pdf(source: bytes, filename: str, target: str, api: str) -> tuple[
     report = {
         'source': filename,
         'target': target,
+        'mode': mode,
+        'conversion_engine': conversion_engine,
         'source_bytes': len(source),
         'office_bytes': len(office_bytes),
         'roundtrip_pdf_bytes': len(roundtrip_pdf),
@@ -241,13 +250,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Round-trip fidelity benchmark for experimental PDF -> Office conversion.')
     parser.add_argument('pdf', type=Path)
     parser.add_argument('--target', choices=['docx', 'xlsx', 'pptx'], default='docx')
+    parser.add_argument('--mode', choices=sorted(_MODES), default='auto')
     parser.add_argument('--api', default='http://localhost:8000')
     parser.add_argument('--save-dir', type=Path)
     args = parser.parse_args()
 
     source = args.pdf.read_bytes()
     try:
-        report, office_bytes, roundtrip_pdf = benchmark_pdf(source, args.pdf.name, args.target, args.api)
+        report, office_bytes, roundtrip_pdf = benchmark_pdf(
+            source,
+            args.pdf.name,
+            args.target,
+            args.api,
+            mode=args.mode,
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
