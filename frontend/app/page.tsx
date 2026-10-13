@@ -13,6 +13,8 @@ const tools = [
   { href: '/booklet', title: 'Booklet · Đóng ghim giữa', description: 'Dàn saddle-stitch 2-up với thứ tự trang, gutter, gáy trái/phải và duplex.', local: true },
   { href: '/crop', title: 'Crop PDF', description: 'Cắt page boxes theo lề và phạm vi trang, giữ vector/text và rotation.', local: true },
   { href: '/resize-pages', title: 'Resize / Scale trang', description: 'Đặt nội dung vào khổ A0–A6, Letter, Legal hoặc kích thước tùy chỉnh.', local: true },
+  { href: '/overlay', title: 'Overlay PDF', description: 'Chồng một PDF lên PDF nền theo trang hoặc lặp trang đầu, có opacity/margin.', local: true },
+  { href: '/single-page', title: 'PDF → Một trang dài', description: 'Nối toàn bộ trang theo chiều dọc thành một trang liên tục, giữ vector/text.', local: true },
   { href: '/ocr', title: 'OCR tài liệu', description: 'PP-OCRv6 và PP-StructureV3 cho ảnh/PDF scan.', local: false, badge: 'PaddleOCR' },
   { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
   { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, che nội dung và khung chú thích.', local: true },
@@ -40,7 +42,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1 đã phát hành · đang mở rộng V1.1</h2><p>PDF → Office đã qua release gate 27 case / 68 trang. V1.1 tiếp tục tăng parity với các bộ công cụ PDF mã nguồn mở mạnh; cloud connectors, remote signing, AI và dịch PDF vẫn là các lựa chọn cần provider/credential riêng.</p></section>
+      <section className="coming-soon"><h2>V1.1 đã phát hành · đang mở rộng V1.2</h2><p>V1.2 tiếp tục đối chiếu các nền tảng PDF mã nguồn mở mạnh và ưu tiên công cụ tự host/browser-local trước; provider/credential chỉ dùng cho các hạng mục thật sự cần dịch vụ ngoài.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
