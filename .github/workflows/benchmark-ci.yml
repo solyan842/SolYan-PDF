@@ -61,6 +61,36 @@ jobs:
           print({'version': manifest['version'], 'cases': len(cases)})
           PY
 
+      - name: Validate V1 release policy coverage
+        run: |
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          policy = json.loads(Path('benchmarks/corpora/pdf_to_office_release_v1.json').read_text())
+          synthetic = json.loads(Path(policy['constituents']['synthetic_manifest']).read_text())
+          real = json.loads(Path(policy['constituents']['real_manifest']).read_text())
+
+          assert policy['version'] == 'pdf-to-office-release-v1'
+          assert policy['release_gate'] is True
+          assert len(synthetic['cases']) == 18
+          assert len(real['cases']) == 9
+          assert Counter(case['target'] for case in synthetic['cases']) == {'docx': 6, 'xlsx': 6, 'pptx': 6}
+          assert Counter(case['target'] for case in real['cases']) == {'docx': 3, 'xlsx': 3, 'pptx': 3}
+          synthetic_pages = 18
+          real_pages = sum(len(case['selected_pages']) for case in real['cases'])
+          assert real_pages == 50, real_pages
+          assert policy['totals'] == {'cases': 27, 'pages': synthetic_pages + real_pages}
+          assert policy['scopes']['synthetic']['expected_cases'] == 18
+          assert policy['scopes']['real_text']['expected_cases'] == 6
+          assert policy['scopes']['real_xlsx']['expected_cases'] == 3
+          assert policy['scopes']['real_text']['expected_source_pages'] == 41
+          assert policy['scopes']['real_xlsx']['expected_source_pages'] == 9
+          assert policy['scopes']['real_xlsx']['expected_roundtrip_pages'] == 9
+          print({'policy': policy['version'], 'cases': 27, 'pages': 68})
+          PY
+
       - name: Smoke test corpus aggregation
         run: |
           PYTHONPATH=benchmarks python - <<'PY'

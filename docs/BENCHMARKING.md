@@ -110,14 +110,17 @@ python engines/ocr-service/benchmark.py corpus.jsonl --url http://localhost:8010
 
 The report records engine selection and whether Tesseract fallback was used.
 
-## PDF → Office fidelity
+## PDF → Office fidelity and editability
 
-`benchmarks/pdf_to_office.py` performs a real round trip:
+`benchmarks/pdf_to_office.py` measures the production `auto` path with a real round trip:
 
-1. PDF → DOCX/XLSX/PPTX through the experimental Bloom adapter.
-2. Converted Office document → PDF through SolYan's LibreOffice service.
-3. Original PDF and round-trip PDF are rendered with PDFium.
-4. Per-page and average visual similarity are calculated.
+1. PDF → DOCX/PPTX uses LibreOffice PDF import first, with pinned Bloom as a best-effort fallback.
+2. PDF → XLSX uses pinned Bloom first and PP-StructureV3 only when Bloom returns its exact no-logical-table placeholder.
+3. The converted Office document is converted back to PDF through SolYan's LibreOffice service.
+4. Original and round-trip PDFs are rendered with PDFium.
+5. Per-page similarity, page-count preservation and geometry mismatches are measured.
+6. DOCX/PPTX packages are also inspected for native OOXML text nodes/characters so a page-image-only result cannot be mistaken for editable conversion.
+7. XLSX diagnostics inspect workbook/sheet structure; the real scanned-table release gate additionally checks PP-Structure engine selection, non-empty cells, source-page preservation, orientation and expected raster-page fallback.
 
 Install dependencies:
 
@@ -128,11 +131,50 @@ pip install -r benchmarks/requirements.txt
 Example:
 
 ```bash
-python benchmarks/pdf_to_office.py samples/report.pdf --target docx --api http://localhost:8000 --save-dir benchmark-output/docx
+python benchmarks/pdf_to_office.py samples/report.pdf \
+  --target docx \
+  --mode auto \
+  --api http://localhost:8000 \
+  --save-dir benchmark-output/docx
 ```
 
-Run the same source corpus for `docx`, `xlsx`, and `pptx`. Keep the feature labelled **Experimental** until representative documents meet an agreed fidelity threshold.
+Available benchmark modes are `auto`, `bloom` and `libreoffice`. `auto` is the release path; forced modes exist for diagnostics and A/B measurement.
+
+### Measured routing baselines
+
+The 2026-10-13 A/B run used the same pinned 6-case / 41-page public DOCX/PPTX slice for both engines:
+
+| Route | Overall | DOCX | PPTX | Editable cases |
+|---|---:|---:|---:|---:|
+| LibreOffice PDF import | **96.44%** | **97.46%** | **95.42%** | **6/6** |
+| Pinned Bloom | **84.56%** | **89.51%** | **79.60%** | **6/6** |
+
+That evidence is why production `auto` now prefers LibreOffice for DOCX/PPTX. The post-routing 18-case controlled corpus measured **97.78%** overall: DOCX **96.40%**, PPTX **98.76%**, XLSX **98.17%**, with zero page-count/unmatched/geometry mismatches and editable native text in all 12 DOCX/PPTX cases.
+
+### V1 release corpus and policy
+
+`benchmarks/corpora/pdf_to_office_release_v1.json` is the versioned acceptance policy. It binds two existing, independently reproducible corpus manifests instead of copying their source definitions:
+
+- `pdf_to_office_synthetic_v1.json`: 18 controlled layout cases, 6 per target;
+- `pdf_to_office_real_diagnostic_v1.json`: 9 pinned public real-world cases / 50 pages with source provenance and SHA-256 verification.
+
+Together the V1 release gate covers **27 cases / 68 source pages**. The public real slice includes ordinary documents, multi-column text, image-heavy documents, scanned handwritten/mixed/wide tables and three presentation styles. The controlled slice adds forms, typography, header/footer, financial/invoice/schedule/matrix tables, charts, cards and timelines.
+
+The release policy is intentionally stricter than a smoke test but leaves a small renderer/runtime margin below the measured baselines:
+
+| Scope | Target | Minimum average | Minimum case | Additional gate |
+|---|---|---:|---:|---|
+| Synthetic | DOCX | 94% | 92% | editable text 6/6 |
+| Synthetic | PPTX | 96% | 94% | editable text 6/6 |
+| Synthetic | XLSX | 96% | 94% | Bloom route, no page/geometry loss |
+| Public real | DOCX | 95% | 93% | editable text 3/3 |
+| Public real | PPTX | 93% | 90% | editable text 3/3 |
+| Public real | XLSX | semantic/page gate | — | PP-StructureV3 fallback, 3 sheets/case, non-empty cells, 9/9 round-trip pages, orientation preserved, expected raster fallback only |
+
+Both visual scopes require zero page-count, unmatched-page and geometry mismatches. The real XLSX gate intentionally uses structural/page-preservation criteria rather than a pixel threshold because its purpose is editable table extraction while preserving source pages that OCR cannot reliably recognize.
+
+`benchmarks/validate_pdf_to_office_release.py` is the single validator for these thresholds. CI runs the synthetic and public-real release gates independently and retains reports/logs as artifacts.
 
 ## Release benchmark rule
 
-Do not publish claims such as “same quality as Adobe/iLovePDF” from synthetic smoke tests. Release-quality claims must be based on a versioned corpus that covers Vietnamese text, mixed fonts, tables, scanned pages, forms, charts, images, multi-column layouts and Office-origin PDFs.
+Do not publish claims such as “same quality as Adobe/iLovePDF” from these measurements. Passing V1 means the pinned 27-case / 68-page release corpus meets SolYan's fixed fidelity, editability and page-preservation thresholds in the tested environment. It is a regression/release gate, not a claim of universal fidelity for every PDF.
