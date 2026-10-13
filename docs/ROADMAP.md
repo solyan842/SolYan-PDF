@@ -72,7 +72,7 @@
 - [x] Pass the 18-case synthetic compatibility gate with zero page-count, unmatched-page and geometry mismatches
 - [x] Add XLSX print-layout normalization and table-fragmentation regressions
 - [x] Add pinned public 9-case / 50-page real-world diagnostic corpus across DOCX/XLSX/PPTX and record a non-release baseline
-- [x] Fix real-world DOCX/PPTX interoperability defects exposed by the diagnostic corpus, including XML sanitation, PDF metadata BOM decoding and inherited page geometry
+- [x] Fix real-world DOCX/PPTX interoperability defects exposed by the diagnostic corpus, including XML sanitation, PDF metadata BOM decoding and inherited PDF page geometry
 - [x] Add PP-StructureV3 fallback for scanned PDF → XLSX only when Bloom reports no logical tables, while preserving Bloom as the primary XLSX engine
 - [x] Validate the scanned-XLSX fallback on 3 pinned public scans / 9 pages, improving useful round-trip pagination from 3/9 to 9/9 pages by preserving source pages with no recognized cells as raster worksheets, without weakening fidelity gates
 - [x] Add native-OOXML editability diagnostics for DOCX/PPTX so routing decisions are not based on rendered similarity alone
@@ -195,6 +195,8 @@ V1.1 self-hosted utility parity is complete. The remaining unchecked items in th
 - [x] Remove completed `v0.1.2` one-shot publisher after successful publication
 - [x] Publish PDF-to-Office V1-gated patch release `v0.1.3`
 - [x] Remove completed `v0.1.3` one-shot publisher after successful publication
+- [x] Publish V1.1 self-hosted utility-parity patch release `v0.1.4`
+- [x] Remove completed `v0.1.4` one-shot publisher after successful publication
 
 ## Release decisions / external inputs still required
 
