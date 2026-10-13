@@ -65,7 +65,7 @@ jobs:
                       "/EmbeddedFiles": "11 0 R"
                     },
                     "/Metadata": "8 0 R",
-                    "/AcroForm": {"/XFA": "8 0 R"},
+                    "/AcroForm": {"/Fields": [], "/XFA": "8 0 R"},
                     "/AF": ["7 0 R"]
                   }
                 },
@@ -228,6 +228,7 @@ jobs:
           assert '/EmbeddedFiles' not in names
           acro = root.get('/AcroForm', {})
           assert '/XFA' not in acro
+          assert acro.get('/Fields') == []
 
           def resolve(value):
               if isinstance(value, str) and value.endswith(' R'):
@@ -301,5 +302,6 @@ jobs:
           assert '/OpenAction' in root
           assert '/JavaScript' in root['/Names']
           assert '/EmbeddedFiles' in root['/Names']
+          assert root['/AcroForm']['/Fields'] == []
           print('selective mode preserves unselected categories')
           PY
