@@ -103,6 +103,116 @@ jobs:
           print('ocr xlsx binary proxy ok')
           PY
 
+      - name: Verify Bloom no-table XLSX OCR fallback
+        run: |
+          python - <<'PY'
+          import io
+          import zipfile
+          import httpx
+          from fastapi.testclient import TestClient
+          from unittest.mock import patch
+
+          from app.bloom_proxy import OCR_XLSX_FALLBACK_TIMEOUT_SECONDS, _is_bloom_no_tables_placeholder
+          from app.main import app
+
+          NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+
+          def make_xlsx(text: str) -> bytes:
+              stream = io.BytesIO()
+              with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
+                  archive.writestr('[Content_Types].xml', '<Types/>')
+                  archive.writestr('xl/workbook.xml', f'<workbook xmlns="{NS}"/>')
+                  archive.writestr(
+                      'xl/sharedStrings.xml',
+                      f'<sst xmlns="{NS}"><si><t>{text}</t></si></sst>',
+                  )
+                  archive.writestr(
+                      'xl/worksheets/sheet1.xml',
+                      f'<worksheet xmlns="{NS}"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>',
+                  )
+              return stream.getvalue()
+
+          placeholder = make_xlsx('No logical tables detected in document.')
+          recognized = make_xlsx('recognized-table-cell')
+          assert _is_bloom_no_tables_placeholder(placeholder) is True
+          assert _is_bloom_no_tables_placeholder(recognized) is False
+          assert _is_bloom_no_tables_placeholder(b'not-an-xlsx') is False
+          # The pinned real-scan diagnostic needs more than 300 seconds for some
+          # CPU-only PP-Structure cases, so prevent the fallback budget from
+          # silently regressing to the old five-minute timeout.
+          assert OCR_XLSX_FALLBACK_TIMEOUT_SECONDS >= 900
+
+          class FakeBloomClient:
+              def __init__(self, *args, **kwargs):
+                  pass
+
+              def __enter__(self):
+                  return self
+
+              def __exit__(self, exc_type, exc, tb):
+                  return False
+
+              def post(self, url, files, data):
+                  assert url.endswith('/convert'), url
+                  assert data == {'target': 'xlsx'}
+                  return httpx.Response(
+                      202,
+                      json={'job': {'id': 'job-1'}},
+                      request=httpx.Request('POST', url),
+                  )
+
+              def get(self, url):
+                  if '/jobs/' in url:
+                      return httpx.Response(
+                          200,
+                          json={'job': {'state': 'Completed'}},
+                          request=httpx.Request('GET', url),
+                      )
+                  if '/download/' in url:
+                      return httpx.Response(
+                          200,
+                          content=placeholder,
+                          headers={
+                              'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                              'content-disposition': 'attachment; filename="bloom.xlsx"',
+                          },
+                          request=httpx.Request('GET', url),
+                      )
+                  raise AssertionError(url)
+
+          fallback = (
+              recognized,
+              'attachment; filename="solyan-ocr-tables.xlsx"',
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              {
+                  'x-solyan-ocr-engine': 'PP-StructureV3',
+                  'x-solyan-ocr-pages': '3',
+                  'x-solyan-ocr-table-workbooks': '4',
+              },
+          )
+
+          with (
+              patch('app.bloom_proxy.httpx.Client', FakeBloomClient),
+              patch('app.bloom_proxy.detect_pdf_print_setup', return_value=None),
+              patch('app.bloom_proxy._try_ocr_xlsx', return_value=fallback) as ocr_fallback,
+          ):
+              response = TestClient(app).post(
+                  '/experimental/pdf-to-office',
+                  files={'file': ('scan.pdf', b'%PDF-1.7\nscan', 'application/pdf')},
+                  data={'target': 'xlsx'},
+              )
+
+          assert response.status_code == 200, response.text
+          assert response.content == recognized
+          assert response.headers['content-disposition'] == 'attachment; filename="solyan-ocr-tables.xlsx"'
+          assert response.headers['x-solyan-conversion-engine'] == 'PP-StructureV3-fallback'
+          assert response.headers['x-solyan-ocr-engine'] == 'PP-StructureV3'
+          assert response.headers['x-solyan-ocr-pages'] == '3'
+          assert response.headers['x-solyan-ocr-table-workbooks'] == '4'
+          ocr_fallback.assert_called_once_with(b'%PDF-1.7\nscan', 'scan.pdf')
+          print('bloom no-table xlsx -> PP-Structure fallback ok')
+          PY
+
       - name: Verify XLSX source-aware print normalization
         run: |
           python - <<'PY'

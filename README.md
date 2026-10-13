@@ -78,6 +78,7 @@ Important variables are documented in `.env.example`.
 - `NEXT_PUBLIC_API_URL` is baked into the Next.js client at image build time.
 - `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_CX` are required only for Google keyword-position lookup.
 - `BLOOM_SERVICE_URL` / `BLOOM_API_KEY` are required only for experimental PDF -> Office conversion. Bloom is not bundled into the default compose stack.
+- `OCR_XLSX_FALLBACK_TIMEOUT_SECONDS` controls the best-effort PP-StructureV3 fallback used when Bloom finds no logical XLSX table; the default is 900 seconds because CPU-only multi-page scans can take several minutes.
 - Private/loopback Ping targets are blocked by default. `ALLOW_PRIVATE_NETWORK_UTILITIES=1` is intended only for trusted self-hosted/LAN deployments.
 - `X-Forwarded-For` is ignored unless `TRUST_PROXY_HEADERS=1` is explicitly enabled behind a trusted reverse proxy.
 
