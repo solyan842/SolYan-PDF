@@ -99,6 +99,18 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [ ] AI document summarization — optional, requires model/provider decision
 - [ ] PDF translation — optional, requires translation/model provider decision
 
+## V1.1 — Self-hosted utility parity and hardening
+
+- [x] Audit maintained open-source PDF platforms before adding difficult utilities; use Stirling-PDF as a feature-parity reference rather than reimplementing blindly
+- [x] Add qpdf linearization / web optimization
+- [x] Add qpdf annotation and form-field flattening with generated appearances
+- [x] Add qpdf image recompression as an explicit lossy-capable mode separate from structural compression
+- [ ] Extract embedded PDF images as a downloadable archive
+- [ ] Detect and remove blank pages with a bounded, testable threshold
+- [ ] Add N-up / multi-page-per-sheet layout
+- [ ] Add booklet / imposition layout
+- [ ] Add crop / resize-page utilities with deterministic page geometry
+
 ## Tiện ích Việt Nam — V1
 
 ### Văn bản
@@ -139,6 +151,7 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] Production npm high-severity audit gate
 - [x] Patched PostCSS transitive dependency override
 - [x] Backend/qpdf CI
+- [x] Real qpdf smoke coverage for web optimization, flattening and image recompression routes
 - [x] OCR XLSX binary proxy regression coverage
 - [x] Private-network Ping blocked by default
 - [x] Untrusted proxy IP headers ignored by default
