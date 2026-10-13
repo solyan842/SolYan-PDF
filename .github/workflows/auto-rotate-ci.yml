@@ -1,0 +1,170 @@
+name: Auto Rotate CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/ocr-service/app/orientation.py'
+      - 'engines/ocr-service/app/main.py'
+      - 'engines/ocr-service/Dockerfile'
+      - 'backend/app/auto_rotate.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/auto-rotate/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-rotate-ci.yml'
+      - '.github/workflows/ocr-ci.yml'
+      - 'README.md'
+      - 'docs/ROADMAP.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/ocr-service/app/orientation.py'
+      - 'engines/ocr-service/app/main.py'
+      - 'engines/ocr-service/Dockerfile'
+      - 'backend/app/auto_rotate.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/auto-rotate/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-rotate-ci.yml'
+      - '.github/workflows/ocr-ci.yml'
+      - 'README.md'
+      - 'docs/ROADMAP.md'
+
+jobs:
+  orientation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Tesseract OSD and qpdf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-osd qpdf fonts-dejavu-core
+          tesseract --version | head -n 1
+          tesseract --list-langs | grep -Fx osd
+          qpdf --version
+          qpdf --help=--rotate >/dev/null
+
+      - name: Install lightweight orientation dependencies
+        run: pip install pytesseract==0.3.13 pypdfium2==5.14.0 Pillow
+
+      - name: Verify production image includes OSD data
+        run: grep -q 'tesseract-ocr-osd' engines/ocr-service/Dockerfile
+
+      - name: Gate real Tesseract OSD orientation and PDFium rendering
+        env:
+          PYTHONPATH: engines/ocr-service
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          from app.orientation import analyze_orientation_file, detect_image_orientation
+
+          root = Path('/tmp/auto-rotate')
+          root.mkdir(parents=True, exist_ok=True)
+          font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 42)
+          image = Image.new('RGB', (1600, 2200), 'white')
+          draw = ImageDraw.Draw(image)
+          lines = [
+              'THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG',
+              'DOCUMENT ORIENTATION DETECTION MUST BE RELIABLE',
+              'SOLYAN PDF KEEPS TEXT AND VECTOR CONTENT INTACT',
+              'AUTOMATIC ROTATION USES A CONSERVATIVE CONFIDENCE GATE',
+              'SCANNED PAGES MAY ARRIVE SIDEWAYS OR UPSIDE DOWN',
+              'TESSERACT OSD RETURNS THE CLOCKWISE CORRECTION ANGLE',
+              'THIS FIXTURE CONTAINS MANY DIFFERENT LATIN WORD SHAPES',
+              'PAGE CONTENT SHOULD READ NORMALLY AFTER THE CORRECTION',
+          ]
+          y = 90
+          for repeat in range(3):
+              for line in lines:
+                  draw.text((80, y), f'{repeat + 1} {line}', font=font, fill='black')
+                  y += 78
+
+          upright = image.copy()
+          ccw90 = image.rotate(90, expand=True, fillcolor='white')
+          upside = image.rotate(180, expand=True, fillcolor='white')
+          cw90 = image.rotate(270, expand=True, fillcolor='white')
+          blank = Image.new('RGB', (1200, 1600), 'white')
+
+          expected = [(upright, 0), (ccw90, 90), (upside, 180), (cw90, 270)]
+          detections = []
+          for test_image, correction in expected:
+              result = detect_image_orientation(test_image)
+              print('image OSD:', result)
+              assert result['resolved'] is True, result
+              assert result['correction'] == correction, (correction, result)
+              assert result['confidence'] > 0, result
+              detections.append(result)
+
+          blank_result = detect_image_orientation(blank)
+          print('blank OSD:', blank_result)
+          assert blank_result['correction'] == 0, blank_result
+
+          pdf_path = root / 'rotated-pages.pdf'
+          upright.save(
+              pdf_path,
+              'PDF',
+              resolution=150.0,
+              save_all=True,
+              append_images=[ccw90, upside, cw90],
+          )
+          pages = analyze_orientation_file(pdf_path, '.pdf')
+          print('PDF OSD:', pages)
+          assert len(pages) == 4, pages
+          assert [item['correction'] for item in pages] == [0, 90, 180, 270], pages
+          assert all(item['resolved'] for item in pages), pages
+
+          for item in [image, upright, ccw90, upside, cw90, blank]:
+              item.close()
+          PY
+
+      - name: Gate conservative confidence and inference policy
+        env:
+          PYTHONPATH: engines/ocr-service
+        run: |
+          python <<'PY'
+          from app.orientation import plan_corrections
+
+          pages = [
+              {'page': 1, 'resolved': True, 'correction': 90, 'confidence': 21.5},
+              {'page': 2, 'resolved': True, 'correction': 180, 'confidence': 13.9},
+              {'page': 3, 'resolved': False, 'correction': 0, 'confidence': 0.0, 'note': 'osdUnavailableForPage'},
+          ]
+          planned = plan_corrections(pages, confidence_threshold=14.0)
+          assert planned[0]['apply'] is True and planned[0]['method'] == 'osd', planned
+          assert planned[1]['apply'] is False and planned[1]['method'] == 'none', planned
+          assert planned[1]['note'] == 'lowConfidence', planned
+          assert planned[2]['apply'] is False and planned[2]['method'] == 'none', planned
+
+          consensus = plan_corrections(
+              [
+                  {'page': 1, 'resolved': True, 'correction': 90, 'confidence': 25.0},
+                  {'page': 2, 'resolved': False, 'correction': 0, 'confidence': 0.0},
+                  {'page': 3, 'resolved': True, 'correction': 90, 'confidence': 30.0},
+              ],
+              confidence_threshold=14.0,
+              infer_undetected=True,
+          )
+          assert consensus[1]['method'] == 'inferred', consensus
+          assert consensus[1]['correction'] == 90 and consensus[1]['apply'] is True, consensus
+
+          conflict = plan_corrections(
+              [
+                  {'page': 1, 'resolved': True, 'correction': 90, 'confidence': 25.0},
+                  {'page': 2, 'resolved': False, 'correction': 0, 'confidence': 0.0},
+                  {'page': 3, 'resolved': True, 'correction': 180, 'confidence': 30.0},
+              ],
+              confidence_threshold=14.0,
+              infer_undetected=True,
+          )
+          assert conflict[1]['method'] == 'none' and conflict[1]['apply'] is False, conflict
+          print('orientation planning gate: PASS')
+          PY
