@@ -80,6 +80,7 @@ jobs:
           PYTHONPATH: backend
         run: |
           python <<'PY'
+          import json
           from pathlib import Path
           from app.remove_images import _build_remove_images_update
           from app.sanitize import _qpdf_json
@@ -88,16 +89,27 @@ jobs:
           update, removed = _build_remove_images_update(data)
           assert removed == 2, removed
           updates = update['qpdf'][1]
+          payload = json.dumps(updates, sort_keys=True)
 
-          root_xobjects = updates['obj:10 0 R']['value']
-          assert '/Im0' not in root_xobjects, root_xobjects
-          assert root_xobjects['/Fm0'] == '8 0 R', root_xobjects
+          # qpdf may renumber indirect objects during fixture round-trip, so assert
+          # semantic resource names rather than hard-coding object numbers.
+          assert '"/Im0"' not in payload, payload
+          assert '"/Nested"' not in payload, payload
+          assert '"/Fm0"' in payload, payload
 
-          form_dict = updates['obj:8 0 R']['stream']['dict']
-          assert form_dict['/Resources']['/XObject'] == {}, form_dict
-
-          assert 'obj:5 0 R' not in updates, 'page content stream must remain byte-for-byte untouched'
-          assert 'obj:6 0 R' not in updates, 'font resource must remain untouched'
+          content_entries = []
+          font_entries = []
+          for key, entry in data['qpdf'][1].items():
+              if not isinstance(entry, dict):
+                  continue
+              stream = entry.get('stream')
+              if isinstance(stream, dict) and isinstance(stream.get('dict'), dict) and stream['dict'] == {}:
+                  content_entries.append(key)
+              value = entry.get('value')
+              if isinstance(value, dict) and value.get('/Subtype') == '/Type1':
+                  font_entries.append(key)
+          assert all(key not in updates for key in content_entries), updates
+          assert all(key not in updates for key in font_entries), updates
           print('planner removed', removed, 'image resource entries')
           PY
 
