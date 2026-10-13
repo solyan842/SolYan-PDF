@@ -18,7 +18,7 @@ from .sign_proxy import router as sign_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
-app = FastAPI(title="SolYan PDF API", version="0.1.2")
+app = FastAPI(title="SolYan PDF API", version="0.1.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("SOLYAN_ALLOWED_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],

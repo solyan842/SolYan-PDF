@@ -1,6 +1,6 @@
-# SolYan PDF v0.1.2 — Release Dependency Manifest
+# SolYan PDF v0.1.3 — Release Dependency Manifest
 
-Release date: 2026-10-12
+Release date: 2026-10-13
 
 Project license: **Apache-2.0** (`LICENSE`)
 
@@ -111,7 +111,7 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 
 | Component | Version | License | Integration |
 |---|---:|---|---|
-| Bloom PDF Editor server | pinned deployment commit selected by operator | Apache-2.0 upstream; re-check exact commit/dependencies | optional external experimental PDF -> Office service |
+| Bloom PDF Editor server | pinned deployment commit selected by operator | Apache-2.0 upstream; re-check exact commit/dependencies | optional external PDF → Office engine; best-effort DOCX/PPTX fallback and primary PDF → XLSX route |
 | Google Custom Search API | external service | provider terms | optional keyword-position utility |
 | Tranco-compatible ranking endpoint | external service | provider/API terms | optional website ranking utility |
 

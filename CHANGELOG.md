@@ -4,6 +4,10 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-13
+
+Patch release promoting the evidence-backed multi-engine PDF -> Office path to the versioned V1 release-gated surface and expanding the real-world OCR/XLSX regression baseline.
+
 ### PDF -> Office V1 release gate
 - Added evidence-based `auto` routing: PDF -> DOCX/PPTX uses LibreOffice PDF import first with pinned Bloom as best-effort fallback; PDF -> XLSX keeps Bloom primary with PP-StructureV3 fallback only when Bloom reports no logical tables.
 - Added native OOXML editability diagnostics so DOCX/PPTX routing is judged on editable text as well as rendered round-trip similarity.
@@ -11,7 +15,7 @@ All notable changes to SolYan PDF are documented here.
 - Re-ran the controlled 18-case synthetic corpus through final `auto` routing: 97.78% overall, DOCX 96.40%, PPTX 98.76%, XLSX 98.17%, with zero page-count, unmatched-page and geometry mismatches and editable DOCX/PPTX text in 12/12 cases.
 - Added permanent versioned `pdf-to-office-release-v1` policy combining 18 synthetic cases with 9 pinned public real-world cases: 27 cases / 68 source pages total.
 - Locked target-specific minimum average/case fidelity thresholds, exact routing engines, zero page/geometry loss requirements and DOCX/PPTX editability requirements.
-- Promoted the public real-world DOCX/PPTX and scanned-XLSX workflows from diagnostics to hard V1 release gates; all gates pass on the accepted baseline.
+- Promoted the public real-world DOCX/PPTX and scanned-XLSX workflows from diagnostics to hard V1 release gates.
 
 ### Scanned table to Excel
 - Added PP-StructureV3 scanned-table export to `.xlsx`, including multi-page/multi-table workbook merging with worksheet-level style, merge, dimension, hyperlink and comment preservation.
@@ -26,7 +30,7 @@ All notable changes to SolYan PDF are documented here.
 - Added regression coverage for cross-workbook OpenPyXL style copying and for the backend XLSX binary proxy.
 - Removed completed one-shot PP-Structure/Bloom fallback diagnostic workflows after their artifacts were reviewed.
 
-### Real-world PDF -> Office diagnostics
+### Real-world PDF -> Office validation
 - Added a pinned public real-world corpus covering 9 PDFs / 50 pages across DOCX, XLSX and PPTX targets, with deterministic source verification and provenance.
 - Fixed hard interoperability defects exposed by the corpus, including DOCX XML 1.0 control-character sanitation, PDF metadata BOM decoding and inherited PDF page geometry for PPTX exports.
 - Final accepted DOCX/PPTX routing baseline: DOCX 7/7 round-trip pages at 97.46% average visual similarity; PPTX 34/34 pages at 95.42%; zero page-count, unmatched-page and geometry mismatches; editable native text in all 6 public cases.
