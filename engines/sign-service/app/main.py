@@ -8,10 +8,13 @@ from fastapi.responses import Response
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
 
+from .validation import router as validation_router
+
 MAX_PDF_SIZE = int(os.getenv("SIGN_MAX_PDF_SIZE", str(100 * 1024 * 1024)))
 MAX_P12_SIZE = int(os.getenv("SIGN_MAX_P12_SIZE", str(10 * 1024 * 1024)))
 
 app = FastAPI(title="SolYan PDF Signature Service", version="0.1.0")
+app.include_router(validation_router)
 
 
 def _read_limited(upload: UploadFile, limit: int, label: str) -> bytes:
