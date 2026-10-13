@@ -1,0 +1,154 @@
+name: Signature Validation CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/sign-service/**'
+      - 'backend/app/sign_proxy.py'
+      - 'frontend/app/verify-signature/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/signature-validation-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/sign-service/**'
+      - 'backend/app/sign_proxy.py'
+      - 'frontend/app/verify-signature/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/signature-validation-ci.yml'
+
+jobs:
+  validate-signatures:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engines/sign-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install OpenSSL and qpdf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssl qpdf
+          openssl version
+          qpdf --version
+
+      - name: Install hash-verified sign-service dependencies
+        run: |
+          python -m pip install --require-hashes -r requirements.hashed.lock
+          python -m pip install --no-deps -r requirements.txt
+          python -m pip check
+
+      - name: Compile sign service
+        run: python -m compileall app
+
+      - name: Generate deterministic test certificate and base PDF
+        run: |
+          mkdir -p /tmp/solyan-sign-validation
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+            -keyout /tmp/solyan-sign-validation/key.pem \
+            -out /tmp/solyan-sign-validation/cert.pem \
+            -days 2 \
+            -subj '/CN=SolYan Signature CI/O=SolYan Test/C=VN' \
+            -addext 'keyUsage=critical,digitalSignature' \
+            -addext 'basicConstraints=critical,CA:TRUE'
+          openssl pkcs12 -export \
+            -inkey /tmp/solyan-sign-validation/key.pem \
+            -in /tmp/solyan-sign-validation/cert.pem \
+            -out /tmp/solyan-sign-validation/test.p12 \
+            -passout pass:test-pass \
+            -name 'SolYan Signature CI'
+          qpdf --empty /tmp/solyan-sign-validation/base.pdf
+
+      - name: Verify no-signature signed-signature and tamper detection
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          root = Path('/tmp/solyan-sign-validation')
+          base = root.joinpath('base.pdf').read_bytes()
+          p12 = root.joinpath('test.p12').read_bytes()
+          client = TestClient(app)
+
+          unsigned = client.post('/validate', files={'file': ('base.pdf', base, 'application/pdf')})
+          assert unsigned.status_code == 200, unsigned.text
+          unsigned_data = unsigned.json()
+          assert unsigned_data['signature_count'] == 0, unsigned_data
+          assert unsigned_data['all_intact'] is False, unsigned_data
+          assert unsigned_data['network_fetching'] is False, unsigned_data
+
+          signed = client.post(
+              '/sign/pkcs12',
+              files={
+                  'file': ('base.pdf', base, 'application/pdf'),
+                  'certificate': ('test.p12', p12, 'application/x-pkcs12'),
+              },
+              data={
+                  'passphrase': 'test-pass',
+                  'field_name': 'ValidationSignature',
+                  'reason': 'Signature validation CI',
+                  'location': 'Hanoi',
+              },
+          )
+          assert signed.status_code == 200, signed.text
+          root.joinpath('signed.pdf').write_bytes(signed.content)
+
+          validated = client.post('/validate', files={'file': ('signed.pdf', signed.content, 'application/pdf')})
+          assert validated.status_code == 200, validated.text
+          report = validated.json()
+          assert report['signature_count'] == 1, report
+          assert report['all_intact'] is True, report
+          assert report['all_cryptographically_valid'] is True, report
+          assert report['all_trusted'] is False, report
+          assert report['all_bottom_line'] is False, report
+          assert report['network_fetching'] is False, report
+          sig = report['signatures'][0]
+          assert sig['field_name'] == 'ValidationSignature', sig
+          assert sig['intact'] is True, sig
+          assert sig['cryptographically_valid'] is True, sig
+          assert sig['trusted'] is False, sig
+          assert sig['bottom_line'] is False, sig
+          assert 'SolYan Signature CI' in (sig['certificate']['subject'] or ''), sig
+          assert sig['certificate']['sha256_fingerprint'], sig
+          assert sig['digest_algorithm'], sig
+          assert sig['validation_error'] is None, sig
+
+          # Change one header byte inside the signed byte range without damaging
+          # PDF parseability. This must invalidate the signed content digest.
+          tampered = bytearray(signed.content)
+          marker = tampered.find(b'%PDF-')
+          assert marker == 0
+          version_digit = marker + 7
+          original = tampered[version_digit]
+          tampered[version_digit] = ord('6') if original != ord('6') else ord('7')
+          tampered_bytes = bytes(tampered)
+          root.joinpath('tampered.pdf').write_bytes(tampered_bytes)
+
+          tampered_result = client.post('/validate', files={'file': ('tampered.pdf', tampered_bytes, 'application/pdf')})
+          assert tampered_result.status_code == 200, tampered_result.text
+          tampered_report = tampered_result.json()
+          assert tampered_report['signature_count'] == 1, tampered_report
+          tampered_sig = tampered_report['signatures'][0]
+          assert tampered_sig['intact'] is False or tampered_sig['cryptographically_valid'] is False, tampered_sig
+          assert tampered_report['all_bottom_line'] is False, tampered_report
+
+          bad = client.post('/validate', files={'file': ('bad.pdf', b'not-a-pdf', 'application/pdf')})
+          assert bad.status_code == 400, bad.text
+
+          print('pyHanko signature validation and tamper detection ok')
+          PY
+
+          qpdf --check /tmp/solyan-sign-validation/signed.pdf
+          # Tampered header still needs to remain structurally parseable.
+          qpdf --check /tmp/solyan-sign-validation/tampered.pdf
