@@ -16,6 +16,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Browser-local N-up / multi-page-per-sheet layout with A4 portrait/landscape, custom grids, margins, borders and LTR/RTL ordering
 - Browser-local saddle-stitch booklet imposition with automatic blank padding, left/right spine, gutter and duplex/manual-pass controls
 - Browser-local Poster PDF tiling: split each source page into an X×Y grid of A3/A4/A5/Letter/Legal/Tabloid print sheets with LTR/RTL ordering
+- Browser-local split-sections: divide selected PDF pages into a rows×columns grid and export one merged PDF or separate PDF parts in a ZIP
 - Browser-local PDF crop with page-range selection and deterministic page-box updates
 - Browser-local resize/scale to A0-A6, Letter, Legal or custom page sizes with rotation-aware fitting
 - Browser-local bookmark/outline editor with Unicode titles, nested hierarchy, sibling reordering and page destinations
@@ -109,6 +110,7 @@ GitHub Actions currently verifies:
 - Real browser-local N-up generation with A4 geometry, ordering, RTL, source rotation and retained-text checks
 - Real browser-local booklet imposition with saddle-stitch order, blank padding, duplex/spine behavior, source rotation and retained-text checks
 - Real browser-local Poster PDF gate covering RTL tile order, real LTR/RTL text placement, target paper geometry, offset CropBox, 90° rotation and qpdf validity
+- Real browser-local split-sections gate covering page-selection semantics, column-major/top-to-bottom section order, merged and per-part output, offset CropBox + 90° rotation, retained text and qpdf validity
 - Real browser-local crop/resize geometry with selective page boxes, rotated source pages, A4/custom target sizes, qpdf validation and retained-text checks
 - Real browser-local bookmark/outline round-trip with Unicode titles, nested hierarchy, sibling links, page clamping, replacement/removal and qpdf object-graph validation
 - Real browser-local split-by-bookmarks gate covering outline depth, physical-page ordering, duplicate-start behavior, safe filenames, real page extraction and qpdf validation
@@ -145,6 +147,7 @@ See `docs/BENCHMARKING.md` for:
 - Blank-page removal is bounded to 100 MB / 300 pages / 700 million raster-analysis pixels. The default 10 / 99.9% threshold is configurable, and the service refuses to emit a zero-page PDF when every page is classified blank.
 - N-up, booklet, crop and page-resize operations are browser-local and bounded to 100 MB / 500 source pages. N-up/booklet/resize embed visible page content into new pages, so interactive form/annotation controls are not preserved as interactive controls.
 - Poster PDF is browser-local and bounded to 100 MB, 100 source pages and 1,000 output sheets. It normalizes visible CropBox/rotation and creates new printable pages; interactive form/annotation controls are not preserved as interactive controls.
+- Split-sections is browser-local and bounded to 100 MB, 300 source pages, an 8×8 grid and 1,000 output pieces. It rebuilds pages from visible content after CropBox/rotation normalization; interactive form/annotation controls are not preserved as interactive controls and existing digital signatures are invalidated by the rewrite.
 - The bookmark editor writes standards-based direct page destinations. It reads direct `/Dest` and `/A /GoTo` outline destinations; named or unusual destination forms that cannot be resolved are shown as page 1 instead of being guessed. Writing a new outline changes the PDF and invalidates existing digital signatures.
 - Split-by-bookmarks is bounded to 100 MB / 500 pages / 500 chapters. Child PDFs are page copies; interactive form/annotation controls and the original outline are not guaranteed to survive in each child. Named or unusual outline destinations inherit the bookmark parser boundary and may resolve to page 1.
 - Crop changes page boxes rather than securely deleting clipped content. It must not be used as a substitute for secure redaction; data outside the visible crop can remain in the PDF content streams.
