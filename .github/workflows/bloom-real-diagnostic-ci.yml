@@ -1,9 +1,9 @@
-name: Bloom Real-World PDF-to-Office Diagnostic
+name: Bloom Real-World PDF-to-Office Diagnostic v2
 
 on:
   push:
     branches:
-      - benchmark/pdf-office-real-diagnostic-v1
+      - benchmark/pdf-office-real-diagnostic-v2
     paths:
       - 'backend/app/bloom_proxy.py'
       - 'backend/app/xlsx_print.py'
@@ -299,7 +299,7 @@ jobs:
       - name: Upload real-world diagnostic artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-to-office-real-diagnostic-v1
+          name: pdf-to-office-real-diagnostic-v2
           path: |
             /tmp/pdf-to-office-real-inventory.json
             /tmp/pdf-to-office-real-report.json
