@@ -79,13 +79,15 @@ jobs:
           JSON
           qpdf --json-input /tmp/active.json /tmp/active.pdf
           qpdf --check /tmp/active.pdf
+          qpdf --encrypt inspect owner-secret 256 -- /tmp/active.pdf /tmp/active-encrypted.pdf
+          qpdf --password=inspect --check /tmp/active-encrypted.pdf
 
           cat >/tmp/clean.json <<'JSON'
           {
             "qpdf": [
               {"jsonversion": 2, "pdfversion": "1.7"},
               {
-                "obj:1 0 R": {"value": {"/Type": "/Catalog", "/Pages": "2 0 R"}},
+                "obj:1 0 R": {"value": {"/Type": "/Catalog", "/Pages": "2 0 R", "/PieceInfo": {"/Vendor": {"/A": "u:not-an-action"}}}},
                 "obj:2 0 R": {"value": {"/Type": "/Pages", "/Count": 1, "/Kids": ["3 0 R"]}},
                 "obj:3 0 R": {"value": {"/Type": "/Page", "/Parent": "2 0 R", "/MediaBox": [0, 0, 612, 792]}},
                 "trailer": {"value": {"/Root": "1 0 R", "/Size": 4}}
@@ -125,6 +127,12 @@ jobs:
           assert any(item.get('subtype') == '/Screen' for item in report['findings'])
           assert any(item.get('subtype') == '/FileAttachment' for item in report['findings'])
           assert report['findingsTruncated'] is False
+
+          encrypted = _inspect_pdf(Path('/tmp/active-encrypted.pdf'), 'inspect')
+          assert encrypted['summary']['javascript'] == 2, encrypted
+          assert encrypted['summary']['actions'] == 4, encrypted
+          encrypted_scripts = {item.get('name'): item for item in encrypted['javascript']}
+          assert "console.println('stream');" in encrypted_scripts['stream-js']['script']
           PY
 
       - name: Verify clean PDF and route registration
@@ -140,6 +148,7 @@ jobs:
           assert report['hasActiveContent'] is False, report
           assert report['summary']['javascript'] == 0
           assert report['summary']['actions'] == 0
+          assert report['summary']['triggers'] == 0
           assert report['findings'] == []
 
           paths = {route.path for route in app.routes}
