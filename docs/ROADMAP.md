@@ -119,6 +119,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add browser-local PDF → one long page with vector/text preservation and a bounded 14,400 pt compatibility ceiling
 - [x] Extend PDF split with exact pages-per-part mode and clearly labeled best-effort target-size mode, returning parts in one ZIP
 - [x] Add bounded qpdf embedded-file management: list, add, extract and remove attachments
+- [x] Extend AES-256 protection with qpdf printing/modification/extraction permissions and generate a distinct random owner password when omitted
 - [ ] Evaluate PDF sanitization only if JavaScript/actions/links/metadata/embedded-file removal can be implemented and regression-tested without misleading partial coverage
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
@@ -171,6 +172,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Real browser-local overlay/single-page gate with qpdf validity, page geometry, rotation handling and retained-text checks
 - [x] Real browser-local advanced-split gate with exact page grouping, bounded target-size estimation, qpdf validity and retained-text checks
 - [x] Real qpdf 11.9 attachment round-trip gate covering add/list/extract/remove and binary payload equality
+- [x] Real qpdf 11.9 AES-256 permission gate covering deny-all, permissive defaults, low-print/form-only rights, user-vs-owner identity and user-password decrypt compatibility
 - [x] OCR XLSX binary proxy regression coverage
 - [x] Private-network Ping blocked by default
 - [x] Untrusted proxy IP headers ignored by default
