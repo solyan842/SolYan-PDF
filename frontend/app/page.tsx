@@ -4,6 +4,7 @@ const tools = [
   { href: '/verify-signature', title: 'Kiểm tra chữ ký số', description: 'Xác minh integrity, crypto validity, trust chain và thay đổi sau ký bằng pyHanko.', local: false, badge: 'pyHanko' },
   { href: '/sanitize', title: 'Làm sạch PDF', description: 'Loại JavaScript/actions, link, metadata và file đính kèm theo gate regression qpdf JSON.', local: false, badge: 'qpdf JSON' },
   { href: '/remove-annotations', title: 'Xóa comment / annotation', description: 'Xóa comment/markup an toàn, giữ Widget/Form; tùy chọn xóa mọi annotation trừ form.', local: false, badge: 'qpdf JSON' },
+  { href: '/bookmarks', title: 'Bookmark / Mục lục PDF', description: 'Đọc, thêm, lồng cấp, sắp xếp và gán trang đích cho outline ngay trên thiết bị.', local: true },
   { href: '/pdfa', title: 'PDF/A', description: 'Tạo PDF/A bằng internal validator, không fallback Ghostscript.', local: false, badge: 'OCRmyPDF' },
   { href: '/workflow', title: 'Workflow PDF', description: 'Chạy nhiều thao tác local trong một lần xử lý.', local: true },
   { href: '/pdf-to-office', title: 'PDF → Office', description: 'DOCX/PPTX theo LibreOffice-first; XLSX theo Bloom → PP-StructureV3 fallback.', local: false, badge: 'V1 Gate' },
