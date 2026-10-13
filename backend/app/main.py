@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from .archive_proxy import router as archive_router
+from .attachments import router as attachments_router
 from .bloom_proxy import router as bloom_router
 from .extract_images import router as extract_images_router
 from .network import router as network_router
@@ -47,6 +48,7 @@ app.include_router(archive_router)
 app.include_router(bloom_router)
 app.include_router(extract_images_router)
 app.include_router(remove_blank_pages_router)
+app.include_router(attachments_router)
 
 
 def _require_qpdf() -> None:
