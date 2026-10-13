@@ -127,6 +127,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add browser-local Poster PDF tiling with X×Y grids, A3/A4/A5/Letter/Legal/Tabloid sheets, RTL ordering and CropBox/rotation-aware visible-page normalization
 - [x] Add browser-local split-sections with all/custom/except-first/except-last page selection, rows×columns grids, merged-PDF or per-part ZIP output, CropBox/rotation normalization and bounded regression coverage
 - [x] Add bounded qpdf JSON active-content inspector for reachable JavaScript/actions/triggers, active annotations and attachment references, including direct/stream JavaScript display without execution, encrypted input support and dead-object exclusion
+- [x] Add bounded qpdf JSON Image XObject removal from inherited page resources and nested Form XObject resources while preserving non-image XObjects, text/vector content and original page/Form content streams; inline `BI … ID … EI` images remain an explicit boundary
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
@@ -174,6 +175,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Real qpdf JSON active-content inspection gate covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input, harmless `/A` false-positive rejection and dead-object exclusion
 - [x] Real qpdf JSON annotation-removal gate covering comment/markup cleanup, optional all-non-widget cleanup and Widget/AcroForm preservation
 - [x] Real Poppler embedded-image extraction gate with bounded Image XObject / ZIP validation
+- [x] Real qpdf JSON image-removal gate covering inherited page resources, direct/nested Form Image XObjects, non-image Form preservation, unchanged content streams, retained text, zero remaining `pdfimages`, qpdf validity, Poppler renderability and idempotence
 - [x] Real conservative blank-page removal gate across blank, vector-content and text-content pages
 - [x] Real browser-local N-up gate with A4 geometry, ordering, RTL, source rotation and retained text checks
 - [x] Real browser-local booklet gate with saddle-stitch order, blank padding, duplex/spine behavior, source rotation and retained text checks
