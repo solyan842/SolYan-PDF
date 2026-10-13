@@ -76,6 +76,12 @@ export function planBookletSides(pageCount: number, options: BookletOptions): Bo
   return sides;
 }
 
+export function visualBookletSide(side: BookletSide, spine: BookletSpine) {
+  return spine === 'right'
+    ? { left: side.right, right: side.left }
+    : { left: side.left, right: side.right };
+}
+
 function sourceDescriptor(page: { getCropBox(): { width: number; height: number }; getRotation(): { angle: number } }): NUpSourcePage {
   const crop = page.getCropBox();
   return { width: crop.width, height: crop.height, rotation: page.getRotation().angle };
@@ -123,8 +129,7 @@ export async function createBookletPdf(sourceBytes: ArrayBuffer | Uint8Array, op
 
   for (const side of sides) {
     const outputPage = output.addPage([pageWidth, pageHeight]);
-    const visualLeft = options.spine === 'right' ? side.right : side.left;
-    const visualRight = options.spine === 'right' ? side.left : side.right;
+    const visual = visualBookletSide(side, options.spine);
 
     const drawCell = (sourceIndex: number | null, box: typeof leftBox) => {
       if (sourceIndex !== null) {
@@ -149,8 +154,8 @@ export async function createBookletPdf(sourceBytes: ArrayBuffer | Uint8Array, op
       }
     };
 
-    drawCell(visualLeft, leftBox);
-    drawCell(visualRight, rightBox);
+    drawCell(visual.left, leftBox);
+    drawCell(visual.right, rightBox);
   }
 
   return output.save({ useObjectStreams: true });
