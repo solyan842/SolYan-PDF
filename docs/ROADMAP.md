@@ -173,6 +173,8 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] Remove completed one-shot release publisher workflows after successful publication
 - [x] Publish PDF-to-Office compatibility patch release `v0.1.2`
 - [x] Remove completed `v0.1.2` one-shot publisher after successful publication
+- [x] Publish PDF-to-Office V1-gated patch release `v0.1.3`
+- [x] Remove completed `v0.1.3` one-shot publisher after successful publication
 
 ## Release decisions / external inputs still required
 
