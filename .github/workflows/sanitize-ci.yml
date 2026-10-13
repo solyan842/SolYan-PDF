@@ -156,19 +156,15 @@ jobs:
                 "trailer": {
                   "value": {
                     "/Root": "1 0 R",
-                    "/Info": "12 0 R"
+                    "/Info": "12 0 R",
+                    "/Size": 13
                   }
                 }
               }
             ]
           }
           JSON
-          qpdf --json-input /tmp/malicious.json /tmp/malicious-raw.pdf
-          set +e
-          qpdf /tmp/malicious-raw.pdf /tmp/malicious.pdf
-          status=$?
-          set -e
-          test "$status" -eq 0 -o "$status" -eq 3
+          qpdf --json-input /tmp/malicious.json /tmp/malicious.pdf
           qpdf --check /tmp/malicious.pdf
           qpdf --list-attachments /tmp/malicious.pdf | grep -q 'payload.bin'
           qpdf --json-output /tmp/malicious.pdf /tmp/before.json
