@@ -16,9 +16,11 @@ router = APIRouter(prefix="/experimental", tags=["Experimental conversion"])
 BLOOM_SERVICE_URL = os.getenv("BLOOM_SERVICE_URL", "http://bloom-service:8787").rstrip("/")
 BLOOM_API_KEY = os.getenv("BLOOM_API_KEY", "")
 OCR_SERVICE_URL = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8010").rstrip("/")
+OFFICE_SERVICE_URL = os.getenv("OFFICE_SERVICE_URL", "http://office-service:8020").rstrip("/")
 OCR_XLSX_FALLBACK_TIMEOUT_SECONDS = float(os.getenv("OCR_XLSX_FALLBACK_TIMEOUT_SECONDS", "900"))
 MAX_FILE_SIZE = int(os.getenv("BLOOM_PROXY_MAX_FILE_SIZE", str(100 * 1024 * 1024)))
 TARGETS = {"docx", "xlsx", "pptx"}
+MODES = {"auto", "bloom", "libreoffice"}
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _BLOOM_NO_TABLES = "No logical tables detected in document."
 _SHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -122,6 +124,39 @@ def _try_ocr_xlsx(data: bytes, filename: str) -> tuple[bytes, str, str, dict[str
     return response.content, disposition, media_type, forwarded
 
 
+def _libreoffice_pdf_to_office(data: bytes, filename: str, target: str) -> Response:
+    if target not in {"docx", "pptx"}:
+        raise HTTPException(status_code=400, detail="LibreOffice mode supports docx or pptx")
+    try:
+        with httpx.Client(timeout=httpx.Timeout(240.0, connect=10.0)) as client:
+            response = client.post(
+                f"{OFFICE_SERVICE_URL}/convert/pdf-to-office",
+                files={"file": (filename, data, "application/pdf")},
+                data={"target": target},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="LibreOffice PDF import service is unavailable") from exc
+
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("detail", response.text)
+        except ValueError:
+            detail = response.text
+        raise HTTPException(status_code=response.status_code, detail=str(detail)[:2000])
+
+    disposition = response.headers.get("content-disposition", f'attachment; filename="solyan-converted.{target}"')
+    media_type = response.headers.get("content-type", "application/octet-stream").split(";", 1)[0]
+    engine = response.headers.get("x-solyan-conversion-engine", "LibreOffice-PDF-import")
+    return Response(
+        content=response.content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": disposition,
+            "X-SolYan-Conversion-Engine": engine,
+        },
+    )
+
+
 @router.get("/bloom/health")
 def bloom_health() -> dict:
     try:
@@ -136,14 +171,22 @@ def bloom_health() -> dict:
 def pdf_to_office(
     file: UploadFile = File(...),
     target: str = Form(default="docx"),
+    mode: str = Form(default="auto"),
 ) -> Response:
     if target not in TARGETS:
         raise HTTPException(status_code=400, detail="Target must be docx, xlsx or pptx")
+    if mode not in MODES:
+        raise HTTPException(status_code=400, detail="Mode must be auto, bloom or libreoffice")
+
     data = file.file.read(MAX_FILE_SIZE + 1)
     if len(data) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="PDF exceeds 100 MB limit")
     if not data.startswith(b"%PDF-"):
         raise HTTPException(status_code=400, detail="Uploaded file is not a PDF")
+
+    filename = file.filename or "document.pdf"
+    if mode == "libreoffice":
+        return _libreoffice_pdf_to_office(data, filename, target)
 
     # Resolve print geometry from the original PDF before conversion. The XLSX
     # normalizer only runs when qpdf can map page 1 to a recognized paper size;
@@ -155,7 +198,7 @@ def pdf_to_office(
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0), headers=headers) as client:
             created = client.post(
                 f"{BLOOM_SERVICE_URL}/convert",
-                files={"file": (file.filename or "document.pdf", data, "application/pdf")},
+                files={"file": (filename, data, "application/pdf")},
                 data={"target": target},
             )
             if created.status_code != 202:
@@ -177,12 +220,15 @@ def pdf_to_office(
                     content = result.content
                     disposition = result.headers.get("content-disposition", f'attachment; filename="solyan-converted.{target}"')
                     media_type = result.headers.get("content-type", "application/octet-stream")
-                    response_headers: dict[str, str] = {"Content-Disposition": disposition}
+                    response_headers: dict[str, str] = {
+                        "Content-Disposition": disposition,
+                        "X-SolYan-Conversion-Engine": "Bloom",
+                    }
 
                     if target == "xlsx":
                         fallback = None
                         if _is_bloom_no_tables_placeholder(content):
-                            fallback = _try_ocr_xlsx(data, file.filename or "document.pdf")
+                            fallback = _try_ocr_xlsx(data, filename)
                         if fallback is not None:
                             content, disposition, media_type, ocr_headers = fallback
                             response_headers = {
@@ -193,7 +239,6 @@ def pdf_to_office(
                         else:
                             if xlsx_print_setup is not None:
                                 content = apply_fit_to_width(content, *xlsx_print_setup)
-                            response_headers["X-SolYan-Conversion-Engine"] = "Bloom"
 
                     return Response(
                         content=content,
