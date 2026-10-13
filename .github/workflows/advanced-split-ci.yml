@@ -94,7 +94,7 @@ jobs:
             const onePart = await splitByApproxSize(bytes, 100 * 1024 * 1024);
             assert.equal(onePart.length, 1);
             assert.deepEqual(onePart[0].indexes, [0,1,2,3,4,5,6]);
-            assert.throws(() => splitByPageCount(bytes, 0), /Số trang mỗi phần/);
+            await assert.rejects(() => splitByPageCount(bytes, 0), /Số trang mỗi phần/);
             console.log('advanced split generation ok');
           })().catch((error) => { console.error(error); process.exit(1); });
           NODE
