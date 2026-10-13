@@ -68,6 +68,9 @@ export default function NUpPage() {
     }
   }
 
+  const invalidGrid = !Number.isInteger(rows) || rows < 1 || rows > 8 || !Number.isInteger(columns) || columns < 1 || columns > 8;
+  const invalidMargins = !Number.isFinite(outerMargin) || outerMargin < 0 || outerMargin > 144 || !Number.isFinite(innerMargin) || innerMargin < 0 || innerMargin > 72;
+
   return <main className="shell">
     <header className="topbar"><a className="brand" href="/">SolYan PDF</a><div className="privacy-pill">Local · Không upload PDF</div></header>
     <section className="hero compact-hero">
@@ -77,8 +80,8 @@ export default function NUpPage() {
       <label className="picker"><input type="file" accept="application/pdf,.pdf" onChange={onFile}/><span>+ Chọn file PDF</span></label>
     </section>
     <section className="workspace form-workspace">
-      <div className="row-actions">{presets.map((preset) => <button className="ghost" type="button" key={preset.label} onClick={() => usePreset(preset)} disabled={busy}>{preset.label}</button>)}</div>
-      <div className="field-grid">
+      <div className="inline-controls">{presets.map((preset) => <button className="ghost" type="button" key={preset.label} onClick={() => usePreset(preset)} disabled={busy}>{preset.label}</button>)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
         <label className="field"><span>Số hàng</span><input type="number" min="1" max="8" step="1" value={rows} onChange={(e)=>setRows(Number(e.target.value))}/></label>
         <label className="field"><span>Số cột</span><input type="number" min="1" max="8" step="1" value={columns} onChange={(e)=>setColumns(Number(e.target.value))}/></label>
         <label className="field"><span>Khổ A4</span><select value={orientation} onChange={(e)=>setOrientation(e.target.value as NUpOrientation)}><option value="portrait">Dọc</option><option value="landscape">Ngang</option></select></label>
@@ -91,7 +94,7 @@ export default function NUpPage() {
       {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong></p>}
       <p className="hint">Giới hạn: 100 MB và 500 trang nguồn. N-up nhúng nội dung trang vào tờ mới nên annotation/form tương tác không được giữ như form tương tác.</p>
       {error && <div className="error">{error}</div>}
-      <button className="merge-button" type="button" onClick={run} disabled={!file || busy || rows < 1 || rows > 8 || columns < 1 || columns > 8}>{busy ? 'Đang tạo N-up…' : `Tạo ${rows * columns}-up PDF`}</button>
+      <button className="merge-button" type="button" onClick={run} disabled={!file || busy || invalidGrid || invalidMargins}>{busy ? 'Đang tạo N-up…' : `Tạo ${rows * columns}-up PDF`}</button>
     </section>
   </main>;
 }
