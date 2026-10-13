@@ -2,7 +2,7 @@
 
 Status: **REQUIRED / REPO SOURCE OF TRUTH**
 
-This file exists to prevent stale-state work, repeated fixes, CI diagnosis without real logs, accidental `main` edits, benchmark weakening, and false success reports.
+This file exists to prevent stale-state work, repeated fixes, CI diagnosis without real logs, accidental `main` edits, benchmark weakening, false success reports, and unnecessary custom implementation when mature open-source building blocks already exist.
 
 Repository state always wins over conversation memory, handoff notes, screenshots, or previous assistant claims.
 
@@ -212,3 +212,55 @@ Use precise language:
 - `fixed` only when the relevant regression or reproduction passes.
 
 If only part of a task is complete, state exactly what passed and what remains.
+
+## 12. OSS-FIRST / SPEED GATE — REUSE BEFORE REWRITE
+
+For every non-trivial subsystem, hard conversion path, parser, renderer, OCR/layout problem, Office export issue, or repeated fidelity defect, **do not begin with custom implementation**.
+
+Before writing substantial new code or applying another deep patch to one engine:
+
+1. search GitHub/current upstream projects for mature open-source implementations that already solve the same layer;
+2. compare at least the most relevant candidates on capability, license, maintenance activity, integration cost, platform fit, output fidelity, and failure behavior;
+3. prefer **adapter / orchestration / routing / fallback** around proven engines over reimplementing the engine inside SolYan-PDF;
+4. reuse existing project APIs/CLIs/libraries with thin adapters when that is faster and safer;
+5. only custom-code the missing delta that cannot reasonably be obtained from an existing maintained project;
+6. record any important engine choice or rejection in repository code/docs/tests so the same research is not repeated later.
+
+For PDF/OCR/Office work, the default comparison set should include relevant maintained projects such as **Stirling-PDF, PaddleOCR, Docling, MinerU, Camelot**, plus any more specialized active project discovered for the exact conversion type. This list is a baseline, not a limit.
+
+### Mandatory anti-rabbit-hole rule
+
+If one engine requires repeated case-specific fixes, expanding patches, or multiple consecutive rounds of fidelity repair, stop adding patches long enough to re-evaluate whether:
+
+- another OSS engine already handles that document class better;
+- a classifier/router can send that class to a better engine;
+- a high-fidelity visual fallback can satisfy the user-visible requirement;
+- the problematic path should remain experimental instead of blocking the whole release.
+
+Do not let one experimental engine become the critical path for the entire product when a reliable fallback exists.
+
+### PDF→Office routing principle
+
+PDF→Office should be treated as a **multi-engine routing problem**, not as a requirement for Bloom or any single converter to solve every document class.
+
+Prefer this order:
+
+1. classify the input document/page type;
+2. route to the strongest available engine for that class;
+3. validate output with real corpus/roundtrip metrics;
+4. fall back to a safer engine or visual-preservation path when editable fidelity is insufficient;
+5. keep the weaker/editable path labeled experimental until evidence supports promotion.
+
+For V1, do not delay the whole release solely to chase perfect editability on every PDF→Office case when a clearly labeled, high-fidelity fallback provides correct user-visible output.
+
+### Speed discipline
+
+Repository work should optimize for **verified user value per change**, not amount of custom code.
+
+Forbidden:
+
+- spending long cycles rebuilding capabilities already available in mature OSS;
+- continuing a deep patch series without checking alternative engines;
+- treating a single upstream tool as mandatory when orchestration would be simpler;
+- researching the same upstream alternatives again because the decision was never written into the repo;
+- expanding scope merely to make one engine universal.
