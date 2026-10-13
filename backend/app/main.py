@@ -17,6 +17,7 @@ from .extract_images import router as extract_images_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
+from .remove_annotations import router as remove_annotations_router
 from .remove_blank_pages import router as remove_blank_pages_router
 from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
@@ -47,6 +48,9 @@ app.add_middleware(
         "X-SolYan-Sanitize-Metadata-Removed",
         "X-SolYan-Sanitize-Embedded-Files-Removed",
         "X-SolYan-Sanitize-Active-Annotations-Removed",
+        "X-SolYan-Comments-Removed",
+        "X-SolYan-Other-Annotations-Removed",
+        "X-SolYan-Widgets-Preserved",
     ],
 )
 app.include_router(network_router)
@@ -59,6 +63,7 @@ app.include_router(extract_images_router)
 app.include_router(remove_blank_pages_router)
 app.include_router(attachments_router)
 app.include_router(sanitize_router)
+app.include_router(remove_annotations_router)
 
 
 def _require_qpdf() -> None:
@@ -118,8 +123,6 @@ def protect_pdf(
         raise HTTPException(status_code=422, detail="modify_mode must be one of: none, assembly, form, annotate, all")
 
     data = _read_pdf(file)
-    # Restrictions are owner-vs-user semantics. Reusing the user password as the
-    # owner password would let anyone who can open the file bypass restrictions.
     owner = owner_password or secrets.token_urlsafe(32)
     return _run_qpdf(
         data,
