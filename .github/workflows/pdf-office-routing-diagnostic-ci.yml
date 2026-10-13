@@ -1,0 +1,239 @@
+name: PDF-to-Office LibreOffice Routing Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/pdf-office-v1-routing
+    paths:
+      - 'backend/app/bloom_proxy.py'
+      - 'backend/app/office_proxy.py'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
+      - '.github/workflows/pdf-office-routing-diagnostic-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REAL_MANIFEST: benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json
+
+jobs:
+  materialize-corpus:
+    name: corpus / ${{ matrix.case_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        case_id:
+          - docx-google-doc
+          - docx-multicolumn
+          - docx-libreoffice-images
+          - pptx-commons-copyright
+          - pptx-what-is-cc
+          - pptx-copyright-laws
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install corpus verification dependencies
+        run: pip install pypdf==6.1.1 cryptography==46.0.3
+
+      - name: Fetch, verify and materialize one pinned document
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/real-case-stage"
+          mkdir -p "$stage/corpus" "$stage/inventory"
+          python benchmarks/fetch_pdf_to_office_real_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --case-id "${{ matrix.case_id }}" \
+            --output-dir "$stage/corpus" \
+            --output-inventory "$stage/inventory/${{ matrix.case_id }}.json"
+
+      - name: Upload verified document artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-office-routing-case-${{ matrix.case_id }}
+          path: ${{ runner.temp }}/real-case-stage/
+          if-no-files-found: error
+          retention-days: 7
+
+  diagnostic:
+    name: LibreOffice DOCX/PPTX routing diagnostic
+    needs: materialize-corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install benchmark dependencies
+        run: pip install -r benchmarks/requirements.txt
+
+      - name: Download verified corpus artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-office-routing-case-*
+          path: /tmp/pdf-office-routing-stage
+          merge-multiple: true
+
+      - name: Verify assembled target subset
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from pypdf import PdfReader
+
+          root = Path('/tmp/pdf-office-routing-stage')
+          manifest = json.loads(Path('benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json').read_text())
+          wanted = {'docx', 'pptx'}
+          cases = [case for case in manifest['cases'] if case['target'] in wanted]
+          assert len(cases) == 6, [case['id'] for case in cases]
+          pages = 0
+          for case in cases:
+              pdf_path = root / 'corpus' / case['filename']
+              assert pdf_path.is_file(), pdf_path
+              pages += len(PdfReader(pdf_path).pages)
+          assert pages == 41, pages
+          print(json.dumps({'cases': len(cases), 'pages': pages}, indent=2))
+          PY
+
+      - name: Build Office and backend images
+        run: |
+          docker build -t solyan-office-routing engines/office-service
+          docker build -t solyan-backend-routing backend
+
+      - name: Start isolated routing stack
+        run: |
+          docker network create solyan-office-routing
+          docker run -d --name office-routing --network solyan-office-routing solyan-office-routing
+          docker run -d --name backend-routing --network solyan-office-routing -p 8000:8000 \
+            -e OFFICE_SERVICE_URL=http://office-routing:8020 \
+            solyan-backend-routing
+
+      - name: Wait for backend and Office health
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+
+          urls = {
+              'backend': 'http://127.0.0.1:8000/health',
+              'office': 'http://127.0.0.1:8000/office/health',
+          }
+          deadline = time.monotonic() + 180
+          pending = dict(urls)
+          while pending and time.monotonic() < deadline:
+              for name, url in list(pending.items()):
+                  try:
+                      with urllib.request.urlopen(url, timeout=5) as response:
+                          if 200 <= response.status < 300:
+                              print(name, response.read().decode('utf-8', 'replace'))
+                              pending.pop(name)
+                  except Exception as exc:
+                      print('waiting', name, type(exc).__name__, exc)
+              if pending:
+                  time.sleep(3)
+          if pending:
+              raise SystemExit(f'Health checks timed out: {sorted(pending)}')
+          PY
+
+      - name: Run LibreOffice routing diagnostic with preserved log
+        run: |
+          set +e
+          set -o pipefail
+          PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
+            --manifest "$REAL_MANIFEST" \
+            --corpus-dir /tmp/pdf-office-routing-stage/corpus \
+            --api http://127.0.0.1:8000 \
+            --mode libreoffice \
+            --target docx \
+            --target pptx \
+            --output /tmp/pdf-office-routing-report.json \
+            2>&1 | tee /tmp/pdf-office-routing.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > /tmp/pdf-office-routing.exit
+          echo "benchmark_exit_code=$status"
+          exit 0
+
+      - name: Upload diagnostic execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-office-routing-execution
+          path: |
+            /tmp/pdf-office-routing.log
+            /tmp/pdf-office-routing.exit
+            /tmp/pdf-office-routing-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce benchmark process result
+        run: |
+          set -euo pipefail
+          status="$(cat /tmp/pdf-office-routing.exit)"
+          if [ "$status" -ne 0 ]; then
+            echo "Benchmark process failed with exit code $status"
+            tail -n 250 /tmp/pdf-office-routing.log || true
+            exit "$status"
+          fi
+
+      - name: Validate routing report shape
+        run: |
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/pdf-office-routing-report.json').read_text())
+          results = report['results']
+          summary = report['summary']
+          assert report['mode'] == 'libreoffice', report
+          assert report['selected_targets'] == ['docx', 'pptx'], report
+          assert len(results) == 6, len(results)
+          assert Counter(item['target'] for item in results) == {'docx': 3, 'pptx': 3}
+          assert summary['engines'] == {'LibreOffice-PDF-import': 6}, summary
+          assert report['failures'] == [], report
+          for item in results:
+              assert item['conversion_engine'] == 'LibreOffice-PDF-import', item
+              assert item['office_bytes'] > 0, item
+              assert item['roundtrip_pdf_bytes'] > 0, item
+              assert item['source_pages'] >= 1, item
+              assert item['roundtrip_pages'] >= 1, item
+              assert 0.0 <= item['average_similarity'] <= 100.0, item
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Upload routing diagnostic report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-office-routing-report
+          path: /tmp/pdf-office-routing-report.json
+          retention-days: 30
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: |
+          for name in office-routing backend-routing; do
+            echo "===== $name ====="
+            docker logs "$name" || true
+          done
+
+      - name: Stop routing stack
+        if: always()
+        run: |
+          docker rm -f backend-routing office-routing 2>/dev/null || true
+          docker network rm solyan-office-routing 2>/dev/null || true
