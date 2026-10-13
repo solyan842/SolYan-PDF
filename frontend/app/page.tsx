@@ -17,6 +17,7 @@ const tools = [
   { href: '/n-up', title: 'N-up · Nhiều trang/tờ', description: 'Xếp nhiều trang lên mỗi tờ A4 với grid, margin, thứ tự và hướng đọc tùy chỉnh.', local: true },
   { href: '/booklet', title: 'Booklet · Đóng ghim giữa', description: 'Dàn saddle-stitch 2-up với thứ tự trang, gutter, gáy trái/phải và duplex.', local: true },
   { href: '/poster', title: 'Poster PDF · In ghép nhiều tờ', description: 'Chia mỗi trang lớn thành lưới A3/A4/A5/Letter/Legal/Tabloid để in và ghép poster.', local: true },
+  { href: '/split-sections', title: 'Chia trang thành Section', description: 'Chia trang được chọn thành lưới hàng × cột rồi xuất một PDF hoặc nhiều file trong ZIP.', local: true },
   { href: '/crop', title: 'Crop PDF', description: 'Cắt page boxes theo lề và phạm vi trang, giữ vector/text và rotation.', local: true },
   { href: '/resize-pages', title: 'Resize / Scale trang', description: 'Đặt nội dung vào khổ A0–A6, Letter, Legal hoặc kích thước tùy chỉnh.', local: true },
   { href: '/overlay', title: 'Overlay PDF', description: 'Chồng một PDF lên PDF nền theo trang hoặc lặp trang đầu, có opacity/margin.', local: true },
