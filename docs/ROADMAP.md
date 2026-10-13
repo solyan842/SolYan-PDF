@@ -121,6 +121,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add bounded qpdf embedded-file management: list, add, extract and remove attachments
 - [x] Extend AES-256 protection with qpdf printing/modification/extraction permissions and generate a distinct random owner password when omitted
 - [x] Add bounded qpdf JSON sanitization with independent regression-tested removal of JavaScript/actions/active annotations, link annotations, Info/XMP metadata and EmbeddedFiles/AF/FileAttachment structures; selective mode must preserve unselected categories and the product explicitly does not claim antivirus/universal exploit coverage
+- [x] Add form-safe qpdf JSON comment/annotation removal: safe mode removes standard markup/comment subtypes while preserving Widget/AcroForm, Link and FileAttachment; optional all-non-widget mode removes every annotation except Widget
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
@@ -165,6 +166,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Backend/qpdf CI
 - [x] Real qpdf smoke coverage for web optimization, flattening and image recompression routes
 - [x] Real qpdf JSON sanitization gate covering catalog/page actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures and selective-mode preservation
+- [x] Real qpdf JSON annotation-removal gate covering comment/markup cleanup, optional all-non-widget cleanup and Widget/AcroForm preservation
 - [x] Real Poppler embedded-image extraction gate with bounded Image XObject / ZIP validation
 - [x] Real conservative blank-page removal gate across blank, vector-content and text-content pages
 - [x] Real browser-local N-up gate with A4 geometry, ordering, RTL, source rotation and retained text checks
