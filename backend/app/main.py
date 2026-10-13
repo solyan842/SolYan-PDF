@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import subprocess
 import tempfile
 from pathlib import Path
@@ -20,6 +21,8 @@ from .remove_blank_pages import router as remove_blank_pages_router
 from .sign_proxy import router as sign_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
+PRINT_MODES = {"none", "low", "full"}
+MODIFY_MODES = {"none", "assembly", "form", "annotate", "all"}
 
 app = FastAPI(title="SolYan PDF API", version="0.1.4")
 app.add_middleware(
@@ -98,10 +101,33 @@ def protect_pdf(
     file: UploadFile = File(...),
     password: str = Form(..., min_length=1, max_length=128),
     owner_password: str | None = Form(default=None, max_length=128),
+    print_mode: str = Form(default="full"),
+    modify_mode: str = Form(default="all"),
+    allow_extract: bool = Form(default=True),
 ) -> Response:
+    if print_mode not in PRINT_MODES:
+        raise HTTPException(status_code=422, detail="print_mode must be one of: none, low, full")
+    if modify_mode not in MODIFY_MODES:
+        raise HTTPException(status_code=422, detail="modify_mode must be one of: none, assembly, form, annotate, all")
+
     data = _read_pdf(file)
-    owner = owner_password or password
-    return _run_qpdf(data, ["--encrypt", password, owner, "256", "--"], "solyan-protected.pdf")
+    # Restrictions are owner-vs-user semantics. Reusing the user password as the
+    # owner password would let anyone who can open the file bypass restrictions.
+    owner = owner_password or secrets.token_urlsafe(32)
+    return _run_qpdf(
+        data,
+        [
+            "--encrypt",
+            password,
+            owner,
+            "256",
+            f"--print={print_mode}",
+            f"--modify={modify_mode}",
+            f"--extract={'y' if allow_extract else 'n'}",
+            "--",
+        ],
+        "solyan-protected.pdf",
+    )
 
 
 @app.post("/pdf/unlock")
