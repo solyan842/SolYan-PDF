@@ -71,7 +71,7 @@ export default function RemoveImagesPage() {
 
     <section className="workspace form-workspace">
       {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong></p>}
-      <p className="hint">Giới hạn: 100 MB, tối đa 2.000 trang và 20.000 resource dictionaries. Công cụ xử lý resource kế thừa và Form XObject lồng nhau mà không rasterize trang.</p>
+      <p className="hint">Giới hạn: 100 MB, tối đa 2.000 trang, 10.000 nút page tree và 20.000 resource dictionaries. Công cụ xử lý resource kế thừa và Form XObject lồng nhau mà không rasterize trang.</p>
       <p className="hint"><strong>Boundary:</strong> công cụ này xóa ảnh dạng PDF Image XObject. Inline image viết trực tiếp trong content stream bằng <code>BI … ID … EI</code> chưa nằm trong phạm vi V1.2 này.</p>
       <p className="hint">Thay đổi cấu trúc PDF sẽ làm chữ ký số hiện có không còn hợp lệ. Nếu chỉ muốn lấy ảnh ra mà không sửa PDF, dùng <a href="/extract-images">Trích xuất ảnh nhúng</a>.</p>
       {result && <div className="success">{result}</div>}
