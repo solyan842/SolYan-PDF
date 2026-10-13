@@ -1,0 +1,129 @@
+name: Split by Bookmarks CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/lib/bookmarks.ts'
+      - 'frontend/lib/chapter-split.ts'
+      - 'frontend/lib/pdf-client.ts'
+      - 'frontend/app/split-by-bookmarks/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/split-by-bookmarks-ci.yml'
+      - 'docs/ROADMAP.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/lib/bookmarks.ts'
+      - 'frontend/lib/chapter-split.ts'
+      - 'frontend/lib/pdf-client.ts'
+      - 'frontend/app/split-by-bookmarks/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/split-by-bookmarks-ci.yml'
+      - 'docs/ROADMAP.md'
+
+jobs:
+  split-by-bookmarks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Install qpdf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf
+          qpdf --version
+
+      - name: Compile bookmark and chapter split helpers
+        run: |
+          rm -rf .tmp-chapter-split
+          npx tsc lib/bookmarks.ts lib/pdf-client.ts lib/chapter-split.ts \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --esModuleInterop \
+            --skipLibCheck \
+            --noEmit false \
+            --outDir .tmp-chapter-split
+
+      - name: Verify chapter planning and real split PDFs
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { PDFDocument, StandardFonts } = require('pdf-lib');
+          const { setPdfBookmarks } = require('./.tmp-chapter-split/bookmarks.js');
+          const { planBookmarkChapters, splitPdfByBookmarks, chapterFilename } = require('./.tmp-chapter-split/chapter-split.js');
+
+          (async () => {
+            const source = await PDFDocument.create();
+            const font = await source.embedFont(StandardFonts.Helvetica);
+            for (let i = 0; i < 6; i += 1) {
+              const page = source.addPage([300, 200]);
+              page.drawText(`PAGE ${i + 1}`, { x: 20, y: 100, size: 16, font });
+            }
+            const sourceBytes = await source.save();
+            const bookmarks = [
+              {
+                title: 'Phần Một', pageNumber: 1, children: [
+                  { title: 'Chương 1.1', pageNumber: 2, children: [] },
+                  { title: 'Chương 1.2', pageNumber: 4, children: [] },
+                ],
+              },
+              {
+                title: 'Phần Hai', pageNumber: 5, children: [
+                  { title: 'Cùng trang', pageNumber: 5, children: [] },
+                ],
+              },
+            ];
+            const outlined = await setPdfBookmarks(sourceBytes, bookmarks);
+
+            assert.deepEqual(planBookmarkChapters(bookmarks, 6, 0, false), [
+              { title: 'Phần Một', startPage: 1, endPage: 4, depth: 0 },
+              { title: 'Phần Hai', startPage: 5, endPage: 6, depth: 0 },
+            ]);
+            assert.deepEqual(planBookmarkChapters(bookmarks, 6, 1, false), [
+              { title: 'Phần Một', startPage: 1, endPage: 1, depth: 0 },
+              { title: 'Chương 1.1', startPage: 2, endPage: 3, depth: 1 },
+              { title: 'Chương 1.2', startPage: 4, endPage: 4, depth: 1 },
+              { title: 'Phần Hai · Cùng trang', startPage: 5, endPage: 6, depth: 0 },
+            ]);
+            assert.deepEqual(planBookmarkChapters(bookmarks, 6, 1, true), [
+              { title: 'Phần Một', startPage: 1, endPage: 1, depth: 0 },
+              { title: 'Chương 1.1', startPage: 2, endPage: 3, depth: 1 },
+              { title: 'Chương 1.2', startPage: 4, endPage: 4, depth: 1 },
+              { title: 'Phần Hai', startPage: 5, endPage: 5, depth: 0 },
+              { title: 'Cùng trang', startPage: 5, endPage: 6, depth: 1 },
+            ]);
+            assert.equal(chapterFilename(0, 'A/B:C*D?', 12), '01 A-B-C-D-.pdf');
+
+            const parts = await splitPdfByBookmarks(outlined, 1, false);
+            assert.equal(parts.length, 4);
+            const expectedPages = [1, 2, 1, 2];
+            for (let i = 0; i < parts.length; i += 1) {
+              const loaded = await PDFDocument.load(parts[i].bytes);
+              assert.equal(loaded.getPageCount(), expectedPages[i]);
+              fs.writeFileSync(`/tmp/chapter-${i + 1}.pdf`, Buffer.from(parts[i].bytes));
+            }
+            console.log('split-by-bookmarks planning and generation ok');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+          for file in /tmp/chapter-*.pdf; do qpdf --check "$file"; done
+
+      - name: Remove temporary compiled helpers
+        if: always()
+        run: rm -rf .tmp-chapter-split
