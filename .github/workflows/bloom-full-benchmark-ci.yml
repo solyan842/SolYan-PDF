@@ -1,7 +1,17 @@
-name: Bloom Full Synthetic Benchmark
+name: PDF-to-Office Synthetic V1 Release Gate
 
 on:
   pull_request:
+    paths:
+      - 'backend/app/bloom_proxy.py'
+      - 'backend/app/xlsx_print.py'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
+      - 'patches/bloom/**'
+      - '.github/workflows/bloom-full-benchmark-ci.yml'
+  push:
+    branches:
+      - main
     paths:
       - 'backend/app/bloom_proxy.py'
       - 'backend/app/xlsx_print.py'
@@ -21,6 +31,7 @@ env:
   BLOOM_COMMIT: 9ed16c43e356cffd4bd3b004b0dab19e582a59d5
   BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
   BLOOM_REGRESSION_TEST: patches/bloom/solyan-table-cluster-regression.test.ts
+  RELEASE_POLICY: benchmarks/corpora/pdf_to_office_release_v1.json
 
 jobs:
   benchmark:
@@ -43,8 +54,9 @@ jobs:
       - name: Install benchmark dependencies
         run: pip install -r benchmarks/requirements.txt
 
-      - name: Fetch pinned Bloom source and apply experimental patch
+      - name: Fetch pinned Bloom source and apply SolYan patch
         run: |
+          set -euo pipefail
           git clone --filter=blob:none --no-checkout "$BLOOM_REPO" /tmp/bloom
           git -C /tmp/bloom fetch --depth=1 origin "$BLOOM_COMMIT"
           git -C /tmp/bloom checkout --detach "$BLOOM_COMMIT"
@@ -57,37 +69,37 @@ jobs:
           grep -q 'currentBottom' /tmp/bloom/server/src/engines/table/candidates.ts
           test -f /tmp/bloom/server/src/tests/solyan-table-cluster-regression.test.ts
 
-      - name: Run patched Bloom relevant tests and typecheck
+      - name: Run pinned Bloom compatibility tests and typecheck
         working-directory: /tmp/bloom/server
         run: |
           npm ci
           npm run typecheck
-          # The exact pinned Bloom commit has two unrelated, pre-existing
-          # whitespace assertions failing in phase4-idm.test.ts. Do not weaken
-          # SolYan's table/XLSX gate: run every other upstream test file plus
-          # the SolYan regression test, then validate the 18-case E2E corpus.
+          # The pinned Bloom commit has two unrelated, pre-existing whitespace
+          # assertions failing in phase4-idm.test.ts. Keep SolYan's XLSX gate
+          # strict by running every other upstream test plus the SolYan regression.
           test_files=$(find src/tests -name '*.test.ts' ! -name 'phase4-idm.test.ts' -print)
           npx vitest run $test_files
 
-      - name: Build pinned patched Bloom, Office and backend images
+      - name: Build pinned Bloom, Office and backend images
         run: |
-          docker build -t solyan-bloom-full /tmp/bloom/server
-          docker build -t solyan-office-full engines/office-service
-          docker build -t solyan-backend-full backend
+          docker build -t solyan-bloom-release-synthetic /tmp/bloom/server
+          docker build -t solyan-office-release-synthetic engines/office-service
+          docker build -t solyan-backend-release-synthetic backend
 
-      - name: Start isolated benchmark stack
+      - name: Start isolated release stack
         run: |
-          docker network create solyan-bloom-full
-          docker run -d --name bloom-full --network solyan-bloom-full \
+          docker network create solyan-release-synthetic
+          docker run -d --name bloom-release-synthetic --network solyan-release-synthetic \
             -e BLOOM_STORAGE_ROOT=/tmp/bloom-storage \
-            solyan-bloom-full
-          docker run -d --name office-full --network solyan-bloom-full solyan-office-full
-          docker run -d --name backend-full --network solyan-bloom-full -p 8000:8000 \
-            -e BLOOM_SERVICE_URL=http://bloom-full:8787 \
-            -e OFFICE_SERVICE_URL=http://office-full:8020 \
-            solyan-backend-full
+            solyan-bloom-release-synthetic
+          docker run -d --name office-release-synthetic --network solyan-release-synthetic \
+            solyan-office-release-synthetic
+          docker run -d --name backend-release-synthetic --network solyan-release-synthetic -p 8000:8000 \
+            -e BLOOM_SERVICE_URL=http://bloom-release-synthetic:8787 \
+            -e OFFICE_SERVICE_URL=http://office-release-synthetic:8020 \
+            solyan-backend-release-synthetic
 
-      - name: Wait for backend and Bloom health
+      - name: Wait for backend, Office and Bloom health
         run: |
           python - <<'PY'
           import time
@@ -95,6 +107,7 @@ jobs:
 
           urls = {
               'backend': 'http://127.0.0.1:8000/health',
+              'office': 'http://127.0.0.1:8000/office/health',
               'bloom': 'http://127.0.0.1:8000/experimental/bloom/health',
           }
           deadline = time.monotonic() + 180
@@ -118,66 +131,43 @@ jobs:
         run: |
           python benchmarks/generate_pdf_to_office_corpus.py \
             --manifest benchmarks/corpora/pdf_to_office_synthetic_v1.json \
-            --output-dir /tmp/pdf-to-office-full-corpus
+            --output-dir /tmp/pdf-to-office-release-synthetic
 
-      - name: Run full end-to-end synthetic benchmark
+      - name: Run synthetic auto-routing benchmark
         run: |
           PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
             --manifest benchmarks/corpora/pdf_to_office_synthetic_v1.json \
-            --corpus-dir /tmp/pdf-to-office-full-corpus \
+            --corpus-dir /tmp/pdf-to-office-release-synthetic \
             --api http://127.0.0.1:8000 \
-            --output /tmp/pdf-to-office-full-report.json
+            --mode auto \
+            --output /tmp/pdf-to-office-release-synthetic-report.json
 
-      - name: Upload full synthetic benchmark report
+      - name: Enforce V1 synthetic release policy
+        run: |
+          python benchmarks/validate_pdf_to_office_release.py \
+            --policy "$RELEASE_POLICY" \
+            --scope synthetic \
+            --report /tmp/pdf-to-office-release-synthetic-report.json
+
+      - name: Upload synthetic release evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-to-office-bloom-full-synthetic
-          path: /tmp/pdf-to-office-full-report.json
+          name: pdf-to-office-release-v1-synthetic
+          path: /tmp/pdf-to-office-release-synthetic-report.json
+          if-no-files-found: warn
           retention-days: 30
-
-      - name: Validate full report and experimental hypothesis
-        run: |
-          python - <<'PY'
-          import json
-          from collections import Counter
-          from pathlib import Path
-
-          report = json.loads(Path('/tmp/pdf-to-office-full-report.json').read_text())
-          results = report['results']
-          summary = report['summary']
-          assert summary['cases'] == 18, summary
-          assert Counter(item['target'] for item in results) == {'docx': 6, 'xlsx': 6, 'pptx': 6}
-          assert len({item['id'] for item in results}) == 18
-          assert not report['failures']
-          for item in results:
-              assert item['office_bytes'] > 0, item
-              assert item['roundtrip_pdf_bytes'] > 0, item
-              assert item['source_pages'] >= 1, item
-              assert item['roundtrip_pages'] >= 1, item
-              assert 0.0 <= item['average_similarity'] <= 100.0, item
-
-          # Experimental success criterion, not a product-release threshold:
-          # the clustering patch must remove synthetic page-count fragmentation
-          # for all six XLSX cases without introducing DOCX/PPTX page drift.
-          for target in ('docx', 'xlsx', 'pptx'):
-              target_summary = summary['targets'][target]
-              assert target_summary['page_count_mismatches'] == 0, target_summary
-              assert target_summary['unmatched_pages'] == 0, target_summary
-              assert target_summary['geometry_mismatches'] == 0, target_summary
-
-          print(json.dumps(summary, indent=2))
-          PY
 
       - name: Collect container logs on failure
         if: failure()
         run: |
-          for name in bloom-full office-full backend-full; do
+          for name in bloom-release-synthetic office-release-synthetic backend-release-synthetic; do
             echo "===== $name ====="
             docker logs "$name" || true
           done
 
-      - name: Stop benchmark stack
+      - name: Stop release stack
         if: always()
         run: |
-          docker rm -f backend-full office-full bloom-full 2>/dev/null || true
-          docker network rm solyan-bloom-full 2>/dev/null || true
+          docker rm -f backend-release-synthetic office-release-synthetic bloom-release-synthetic 2>/dev/null || true
+          docker network rm solyan-release-synthetic 2>/dev/null || true
