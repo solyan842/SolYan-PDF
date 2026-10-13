@@ -1,4 +1,4 @@
-# SolYan PDF v0.1.3 — Release Dependency Manifest
+# SolYan PDF v0.1.4 — Release Dependency Manifest
 
 Release date: 2026-10-13
 
@@ -49,7 +49,7 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Next.js | 15.5.27 | MIT | bundled npm runtime |
 | React | 19.1.1 | MIT | bundled npm runtime |
 | React DOM | 19.1.1 | MIT | bundled npm runtime |
-| pdf-lib | 1.17.1 | MIT | bundled browser PDF engine |
+| pdf-lib | 1.17.1 | MIT | bundled browser PDF engine; core PDF, N-up, booklet, crop and resize |
 | pdfjs-dist / PDF.js | 6.4.299 | Apache-2.0 | bundled browser viewer/rendering engine |
 | JSZip | 3.10.2 | MIT | bundled browser ZIP engine |
 | PostCSS override | 8.5.29 | MIT | transitive security override |
@@ -62,7 +62,8 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | httpx | 0.28.1 | BSD-3-Clause | Python runtime dependency |
-| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI in backend/archive containers |
+| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI for protect/unlock/repair/compression, linearization, flattening and page selection |
+| Poppler utilities | snapshot-resolved distro package | GPL-2.0-or-later family; verify exact Debian package metadata at release build | separate CLI tools (`pdfimages`, `pdftotext`, `pdftoppm`) for image extraction and bounded blank-page analysis |
 | iputils-ping | snapshot-resolved distro package | BSD/GPL-family package licensing; verify image package metadata at release build | CLI for network utility |
 
 ## OCR service
