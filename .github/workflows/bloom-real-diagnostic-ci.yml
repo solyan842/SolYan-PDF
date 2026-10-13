@@ -1,12 +1,22 @@
-name: Bloom Real-World PDF-to-Office Diagnostic
+name: PDF-to-Office Real-World V1 Release Gate
 
 on:
-  push:
-    branches:
-      - benchmark/pdf-office-real-diagnostic-v1
+  pull_request:
     paths:
       - 'backend/app/bloom_proxy.py'
       - 'backend/app/xlsx_print.py'
+      - 'engines/ocr-service/**'
+      - 'engines/office-service/**'
+      - 'benchmarks/**'
+      - 'patches/bloom/**'
+      - '.github/workflows/bloom-real-diagnostic-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/bloom_proxy.py'
+      - 'backend/app/xlsx_print.py'
+      - 'engines/ocr-service/**'
       - 'engines/office-service/**'
       - 'benchmarks/**'
       - 'patches/bloom/**'
@@ -24,15 +34,16 @@ env:
   BLOOM_PATCH: patches/bloom/table-cluster-group-bottom.patch
   BLOOM_REGRESSION_TEST: patches/bloom/solyan-table-cluster-regression.test.ts
   REAL_MANIFEST: benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json
+  RELEASE_POLICY: benchmarks/corpora/pdf_to_office_release_v1.json
 
 jobs:
   materialize-corpus:
     name: corpus / ${{ matrix.case_id }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 3
       matrix:
         case_id:
           - docx-google-doc
@@ -70,16 +81,16 @@ jobs:
       - name: Upload verified document artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-to-office-real-case-${{ matrix.case_id }}
+          name: pdf-to-office-release-real-case-${{ matrix.case_id }}
           path: ${{ runner.temp }}/real-case-stage/
           if-no-files-found: error
           retention-days: 7
 
-  diagnostic:
-    name: Bloom real-world diagnostic
+  release-gate:
+    name: Real DOCX/PPTX/XLSX release gate
     needs: materialize-corpus
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Checkout SolYan PDF
         uses: actions/checkout@v4
@@ -89,17 +100,17 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install benchmark dependencies
-        run: pip install -r benchmarks/requirements.txt
+      - name: Install release-gate dependencies
+        run: pip install -r benchmarks/requirements.txt openpyxl==3.1.5
 
       - name: Download verified corpus artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: pdf-to-office-real-case-*
-          path: /tmp/pdf-to-office-real-stage
+          pattern: pdf-to-office-release-real-case-*
+          path: /tmp/pdf-to-office-release-real-stage
           merge-multiple: true
 
-      - name: Assemble and verify corpus artifact set
+      - name: Assemble and verify pinned 9-case / 50-page corpus
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -108,7 +119,7 @@ jobs:
           from pathlib import Path
           from pypdf import PdfReader
 
-          root = Path('/tmp/pdf-to-office-real-stage')
+          root = Path('/tmp/pdf-to-office-release-real-stage')
           corpus_dir = root / 'corpus'
           inventory_dir = root / 'inventory'
           manifest = json.loads(Path('benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json').read_text())
@@ -142,7 +153,7 @@ jobs:
               'corpus_kind': manifest['corpus_kind'],
               'cases': [by_id[case_id] for case_id in expected_ids],
           }
-          Path('/tmp/pdf-to-office-real-inventory.json').write_text(
+          Path('/tmp/pdf-to-office-release-real-inventory.json').write_text(
               json.dumps(combined, ensure_ascii=False, indent=2) + '\n',
               encoding='utf-8',
           )
@@ -178,25 +189,32 @@ jobs:
           npm run typecheck
           npx vitest run src/tests/solyan-table-cluster-regression.test.ts
 
-      - name: Build pinned patched Bloom, Office and backend images
+      - name: Build Bloom, OCR, Office and backend images
         run: |
-          docker build -t solyan-bloom-real /tmp/bloom/server
-          docker build -t solyan-office-real engines/office-service
-          docker build -t solyan-backend-real backend
+          docker build -t solyan-bloom-release-real /tmp/bloom/server
+          docker build -t solyan-ocr-release-real engines/ocr-service
+          docker build -t solyan-office-release-real engines/office-service
+          docker build -t solyan-backend-release-real backend
 
-      - name: Start isolated diagnostic stack
+      - name: Start isolated release stack
         run: |
-          docker network create solyan-bloom-real
-          docker run -d --name bloom-real --network solyan-bloom-real \
+          docker network create solyan-release-real
+          docker run -d --name bloom-release-real --network solyan-release-real \
             -e BLOOM_STORAGE_ROOT=/tmp/bloom-storage \
-            solyan-bloom-real
-          docker run -d --name office-real --network solyan-bloom-real solyan-office-real
-          docker run -d --name backend-real --network solyan-bloom-real -p 8000:8000 \
-            -e BLOOM_SERVICE_URL=http://bloom-real:8787 \
-            -e OFFICE_SERVICE_URL=http://office-real:8020 \
-            solyan-backend-real
+            solyan-bloom-release-real
+          docker run -d --name ocr-release-real --network solyan-release-real \
+            -e OCR_LANG=en \
+            -e PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
+            solyan-ocr-release-real
+          docker run -d --name office-release-real --network solyan-release-real \
+            solyan-office-release-real
+          docker run -d --name backend-release-real --network solyan-release-real -p 8000:8000 \
+            -e BLOOM_SERVICE_URL=http://bloom-release-real:8787 \
+            -e OCR_SERVICE_URL=http://ocr-release-real:8010 \
+            -e OFFICE_SERVICE_URL=http://office-release-real:8020 \
+            solyan-backend-release-real
 
-      - name: Wait for backend and Bloom health
+      - name: Wait for backend, Bloom, OCR and Office health
         run: |
           python - <<'PY'
           import time
@@ -205,116 +223,217 @@ jobs:
           urls = {
               'backend': 'http://127.0.0.1:8000/health',
               'bloom': 'http://127.0.0.1:8000/experimental/bloom/health',
+              'ocr': 'http://127.0.0.1:8000/ocr/health',
+              'office': 'http://127.0.0.1:8000/office/health',
           }
-          deadline = time.monotonic() + 180
+          deadline = time.monotonic() + 240
           pending = dict(urls)
           while pending and time.monotonic() < deadline:
               for name, url in list(pending.items()):
                   try:
-                      with urllib.request.urlopen(url, timeout=5) as response:
+                      with urllib.request.urlopen(url, timeout=8) as response:
                           if 200 <= response.status < 300:
                               print(name, response.read().decode('utf-8', 'replace'))
                               pending.pop(name)
                   except Exception as exc:
                       print('waiting', name, type(exc).__name__, exc)
               if pending:
-                  time.sleep(3)
+                  time.sleep(4)
           if pending:
               raise SystemExit(f'Health checks timed out: {sorted(pending)}')
           PY
 
-      - name: Run real-world diagnostic benchmark with preserved log
+      - name: Run real DOCX/PPTX auto benchmark with preserved log
+        shell: bash
         run: |
           set +e
           set -o pipefail
           PYTHONPATH=benchmarks python benchmarks/run_pdf_to_office_corpus.py \
             --manifest "$REAL_MANIFEST" \
-            --corpus-dir /tmp/pdf-to-office-real-stage/corpus \
+            --corpus-dir /tmp/pdf-to-office-release-real-stage/corpus \
             --api http://127.0.0.1:8000 \
-            --output /tmp/pdf-to-office-real-report.json \
-            2>&1 | tee /tmp/pdf-to-office-real-benchmark.log
+            --mode auto \
+            --target docx \
+            --target pptx \
+            --output /tmp/pdf-to-office-release-real-text-report.json \
+            2>&1 | tee /tmp/pdf-to-office-release-real-text.log
           status=${PIPESTATUS[0]}
-          echo "$status" > /tmp/pdf-to-office-real-benchmark.exit
-          echo "benchmark_exit_code=$status"
+          printf '%s\n' "$status" > /tmp/pdf-to-office-release-real-text.exit
+          echo "real_text_exit_code=$status"
           exit 0
 
-      - name: Upload benchmark execution log
+      - name: Run real XLSX auto benchmark with preserved log
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          PYTHONPATH=benchmarks python - <<'PY' 2>&1 | tee /tmp/pdf-to-office-release-real-xlsx.log
+          import json
+          import time
+          from pathlib import Path
+
+          import httpx
+          from openpyxl import load_workbook
+
+          from pdf_to_office import visual_similarity
+
+          corpus = Path('/tmp/pdf-to-office-release-real-stage/corpus')
+          cases = [
+              ('xlsx-table-material', 'xlsx-table-material.pdf'),
+              ('xlsx-unidentified-table', 'xlsx-unidentified-table.pdf'),
+              ('xlsx-transport-table', 'xlsx-transport-table.pdf'),
+          ]
+          results = []
+
+          with httpx.Client(timeout=httpx.Timeout(2400.0, connect=15.0)) as client:
+              for case_id, filename in cases:
+                  source_path = corpus / filename
+                  source = source_path.read_bytes()
+                  print(f'===== {case_id} =====', flush=True)
+                  started = time.perf_counter()
+                  response = client.post(
+                      'http://127.0.0.1:8000/experimental/pdf-to-office',
+                      files={'file': (filename, source, 'application/pdf')},
+                      data={'target': 'xlsx', 'mode': 'auto'},
+                  )
+                  response.raise_for_status()
+                  xlsx = response.content
+                  converted = Path(f'/tmp/{case_id}.xlsx')
+                  converted.write_bytes(xlsx)
+
+                  item = {
+                      'id': case_id,
+                      'source_pages': 3,
+                      'convert_seconds': time.perf_counter() - started,
+                      'office_bytes': len(xlsx),
+                      'conversion_engine': response.headers.get('x-solyan-conversion-engine'),
+                      'ocr_engine': response.headers.get('x-solyan-ocr-engine'),
+                      'ocr_pages': response.headers.get('x-solyan-ocr-pages'),
+                      'ocr_table_workbooks': response.headers.get('x-solyan-ocr-table-workbooks'),
+                  }
+
+                  wb = load_workbook(converted, data_only=False)
+                  try:
+                      item['sheet_count'] = len(wb.worksheets)
+                      item['nonempty_cells'] = sum(
+                          1
+                          for ws in wb.worksheets
+                          for row in ws.iter_rows()
+                          for cell in row
+                          if cell.value is not None and str(cell.value).strip()
+                      )
+                      item['raster_image_sheets'] = [
+                          ws.title for ws in wb.worksheets if getattr(ws, '_images', [])
+                      ]
+                  finally:
+                      wb.close()
+
+                  roundtrip = client.post(
+                      'http://127.0.0.1:8000/office/to-pdf',
+                      files={
+                          'file': (
+                              'converted.xlsx',
+                              xlsx,
+                              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          )
+                      },
+                  )
+                  roundtrip.raise_for_status()
+                  metrics = visual_similarity(source, roundtrip.content)
+                  item.update(metrics)
+                  pairs = zip(item['source_render_sizes'], item['roundtrip_render_sizes'])
+                  item['orientation_match'] = (
+                      item['source_pages'] == item['roundtrip_pages']
+                      and all((sw > sh) == (rw > rh) for (sw, sh), (rw, rh) in pairs)
+                  )
+                  results.append(item)
+                  print(json.dumps(item, ensure_ascii=False, indent=2), flush=True)
+
+          report = {
+              'scope': 'real_xlsx',
+              'results': results,
+              'summary': {
+                  'cases': len(results),
+                  'source_pages': sum(item['source_pages'] for item in results),
+                  'roundtrip_pages': sum(item['roundtrip_pages'] for item in results),
+                  'unmatched_pages': sum(item['unmatched_pages'] for item in results),
+              },
+          }
+          Path('/tmp/pdf-to-office-release-real-xlsx-report.json').write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print('===== XLSX SUMMARY =====', flush=True)
+          print(json.dumps(report['summary'], ensure_ascii=False, indent=2), flush=True)
+          PY
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > /tmp/pdf-to-office-release-real-xlsx.exit
+          echo "real_xlsx_exit_code=$status"
+          exit 0
+
+      - name: Upload execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-to-office-real-benchmark-execution
+          name: pdf-to-office-release-v1-real-execution
           path: |
-            /tmp/pdf-to-office-real-benchmark.log
-            /tmp/pdf-to-office-real-benchmark.exit
-            /tmp/pdf-to-office-real-report.json
+            /tmp/pdf-to-office-release-real-text.log
+            /tmp/pdf-to-office-release-real-text.exit
+            /tmp/pdf-to-office-release-real-text-report.json
+            /tmp/pdf-to-office-release-real-xlsx.log
+            /tmp/pdf-to-office-release-real-xlsx.exit
+            /tmp/pdf-to-office-release-real-xlsx-report.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
 
-      - name: Enforce benchmark process result
+      - name: Enforce benchmark process results
         run: |
           set -euo pipefail
-          status="$(cat /tmp/pdf-to-office-real-benchmark.exit)"
-          if [ "$status" -ne 0 ]; then
-            echo "Benchmark process failed with exit code $status"
-            echo "===== benchmark tail ====="
-            tail -n 200 /tmp/pdf-to-office-real-benchmark.log || true
-            exit "$status"
+          text_status="$(cat /tmp/pdf-to-office-release-real-text.exit)"
+          xlsx_status="$(cat /tmp/pdf-to-office-release-real-xlsx.exit)"
+          if [ "$text_status" -ne 0 ] || [ "$xlsx_status" -ne 0 ]; then
+            echo "Release benchmark process failure: text=$text_status xlsx=$xlsx_status"
+            tail -n 200 /tmp/pdf-to-office-release-real-text.log || true
+            tail -n 200 /tmp/pdf-to-office-release-real-xlsx.log || true
+            exit 1
           fi
 
-      - name: Validate diagnostic report shape
+      - name: Enforce V1 real DOCX/PPTX release policy
         run: |
-          python - <<'PY'
-          import json
-          from collections import Counter
-          from pathlib import Path
+          python benchmarks/validate_pdf_to_office_release.py \
+            --policy "$RELEASE_POLICY" \
+            --scope real_text \
+            --report /tmp/pdf-to-office-release-real-text-report.json
 
-          inventory = json.loads(Path('/tmp/pdf-to-office-real-inventory.json').read_text())
-          report = json.loads(Path('/tmp/pdf-to-office-real-report.json').read_text())
-          results = report['results']
-          summary = report['summary']
+      - name: Enforce V1 real XLSX release policy
+        run: |
+          python benchmarks/validate_pdf_to_office_release.py \
+            --policy "$RELEASE_POLICY" \
+            --scope real_xlsx \
+            --report /tmp/pdf-to-office-release-real-xlsx-report.json
 
-          assert inventory['corpus_kind'] == 'public-real-world-diagnostic', inventory
-          assert report['corpus_kind'] == 'public-real-world-diagnostic', report
-          assert report['release_gate'] is False, report
-          assert report['thresholds'] == {}, report
-          assert report['failures'] == [], report
-          assert summary['cases'] == 9, summary
-          assert Counter(item['target'] for item in results) == {'docx': 3, 'xlsx': 3, 'pptx': 3}
-          assert len({item['id'] for item in results}) == 9
-          assert sum(item['output_pages'] for item in inventory['cases']) == 50
-
-          for item in results:
-              assert item['office_bytes'] > 0, item
-              assert item['roundtrip_pdf_bytes'] > 0, item
-              assert item['source_pages'] >= 1, item
-              assert item['roundtrip_pages'] >= 1, item
-              assert 0.0 <= item['average_similarity'] <= 100.0, item
-
-          # Deliberately do not assert similarity, page-count or geometry thresholds here.
-          # This workflow establishes a measured real-world baseline; release gates remain
-          # a separate product decision after the corpus is representative enough.
-          print(json.dumps(summary, indent=2))
-          PY
-
-      - name: Upload real-world diagnostic artifacts
+      - name: Upload V1 real release evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-to-office-real-diagnostic-v1
+          name: pdf-to-office-release-v1-real
           path: |
-            /tmp/pdf-to-office-real-inventory.json
-            /tmp/pdf-to-office-real-report.json
+            /tmp/pdf-to-office-release-real-inventory.json
+            /tmp/pdf-to-office-release-real-text-report.json
+            /tmp/pdf-to-office-release-real-xlsx-report.json
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Collect container logs on failure
         if: failure()
         run: |
-          for name in bloom-real office-real backend-real; do
+          for name in bloom-release-real ocr-release-real office-release-real backend-release-real; do
             echo "===== $name ====="
             docker logs "$name" || true
           done
 
-      - name: Stop diagnostic stack
+      - name: Stop release stack
         if: always()
         run: |
-          docker rm -f backend-real office-real bloom-real 2>/dev/null || true
-          docker network rm solyan-bloom-real 2>/dev/null || true
+          docker rm -f backend-release-real office-release-real ocr-release-real bloom-release-real 2>/dev/null || true
+          docker network rm solyan-release-real 2>/dev/null || true
