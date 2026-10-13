@@ -188,6 +188,16 @@ def pdf_to_office(
     if mode == "libreoffice":
         return _libreoffice_pdf_to_office(data, filename, target)
 
+    # Real-world A/B evidence shows LibreOffice's PDF import preserves both
+    # visual fidelity and native OOXML text better for DOCX/PPTX. In auto mode
+    # it is therefore the primary engine for those targets. Bloom remains a
+    # best-effort fallback if LibreOffice is unavailable or rejects the file.
+    if mode == "auto" and target in {"docx", "pptx"}:
+        try:
+            return _libreoffice_pdf_to_office(data, filename, target)
+        except HTTPException:
+            pass
+
     # Resolve print geometry from the original PDF before conversion. The XLSX
     # normalizer only runs when qpdf can map page 1 to a recognized paper size;
     # custom/unknown PDFs therefore keep Bloom's output unchanged.
