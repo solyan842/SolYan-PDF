@@ -9,8 +9,19 @@ All notable changes to SolYan PDF are documented here.
 - Added a backend binary proxy for `/ocr/xlsx` with bounded uploads and forwarded download/diagnostic headers.
 - Added the OCR web/PWA mode **Bảng scan → Excel (.xlsx)** with direct browser download and page/table metadata.
 - Exposed OCR download headers through CORS so the browser can retain the service filename and result metadata.
+- Group PP-Structure table workbooks by source page, stack multiple detected tables into the same worksheet and preserve source-derived print orientation/aspect with one-page fit scaling.
+- Added a permanent regression covering same-page table grouping, styles, merged cells and print-layout metadata.
+- Added a Bloom PDF → XLSX fallback that invokes PP-StructureV3 only when Bloom returns its exact `No logical tables detected in document.` placeholder; normal/digital XLSX conversions remain on Bloom.
+- Preserve Bloom's successful placeholder if the OCR fallback is unavailable or cannot export a table, expose the selected XLSX engine in response headers and allow a configurable CPU-friendly OCR fallback timeout.
+- Validated the scanned-table path on three pinned public real PDFs (9 source pages): PP-Structure recovered useful workbook content in all three cases and improved round-trip pagination from Bloom's 3/9-page placeholder baseline to 8/9 pages. This remains diagnostic evidence, not a visual-fidelity release claim.
 - Added regression coverage for cross-workbook OpenPyXL style copying and for the backend XLSX binary proxy.
-- Removed the completed one-shot PP-Structure scanned-XLSX diagnostic workflow after the feature path was validated.
+- Removed completed one-shot PP-Structure/Bloom fallback diagnostic workflows after their artifacts were reviewed.
+
+### Real-world PDF → Office diagnostics
+- Added a pinned public real-world diagnostic corpus covering 9 PDFs / 50 pages across DOCX, XLSX and PPTX targets, with deterministic source verification and provenance.
+- Fixed hard interoperability defects exposed by the corpus, including DOCX XML 1.0 control-character sanitation, PDF metadata BOM decoding and inherited PDF page geometry for PPTX exports.
+- Recorded the current diagnostic baseline without weakening release gates: DOCX 7/7 round-trip pages at 89.51% average visual similarity; PPTX 34/34 pages at 51.33%; XLSX remains the weakest target and is supplemented by the scanned-table OCR fallback above.
+- Kept PDF → Office labelled **Experimental** because the public diagnostic corpus is not yet an accepted representative release corpus with target-specific fidelity thresholds.
 
 ### Vietnamese OCR regression coverage
 - Expanded the reproducible real-scan Vietnamese OCR corpus from 9 to 59 samples without using synthetic scans.
