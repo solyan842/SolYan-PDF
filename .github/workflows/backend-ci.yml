@@ -47,6 +47,65 @@ jobs:
       - name: Import app and verify qpdf health
         run: python -c "from app.main import health; print(health())"
 
+      - name: Verify qpdf V1.1 utility routes
+        run: |
+          python - <<'PY'
+          import subprocess
+          import tempfile
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          def minimal_pdf() -> bytes:
+              header = b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n'
+              objects = [
+                  b'1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+                  b'2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+                  b'3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>\nendobj\n',
+                  b'4 0 obj\n<< /Length 0 >>\nstream\n\nendstream\nendobj\n',
+              ]
+              data = bytearray(header)
+              offsets = [0]
+              for obj in objects:
+                  offsets.append(len(data))
+                  data.extend(obj)
+              xref = len(data)
+              data.extend(f'xref\n0 {len(objects) + 1}\n'.encode())
+              data.extend(b'0000000000 65535 f \n')
+              for offset in offsets[1:]:
+                  data.extend(f'{offset:010d} 00000 n \n'.encode())
+              data.extend(
+                  f'trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n'.encode()
+              )
+              return bytes(data)
+
+          client = TestClient(app)
+          source = minimal_pdf()
+          routes = {
+              '/pdf/web-optimize': 'web.pdf',
+              '/pdf/flatten': 'flattened.pdf',
+              '/pdf/compress-images': 'image-compressed.pdf',
+          }
+
+          with tempfile.TemporaryDirectory(prefix='solyan-qpdf-ci-') as temp_dir:
+              temp = Path(temp_dir)
+              for route, filename in routes.items():
+                  response = client.post(
+                      route,
+                      files={'file': ('input.pdf', source, 'application/pdf')},
+                  )
+                  assert response.status_code == 200, (route, response.text)
+                  assert response.content.startswith(b'%PDF-'), route
+                  output = temp / filename
+                  output.write_bytes(response.content)
+                  subprocess.run(['qpdf', '--check', str(output)], check=True)
+
+              subprocess.run(['qpdf', '--check-linearization', str(temp / 'web.pdf')], check=True)
+
+          print('qpdf V1.1 utility routes ok')
+          PY
+
       - name: Verify OCR XLSX binary proxy
         run: |
           python - <<'PY'
