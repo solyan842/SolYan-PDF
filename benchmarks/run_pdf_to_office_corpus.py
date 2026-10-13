@@ -17,6 +17,21 @@ def _load_thresholds(path: Path | None) -> dict[str, float]:
     return {str(key): float(value) for key, value in raw.items()}
 
 
+def _editability_summary(items: list[dict]) -> dict:
+    diagnostics = [
+        item.get('ooxml_diagnostics', {})
+        for item in items
+        if item.get('target') in {'docx', 'pptx'}
+    ]
+    return {
+        'ooxml_cases': len(diagnostics),
+        'editable_text_cases': sum(1 for diag in diagnostics if bool(diag.get('editable_text_present', False))),
+        'text_nodes': sum(int(diag.get('text_nodes', 0)) for diag in diagnostics),
+        'text_characters': sum(int(diag.get('text_characters', 0)) for diag in diagnostics),
+        'embedded_media_files': sum(int(diag.get('embedded_media_files', 0)) for diag in diagnostics),
+    }
+
+
 def _summary(results: list[dict]) -> dict:
     grouped: dict[str, list[dict]] = defaultdict(list)
     for result in results:
@@ -25,7 +40,7 @@ def _summary(results: list[dict]) -> dict:
     targets = {}
     for target, items in sorted(grouped.items()):
         similarities = [float(item['average_similarity']) for item in items]
-        targets[target] = {
+        target_summary = {
             'cases': len(items),
             'average_similarity': sum(similarities) / max(1, len(similarities)),
             'minimum_similarity': min(similarities) if similarities else 0.0,
@@ -39,6 +54,10 @@ def _summary(results: list[dict]) -> dict:
             'roundtrip_seconds': sum(float(item['roundtrip_seconds']) for item in items),
             'engines': dict(sorted(Counter(str(item.get('conversion_engine', 'unknown')) for item in items).items())),
         }
+        if target in {'docx', 'pptx'}:
+            target_summary['editability'] = _editability_summary(items)
+        targets[target] = target_summary
+
     all_scores = [float(item['average_similarity']) for item in results]
     return {
         'cases': len(results),
@@ -49,6 +68,7 @@ def _summary(results: list[dict]) -> dict:
         'geometry_normalized_pages': sum(int(item.get('geometry_normalized_pages', 0)) for item in results),
         'geometry_mismatches': sum(int(item.get('geometry_mismatches', 0)) for item in results),
         'engines': dict(sorted(Counter(str(item.get('conversion_engine', 'unknown')) for item in results).items())),
+        'editability': _editability_summary(results),
         'targets': targets,
     }
 
@@ -116,12 +136,22 @@ def main() -> None:
             raise
         report.update(_case_metadata(case))
         results.append(report)
+        editability = report.get('ooxml_diagnostics')
+        editability_text = ''
+        if isinstance(editability, dict):
+            editability_text = (
+                f" editable_text={editability.get('editable_text_present', False)}"
+                f" text_nodes={editability.get('text_nodes', 0)}"
+                f" text_chars={editability.get('text_characters', 0)}"
+                f" media={editability.get('embedded_media_files', 0)}"
+            )
         print(
             f"{case['id']}: engine={report.get('conversion_engine', 'unknown')} "
             f"{report['average_similarity']:.2f}% "
             f"pages={report['source_pages']}->{report['roundtrip_pages']} "
             f"geometry_normalized={report.get('geometry_normalized_pages', 0)} "
             f"geometry_mismatches={report.get('geometry_mismatches', 0)}"
+            f"{editability_text}"
         )
 
     summary = _summary(results)
