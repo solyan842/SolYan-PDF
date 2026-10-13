@@ -75,11 +75,12 @@ jobs:
           pdftotext /tmp/input.pdf /tmp/input.txt
           grep -q 'KEEP TEXT' /tmp/input.txt
 
-      - name: Verify planner removes only Image XObject resource entries
+      - name: Verify planner removes only reachable Image XObject resource entries
         env:
           PYTHONPATH: backend
         run: |
           python <<'PY'
+          import copy
           import json
           from pathlib import Path
           from app.remove_images import _build_remove_images_update
@@ -110,7 +111,35 @@ jobs:
                   font_entries.append(key)
           assert all(key not in updates for key in content_entries), updates
           assert all(key not in updates for key in font_entries), updates
-          print('planner removed', removed, 'image resource entries')
+
+          # Inject an unreachable/dead page into the qpdf JSON model. The planner
+          # must start at Catalog /Pages and must not mutate its image resource.
+          with_dead = copy.deepcopy(data)
+          objects = with_dead['qpdf'][1]
+          objects['obj:900 0 R'] = {
+              'value': {
+                  '/Type': '/Page',
+                  '/MediaBox': [0, 0, 10, 10],
+                  '/Resources': '901 0 R',
+              }
+          }
+          objects['obj:901 0 R'] = {'value': {'/XObject': {'/DeadIm': '902 0 R'}}}
+          objects['obj:902 0 R'] = {
+              'stream': {
+                  'dict': {
+                      '/Type': '/XObject',
+                      '/Subtype': '/Image',
+                      '/Width': 1,
+                      '/Height': 1,
+                      '/ColorSpace': '/DeviceRGB',
+                      '/BitsPerComponent': 8,
+                  }
+              }
+          }
+          dead_update, dead_removed = _build_remove_images_update(with_dead)
+          assert dead_removed == 2, dead_removed
+          assert 'obj:901 0 R' not in dead_update['qpdf'][1], dead_update
+          print('planner removed', removed, 'reachable image resource entries and ignored dead page resources')
           PY
 
       - name: Remove images and preserve text/vector content
