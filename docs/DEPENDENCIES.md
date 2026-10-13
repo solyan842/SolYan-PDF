@@ -8,7 +8,8 @@ This document tracks third-party components used or evaluated by SolYan PDF. Exa
 
 | Component | Current role | License / model | Integration |
 |---|---|---|---|
-| qpdf | Protect/unlock, repair and structural optimization | Apache-2.0 | Backend CLI inside isolated API container |
+| qpdf | Protect/unlock, repair, structural optimization, web linearization, flattening and image optimization | Apache-2.0 | Backend CLI inside isolated API container |
+| Poppler `pdfimages` | Extract embedded raster images from PDF with native formats preserved where supported | GPL-2.0-or-later for Poppler code, with separately licensed inherited/third-party portions; preserve Debian/upstream notices | `poppler-utils` system CLI inside backend container; invoked as a separate process |
 | pdf-lib | Browser-side merge/page operations/editing/workflows | MIT | Frontend dependency |
 | PDF.js / pdfjs-dist | Viewer, text extraction and visual compare rendering | Apache-2.0 | Frontend dependency |
 | JSZip | Package rendered PDF pages for download | MIT | Frontend dependency |
@@ -19,7 +20,7 @@ This document tracks third-party components used or evaluated by SolYan PDF. Exa
 | LibreOffice | DOCX/XLSX/PPTX/OpenDocument/RTF → PDF | MPL-2.0 for LibreOffice product; includes separately licensed third-party code | Isolated headless conversion service |
 | pyHanko 0.37 | PKCS#12 cryptographic PDF signing | MIT | Isolated signing service |
 | OCRmyPDF 17.13 | PDF/A orchestration using internal non-Ghostscript backend | MPL-2.0 | Isolated archive service |
-| Bloom PDF Editor server | Experimental PDF → DOCX/XLSX/PPTX candidate | Apache-2.0 upstream at pinned deployment commit; re-check exact dependencies before deployment | External optional service behind adapter; not bundled by default |
+| Bloom PDF Editor server | PDF → XLSX primary route and optional DOCX/PPTX fallback | Apache-2.0 upstream at pinned deployment commit; re-check exact dependencies before deployment | External optional service behind adapter; not bundled by default |
 
 ## Approved architecture rules
 

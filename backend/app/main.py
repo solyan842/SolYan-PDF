@@ -11,6 +11,7 @@ from fastapi.responses import Response
 
 from .archive_proxy import router as archive_router
 from .bloom_proxy import router as bloom_router
+from .extract_images import router as extract_images_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
@@ -30,6 +31,7 @@ app.add_middleware(
         "X-SolYan-OCR-Engine",
         "X-SolYan-OCR-Pages",
         "X-SolYan-OCR-Table-Workbooks",
+        "X-SolYan-Extracted-Images",
     ],
 )
 app.include_router(network_router)
@@ -38,6 +40,7 @@ app.include_router(office_router)
 app.include_router(sign_router)
 app.include_router(archive_router)
 app.include_router(bloom_router)
+app.include_router(extract_images_router)
 
 
 def _require_qpdf() -> None:

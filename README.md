@@ -10,6 +10,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Watermark, page numbers and metadata editing
 - AES-256 protect/unlock, repair and structural compression through qpdf
 - qpdf web optimization (linearization), annotation/form flattening, and optional image recompression
+- Embedded raster-image extraction to ZIP through Poppler `pdfimages`, preserving native encoded formats where supported
 - Browser-side PDF viewer and basic editor
 - AcroForm discovery/filling
 
@@ -20,7 +21,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 - JSON/Markdown/text exports
 - CER/WER benchmark harness for Vietnamese OCR quality measurement
-- Reproducible 59-sample real-scan Tesseract regression corpus: 9 public-domain modern documents plus 50 proofread historical scan pages from two public-domain works
+- Reproducible 59-sample real-scan Tesseract regression corpus: 9 public-domain modern documents plus 50 proofread historical scan pages from two public-domain Vietnamese works
 - Expanded real-scan baseline: average CER **9.41%**, average WER **22.18%** on the pinned corpus/environment
 
 ### Conversion
@@ -48,7 +49,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 Browser / Next.js PWA
       |
       v
-FastAPI orchestration backend (qpdf + network utilities)
+FastAPI orchestration backend (qpdf + Poppler utilities + network utilities)
       |---------------- OCR service (PaddleOCR + Tesseract fallback)
       |---------------- Office service (LibreOffice + PDF import routing)
       |---------------- Signature service (pyHanko)
@@ -93,6 +94,7 @@ GitHub Actions currently verifies:
 - Next.js production build
 - FastAPI/qpdf backend and hardened network routes
 - Real qpdf smoke coverage for linearization, annotation/form flattening and image optimization routes
+- Real Poppler `pdfimages` extraction on a PDF containing an embedded Image XObject, including ZIP validation and no-image/error cases
 - OCR binary proxy behavior for scanned-table XLSX downloads
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
@@ -121,6 +123,7 @@ See `docs/BENCHMARKING.md` for:
 - Passing the PDF-to-Office V1 release gate establishes a reproducible supported baseline for the pinned representative corpus; it is not a claim that every arbitrary PDF will convert with the same fidelity.
 - PDF -> XLSX still depends on the optional external Bloom service for its primary route; PP-StructureV3 is a bounded fallback for scanned/no-logical-table cases rather than a universal spreadsheet reconstruction engine.
 - qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
+- Embedded-image extraction is bounded to 100 MB input, 2,000 listed images, 100 megapixels per image, 1 gigapixel aggregate and 512 MB extracted/archive payload to limit decompression/resource abuse.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
 ## License
