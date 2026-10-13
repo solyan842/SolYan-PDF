@@ -4,6 +4,32 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-13
+
+Patch release completing the current **V1.1 self-hosted utility parity and hardening** roadmap with new qpdf/Poppler utilities and browser-local printing/page-geometry tools.
+
+### PDF utility parity
+- Added qpdf web optimization/linearization, annotation/form flattening with generated appearances, and an explicit lossy-capable image recompression route separate from structural compression.
+- Added bounded embedded-image extraction through Poppler `pdfimages`, preserving native encoded image formats where supported and returning a streamed ZIP archive.
+- Added conservative blank-page removal: pages with a real text layer are always retained; only text-free pages are raster-classified at bounded resolution before qpdf page selection.
+- Added browser-local N-up layout with A4 portrait/landscape output, custom grids, row/column ordering, LTR/RTL, margins, borders and CropBox-/rotation-aware fitting.
+- Added browser-local saddle-stitch booklet imposition with automatic blank padding, left/right spine, gutter, front/back manual passes and short-edge auto-duplex support.
+- Added browser-local crop with page-range selection and deterministic MediaBox/CropBox/BleedBox/TrimBox/ArtBox updates.
+- Added browser-local resize/scale to A0-A6, Letter, Legal and custom sizes with portrait/landscape orientation, 10–200% scale and rotation-aware centering.
+
+### Verification and architecture
+- Added permanent real-PDF CI gates for image extraction, blank-page removal, N-up, booklet and crop/resize geometry.
+- New layout gates validate qpdf structure, page count, target geometry, rotated source pages and retained text rather than relying only on TypeScript/build success.
+- Kept N-up, booklet, crop and resize on the existing `pdf-lib` browser engine; no new application runtime package or layout service was added.
+- Added Poppler utilities to the backend release dependency manifest for `pdfimages`, `pdftotext` and `pdftoppm` CLI integration.
+- Continued the research-before-custom-code rule, using maintained open-source projects such as Stirling-PDF as behavior/parity references without copying their implementation.
+
+### Important boundaries
+- Crop changes visible page boxes and is **not secure redaction**; clipped content can remain in PDF content streams.
+- N-up, booklet and resize embed visible page content into new pages, so interactive form/annotation controls are not preserved as interactive controls.
+- Browser-local N-up/booklet/crop/resize are bounded to 100 MB / 500 source pages; blank-page removal has separate 100 MB / 300-page / aggregate-raster bounds.
+- Cloud connectors, multi-party remote signing, AI summarization and PDF translation remain separate provider/product decisions.
+
 ## [0.1.3] - 2026-10-13
 
 Patch release promoting the evidence-backed multi-engine PDF -> Office path to the versioned V1 release-gated surface and expanding the real-world OCR/XLSX regression baseline.
@@ -75,7 +101,7 @@ Patch release focused on reproducibility, dependency integrity, OCR release vali
 
 ### Security and reproducibility
 - Pinned Node/Python multi-architecture base-image digests.
-- Locked the complete frontend npm dependency graph with `package-lock.json` and `npm ci`.
+- Locked the complete frontend npm dependency graph with `package-lock.json` + `npm ci`.
 - Locked Python transitive dependency graphs for backend, Office, signing, PDF/A and OCR services.
 - Added SHA-256 artifact verification for backend, Office, signing, PDF/A and the ordinary PyPI portion of the OCR graph.
 - Kept PaddlePaddle isolated on its official CPU package index with an explicit source/version lock.
