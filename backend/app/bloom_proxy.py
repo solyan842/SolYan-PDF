@@ -16,6 +16,7 @@ router = APIRouter(prefix="/experimental", tags=["Experimental conversion"])
 BLOOM_SERVICE_URL = os.getenv("BLOOM_SERVICE_URL", "http://bloom-service:8787").rstrip("/")
 BLOOM_API_KEY = os.getenv("BLOOM_API_KEY", "")
 OCR_SERVICE_URL = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8010").rstrip("/")
+OCR_XLSX_FALLBACK_TIMEOUT_SECONDS = float(os.getenv("OCR_XLSX_FALLBACK_TIMEOUT_SECONDS", "900"))
 MAX_FILE_SIZE = int(os.getenv("BLOOM_PROXY_MAX_FILE_SIZE", str(100 * 1024 * 1024)))
 TARGETS = {"docx", "xlsx", "pptx"}
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -92,11 +93,15 @@ def _try_ocr_xlsx(data: bytes, filename: str) -> tuple[bytes, str, str, dict[str
 
     OCR is a best-effort fallback. If the OCR service is unavailable or finds no
     exportable table, the caller keeps Bloom's original placeholder instead of
-    turning a previously successful conversion into an error.
+    turning a previously successful conversion into an error. CPU-only
+    PP-Structure can legitimately take several minutes for multi-page scans, so
+    its fallback timeout is intentionally longer than Bloom's own job timeout.
     """
 
     try:
-        with httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
+        with httpx.Client(
+            timeout=httpx.Timeout(OCR_XLSX_FALLBACK_TIMEOUT_SECONDS, connect=10.0)
+        ) as client:
             response = client.post(
                 f"{OCR_SERVICE_URL}/ocr/xlsx",
                 files={"file": (filename, data, "application/pdf")},
