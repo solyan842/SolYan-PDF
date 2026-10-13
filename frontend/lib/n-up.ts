@@ -110,10 +110,12 @@ export function fitSourcePageToBox(
   box: { x: number; y: number; width: number; height: number },
   innerMargin = 0,
   pageNumber?: number,
+  scaleMultiplier = 1,
 ): PageFit {
   const usableWidth = box.width - 2 * innerMargin;
   const usableHeight = box.height - 2 * innerMargin;
   if (!(usableWidth > 0 && usableHeight > 0)) throw new Error('Lề quá lớn so với vùng đặt trang.');
+  if (!Number.isFinite(scaleMultiplier) || scaleMultiplier <= 0) throw new Error('Hệ số scale phải lớn hơn 0.');
 
   const rotation = normalizePageRotation(source.rotation);
   const rotated = rotation === 90 || rotation === 270;
@@ -123,7 +125,7 @@ export function fitSourcePageToBox(
     throw new Error(pageNumber ? `Trang ${pageNumber} có kích thước không hợp lệ.` : 'Trang có kích thước không hợp lệ.');
   }
 
-  const scale = Math.min(usableWidth / displayWidth, usableHeight / displayHeight);
+  const scale = Math.min(usableWidth / displayWidth, usableHeight / displayHeight) * scaleMultiplier;
   const width = displayWidth * scale;
   const height = displayHeight * scale;
   const x = box.x + innerMargin + (usableWidth - width) / 2;
