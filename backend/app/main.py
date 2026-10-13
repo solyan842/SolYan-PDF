@@ -18,6 +18,7 @@ from .network import router as network_router
 from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
 from .remove_blank_pages import router as remove_blank_pages_router
+from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -41,6 +42,11 @@ app.add_middleware(
         "X-SolYan-Blank-Pages",
         "X-SolYan-Blank-Threshold",
         "X-SolYan-Blank-White-Percent",
+        "X-SolYan-Sanitize-Actions-Removed",
+        "X-SolYan-Sanitize-Links-Removed",
+        "X-SolYan-Sanitize-Metadata-Removed",
+        "X-SolYan-Sanitize-Embedded-Files-Removed",
+        "X-SolYan-Sanitize-Active-Annotations-Removed",
     ],
 )
 app.include_router(network_router)
@@ -52,6 +58,7 @@ app.include_router(bloom_router)
 app.include_router(extract_images_router)
 app.include_router(remove_blank_pages_router)
 app.include_router(attachments_router)
+app.include_router(sanitize_router)
 
 
 def _require_qpdf() -> None:
