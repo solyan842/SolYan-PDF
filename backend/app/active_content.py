@@ -25,7 +25,7 @@ MAX_FINDINGS = 500
 MAX_SCRIPT_BYTES = 64 * 1024
 MAX_TOTAL_SCRIPT_BYTES = 256 * 1024
 
-TRIGGER_KEYS = {"/A", "/AA", "/OpenAction", "/XFA"}
+TRIGGER_KEYS = {"/AA", "/OpenAction", "/XFA"}
 ATTACHMENT_KEYS = {"/EmbeddedFiles", "/AF"}
 ATTACHMENT_ANNOTATIONS = {"/FileAttachment"}
 
@@ -86,6 +86,18 @@ def _object_payload(objects: dict[str, Any], ref: str) -> Any:
     if isinstance(stream, dict):
         return stream.get("dict")
     return None
+
+
+def _resolved_action(objects: dict[str, Any], value: Any) -> dict[str, Any] | None:
+    candidate = value
+    if isinstance(value, str) and OBJECT_REF_RE.fullmatch(value):
+        candidate = _object_payload(objects, value)
+    if not isinstance(candidate, dict):
+        return None
+    action_type = candidate.get("/S")
+    if not isinstance(action_type, str) or action_type not in ACTION_TYPES:
+        return None
+    return candidate
 
 
 def _decode_qpdf_string(value: Any) -> str | None:
@@ -288,7 +300,8 @@ def _inspect_pdf(input_path: Path, password: str = "") -> dict[str, Any]:
 
         for key, child in value.items():
             child_path = f"{path}.{key}"
-            if key in TRIGGER_KEYS:
+            is_action_trigger = key == "/A" and _resolved_action(objects, child) is not None
+            if key in TRIGGER_KEYS or is_action_trigger:
                 add_finding(
                     {
                         "kind": "trigger",
