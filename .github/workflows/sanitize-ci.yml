@@ -49,117 +49,21 @@ jobs:
           cat >/tmp/malicious.json <<'JSON'
           {
             "qpdf": [
+              {"jsonversion": 2, "pdfversion": "1.7"},
               {
-                "jsonversion": 2,
-                "pdfversion": "1.7"
-              },
-              {
-                "obj:1 0 R": {
-                  "value": {
-                    "/Type": "/Catalog",
-                    "/Pages": "2 0 R",
-                    "/OpenAction": "5 0 R",
-                    "/AA": {"/WC": "5 0 R"},
-                    "/Names": {
-                      "/JavaScript": "10 0 R",
-                      "/EmbeddedFiles": "11 0 R"
-                    },
-                    "/Metadata": "8 0 R",
-                    "/AcroForm": {"/Fields": [], "/XFA": "8 0 R"},
-                    "/AF": ["7 0 R"]
-                  }
-                },
-                "obj:2 0 R": {
-                  "value": {
-                    "/Type": "/Pages",
-                    "/Count": 1,
-                    "/Kids": ["3 0 R"]
-                  }
-                },
-                "obj:3 0 R": {
-                  "value": {
-                    "/Type": "/Page",
-                    "/Parent": "2 0 R",
-                    "/MediaBox": [0, 0, 612, 792],
-                    "/AA": {"/O": "5 0 R"},
-                    "/Annots": ["4 0 R", "6 0 R"]
-                  }
-                },
-                "obj:4 0 R": {
-                  "value": {
-                    "/Type": "/Annot",
-                    "/Subtype": "/Link",
-                    "/Rect": [10, 10, 200, 40],
-                    "/A": {
-                      "/S": "/URI",
-                      "/URI": "u:https://evil.example/"
-                    }
-                  }
-                },
-                "obj:5 0 R": {
-                  "value": {
-                    "/S": "/JavaScript",
-                    "/JS": "u:app.alert('owned')"
-                  }
-                },
-                "obj:6 0 R": {
-                  "value": {
-                    "/Type": "/Annot",
-                    "/Subtype": "/FileAttachment",
-                    "/Rect": [10, 50, 30, 70],
-                    "/FS": "7 0 R"
-                  }
-                },
-                "obj:7 0 R": {
-                  "value": {
-                    "/Type": "/Filespec",
-                    "/F": "u:payload.bin",
-                    "/UF": "u:payload.bin",
-                    "/EF": {"/F": "9 0 R"}
-                  }
-                },
-                "obj:8 0 R": {
-                  "stream": {
-                    "dict": {
-                      "/Type": "/Metadata",
-                      "/Subtype": "/XML"
-                    },
-                    "data": "PHg6eG1wbWV0YT5FVklMPC94OnhtcG1ldGE+"
-                  }
-                },
-                "obj:9 0 R": {
-                  "stream": {
-                    "dict": {
-                      "/Type": "/EmbeddedFile",
-                      "/Subtype": "/application#2foctet-stream"
-                    },
-                    "data": "UEFZTE9BRA=="
-                  }
-                },
-                "obj:10 0 R": {
-                  "value": {
-                    "/Names": ["u:doc-js", "5 0 R"]
-                  }
-                },
-                "obj:11 0 R": {
-                  "value": {
-                    "/Names": ["u:payload.bin", "7 0 R"]
-                  }
-                },
-                "obj:12 0 R": {
-                  "value": {
-                    "/Title": "u:Sensitive title",
-                    "/Author": "u:Sensitive author",
-                    "/Keywords": "u:secret metadata"
-                  }
-                },
-                "trailer": {
-                  "value": {
-                    "/Root": "1 0 R",
-                    "/Info": "12 0 R",
-                    "/Size": 13
-                  }
-                }
+                "obj:1 0 R": {"value": {"/Type": "/Catalog", "/Pages": "2 0 R", "/OpenAction": "5 0 R", "/AA": {"/WC": "5 0 R"}, "/Names": {"/JavaScript": "10 0 R", "/EmbeddedFiles": "11 0 R"}, "/Metadata": "8 0 R", "/AcroForm": {"/Fields": [], "/XFA": "8 0 R"}, "/AF": ["7 0 R"]}},
+                "obj:2 0 R": {"value": {"/Type": "/Pages", "/Count": 1, "/Kids": ["3 0 R"]}},
+                "obj:3 0 R": {"value": {"/Type": "/Page", "/Parent": "2 0 R", "/MediaBox": [0, 0, 612, 792], "/AA": {"/O": "5 0 R"}, "/Annots": ["4 0 R", "6 0 R"]}},
+                "obj:4 0 R": {"value": {"/Type": "/Annot", "/Subtype": "/Link", "/Rect": [10, 10, 200, 40], "/A": {"/S": "/URI", "/URI": "u:https://evil.example/"}}},
+                "obj:5 0 R": {"value": {"/S": "/JavaScript", "/JS": "u:app.alert('owned')"}},
+                "obj:6 0 R": {"value": {"/Type": "/Annot", "/Subtype": "/FileAttachment", "/Rect": [10, 50, 30, 70], "/FS": "7 0 R"}},
+                "obj:7 0 R": {"value": {"/Type": "/Filespec", "/F": "u:payload.bin", "/UF": "u:payload.bin", "/EF": {"/F": "9 0 R"}}},
+                "obj:8 0 R": {"stream": {"dict": {"/Type": "/Metadata", "/Subtype": "/XML"}, "data": "PHg6eG1wbWV0YT5FVklMPC94OnhtcG1ldGE+"}},
+                "obj:9 0 R": {"stream": {"dict": {"/Type": "/EmbeddedFile", "/Subtype": "/application#2foctet-stream"}, "data": "UEFZTE9BRA=="}},
+                "obj:10 0 R": {"value": {"/Names": ["u:doc-js", "5 0 R"]}},
+                "obj:11 0 R": {"value": {"/Names": ["u:payload.bin", "7 0 R"]}},
+                "obj:12 0 R": {"value": {"/Title": "u:Sensitive title", "/Author": "u:Sensitive author", "/Keywords": "u:secret metadata"}},
+                "trailer": {"value": {"/Root": "1 0 R", "/Info": "12 0 R", "/Size": 13}}
               }
             ]
           }
@@ -190,17 +94,10 @@ jobs:
           from pathlib import Path
           from app.sanitize import SanitizeOptions, _sanitize_pdf
 
-          src = Path('/tmp/malicious.pdf')
-          out = Path('/tmp/sanitized.pdf')
           stats = _sanitize_pdf(
-              src,
-              out,
-              SanitizeOptions(
-                  remove_actions=True,
-                  remove_links=True,
-                  remove_metadata=True,
-                  remove_embedded_files=True,
-              ),
+              Path('/tmp/malicious.pdf'),
+              Path('/tmp/sanitized.pdf'),
+              SanitizeOptions(True, True, True, True),
           )
           assert stats.actions_removed >= 4, stats
           assert stats.links_removed >= 1, stats
@@ -210,8 +107,12 @@ jobs:
           PY
 
           qpdf --check /tmp/sanitized.pdf
-          test "$(pdfinfo /tmp/sanitized.pdf | awk '/^Pages:/ {print $2}')" = "1"
-          test -z "$(qpdf --list-attachments /tmp/sanitized.pdf)"
+          pages="$(pdfinfo /tmp/sanitized.pdf | awk '/^Pages:/ {print $2}')"
+          attachments="$(qpdf --list-attachments /tmp/sanitized.pdf)"
+          echo "sanitized pages=${pages}"
+          printf 'sanitized attachments=%s\n' "$attachments"
+          test "$pages" = "1"
+          test -z "$attachments"
           qpdf --json-output /tmp/sanitized.pdf /tmp/after.json
 
           python <<'PY'
@@ -236,35 +137,26 @@ jobs:
                   return entry.get('value') if isinstance(entry, dict) else None
               return value if isinstance(value, dict) else None
 
-          action_types = {
-              '/GoTo','/GoToR','/GoToE','/Launch','/Thread','/URI','/Sound','/Movie','/Hide','/Named',
-              '/SubmitForm','/ResetForm','/ImportData','/JavaScript','/SetOCGState','/Rendition','/Trans','/GoTo3DView'
-          }
+          action_types = {'/GoTo','/GoToR','/GoToE','/Launch','/Thread','/URI','/Sound','/Movie','/Hide','/Named','/SubmitForm','/ResetForm','/ImportData','/JavaScript','/SetOCGState','/Rendition','/Trans','/GoTo3DView'}
           forbidden_keys = {'/A','/AA','/OpenAction','/JavaScript','/JS','/XFA','/Metadata','/EmbeddedFiles','/AF'}
 
           def walk(value):
               if isinstance(value, dict):
                   assert not (forbidden_keys & set(value)), value
                   assert value.get('/S') not in action_types, value
-                  for child in value.values():
-                      walk(child)
+                  for child in value.values(): walk(child)
               elif isinstance(value, list):
-                  for child in value:
-                      walk(child)
+                  for child in value: walk(child)
 
           for entry in objs.values():
-              if not isinstance(entry, dict):
-                  continue
-              if isinstance(entry.get('value'), (dict, list)):
-                  walk(entry['value'])
+              if not isinstance(entry, dict): continue
+              if isinstance(entry.get('value'), (dict, list)): walk(entry['value'])
               stream = entry.get('stream')
-              if isinstance(stream, dict) and isinstance(stream.get('dict'), dict):
-                  walk(stream['dict'])
+              if isinstance(stream, dict) and isinstance(stream.get('dict'), dict): walk(stream['dict'])
 
           pages = [v['value'] for k, v in objs.items() if k.startswith('obj:') and isinstance(v, dict) and isinstance(v.get('value'), dict) and v['value'].get('/Type') == '/Page']
           assert len(pages) == 1
-          annots = pages[0].get('/Annots', [])
-          for ref in annots:
+          for ref in pages[0].get('/Annots', []):
               annot = resolve(ref)
               assert not annot or annot.get('/Subtype') not in {'/Link','/FileAttachment','/RichMedia','/Screen','/Movie','/Sound','/3D'}
           print('sanitized object graph contains no tested active-content vectors')
@@ -277,13 +169,7 @@ jobs:
           python <<'PY'
           from pathlib import Path
           from app.sanitize import SanitizeOptions, _sanitize_pdf
-
-          out = Path('/tmp/metadata-only.pdf')
-          stats = _sanitize_pdf(
-              Path('/tmp/malicious.pdf'),
-              out,
-              SanitizeOptions(False, False, True, False),
-          )
+          stats = _sanitize_pdf(Path('/tmp/malicious.pdf'), Path('/tmp/metadata-only.pdf'), SanitizeOptions(False, False, True, False))
           assert stats.metadata_removed >= 2
           assert stats.actions_removed == 0
           assert stats.links_removed == 0
