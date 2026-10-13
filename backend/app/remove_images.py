@@ -15,6 +15,7 @@ from .sanitize import OBJECT_REF_RE, _qpdf_json, _read_pdf, _require_qpdf_json, 
 router = APIRouter()
 
 MAX_PAGE_WALK = 2_000
+MAX_PAGE_TREE_NODES = 10_000
 MAX_RESOURCE_WALK = 20_000
 
 
@@ -38,6 +39,61 @@ def _resolve_dictionary(objects: dict[str, Any], value: Any) -> dict[str, Any] |
     if not isinstance(value, str) or not OBJECT_REF_RE.fullmatch(value):
         return None
     return _entry_dictionary(objects.get(f"obj:{value}"))
+
+
+def _reachable_pages(objects: dict[str, Any]) -> list[dict[str, Any]]:
+    trailer = _entry_dictionary(objects.get("trailer"))
+    if trailer is None:
+        raise HTTPException(status_code=422, detail="PDF trailer is unavailable")
+
+    catalog = _resolve_dictionary(objects, trailer.get("/Root"))
+    if catalog is None:
+        raise HTTPException(status_code=422, detail="PDF catalog is unavailable")
+
+    pages_root = catalog.get("/Pages")
+    if pages_root is None:
+        raise HTTPException(status_code=422, detail="PDF page tree is unavailable")
+
+    pages: list[dict[str, Any]] = []
+    stack: list[Any] = [pages_root]
+    seen: set[str | int] = set()
+    visited_nodes = 0
+
+    while stack:
+        node_value = stack.pop()
+        node_id: str | int
+        if isinstance(node_value, str) and OBJECT_REF_RE.fullmatch(node_value):
+            node_id = node_value
+        elif isinstance(node_value, dict):
+            node_id = id(node_value)
+        else:
+            continue
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+
+        visited_nodes += 1
+        if visited_nodes > MAX_PAGE_TREE_NODES:
+            raise HTTPException(status_code=422, detail="PDF page tree is too large")
+
+        node = _resolve_dictionary(objects, node_value)
+        if node is None:
+            continue
+        node_type = node.get("/Type")
+        if node_type == "/Page":
+            pages.append(node)
+            if len(pages) > MAX_PAGE_WALK:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Remove Images is limited to {MAX_PAGE_WALK} pages",
+                )
+            continue
+
+        kids = node.get("/Kids")
+        if node_type == "/Pages" and isinstance(kids, list):
+            stack.extend(reversed(kids))
+
+    return pages
 
 
 def _page_resources(objects: dict[str, Any], page: dict[str, Any]) -> Any:
@@ -128,16 +184,10 @@ def _build_remove_images_update(data: dict[str, Any]) -> tuple[dict[str, Any], i
 
     visited_resources: set[str | int] = set()
     visited_forms: set[str] = set()
-    counters = {"pages": 0, "resources": 0}
+    counters = {"resources": 0}
     removed = 0
 
-    for entry in objects.values():
-        page = _entry_dictionary(entry)
-        if page is None or page.get("/Type") != "/Page":
-            continue
-        counters["pages"] += 1
-        if counters["pages"] > MAX_PAGE_WALK:
-            raise HTTPException(status_code=422, detail=f"Remove Images is limited to {MAX_PAGE_WALK} pages")
+    for page in _reachable_pages(objects):
         resources_value = _page_resources(objects, page)
         if resources_value is None:
             continue
