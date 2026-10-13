@@ -67,7 +67,7 @@ export default function RemoveBlankPagesPage() {
       <label className="field"><span>Tỷ lệ pixel trắng tối thiểu (%)</span><input type="number" min="0.1" max="100" step="0.1" value={whitePercent} onChange={(e)=>setWhitePercent(Number(e.target.value))}/></label>
       {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong></p>}
       <p className="hint">Mặc định 10 / 99.9% tương đương pixel grayscale ≥245 phải chiếm ít nhất 99.9% trang. Giới hạn: 100 MB, 300 trang; trang text được giữ không cần raster.</p>
-      {result && <div className="success">{result}</div>}
+      {result && <div className="result-box">{result}</div>}
       {error && <div className="error">{error}</div>}
       <button className="merge-button" type="button" onClick={run} disabled={!file || busy || threshold < 0 || threshold > 255 || whitePercent <= 0 || whitePercent > 100}>{busy ? 'Đang phân tích…' : 'Xóa trang trắng'}</button>
     </section>
