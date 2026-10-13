@@ -112,7 +112,7 @@ jobs:
           echo "sanitized pages=${pages}"
           printf 'sanitized attachments=%s\n' "$attachments"
           test "$pages" = "1"
-          test -z "$attachments"
+          printf '%s\n' "$attachments" | grep -q 'has no embedded files'
           qpdf --json-output /tmp/sanitized.pdf /tmp/after.json
 
           python <<'PY'
