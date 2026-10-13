@@ -29,7 +29,7 @@ RUN rm -f /etc/apt/sources.list \
       'Check-Valid-Until: no' \
       > /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=3 update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng tesseract-ocr-osd \
     && groupadd --system solyan \
     && useradd --system --gid solyan --create-home --home-dir /home/solyan solyan \
     && rm -rf /var/lib/apt/lists/*
