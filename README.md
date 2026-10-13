@@ -12,6 +12,10 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - qpdf web optimization (linearization), annotation/form flattening, and optional image recompression
 - Embedded raster-image extraction to ZIP through Poppler `pdfimages`, preserving native encoded formats where supported
 - Conservative blank-page detection/removal: text pages are always kept; text-free pages use bounded Poppler grayscale analysis before qpdf page selection
+- Browser-local N-up / multi-page-per-sheet layout with A4 portrait/landscape, custom grids, margins, borders and LTR/RTL ordering
+- Browser-local saddle-stitch booklet imposition with automatic blank padding, left/right spine, gutter and duplex/manual-pass controls
+- Browser-local PDF crop with page-range selection and deterministic page-box updates
+- Browser-local resize/scale to A0-A6, Letter, Legal or custom page sizes with rotation-aware fitting
 - Browser-side PDF viewer and basic editor
 - AcroForm discovery/filling
 
@@ -97,6 +101,9 @@ GitHub Actions currently verifies:
 - Real qpdf smoke coverage for linearization, annotation/form flattening and image optimization routes
 - Real Poppler `pdfimages` extraction on a PDF containing an embedded Image XObject, including ZIP validation and no-image/error cases
 - Real conservative blank-page removal on controlled blank/vector/text pages, requiring only the truly blank page to be removed
+- Real browser-local N-up generation with A4 geometry, ordering, RTL, source rotation and retained-text checks
+- Real browser-local booklet imposition with saddle-stitch order, blank padding, duplex/spine behavior, source rotation and retained-text checks
+- Real browser-local crop/resize geometry with selective page boxes, rotated source pages, A4/custom target sizes, qpdf validation and retained-text checks
 - OCR binary proxy behavior for scanned-table XLSX downloads
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
@@ -127,6 +134,8 @@ See `docs/BENCHMARKING.md` for:
 - qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
 - Embedded-image extraction is bounded to 100 MB input, 2,000 listed images, 100 megapixels per image, 1 gigapixel aggregate and 512 MB extracted/archive payload to limit decompression/resource abuse.
 - Blank-page removal is bounded to 100 MB / 300 pages / 700 million raster-analysis pixels. The default 10 / 99.9% threshold is configurable, and the service refuses to emit a zero-page PDF when every page is classified blank.
+- N-up, booklet, crop and page-resize operations are browser-local and bounded to 100 MB / 500 source pages. N-up/booklet/resize embed visible page content into new pages, so interactive form/annotation controls are not preserved as interactive controls.
+- Crop changes page boxes rather than securely deleting clipped content. It must not be used as a substitute for secure redaction; data outside the visible crop can remain in the PDF content streams.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
 ## License
