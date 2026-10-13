@@ -73,13 +73,17 @@
 - [x] Add XLSX print-layout normalization and table-fragmentation regressions
 - [x] Add pinned public 9-case / 50-page real-world diagnostic corpus across DOCX/XLSX/PPTX and record a non-release baseline
 - [x] Fix real-world DOCX/PPTX interoperability defects exposed by the diagnostic corpus, including XML sanitation, PDF metadata BOM decoding and inherited page geometry
-- [x] Add PP-StructureV3 fallback for scanned PDF → XLSX only when Bloom reports no logical tables, while preserving Bloom as the primary engine
+- [x] Add PP-StructureV3 fallback for scanned PDF → XLSX only when Bloom reports no logical tables, while preserving Bloom as the primary XLSX engine
 - [x] Validate the scanned-XLSX fallback on 3 pinned public scans / 9 pages, improving useful round-trip pagination from 3/9 to 9/9 pages by preserving source pages with no recognized cells as raster worksheets, without weakening fidelity gates
+- [x] Add native-OOXML editability diagnostics for DOCX/PPTX so routing decisions are not based on rendered similarity alone
+- [x] A/B pinned Bloom vs LibreOffice PDF import on the same 6-case / 41-page public DOCX/PPTX corpus: LibreOffice 96.44% average similarity vs Bloom 84.56%, with editable native text in all 6 cases
+- [x] Route PDF → DOCX/PPTX `auto` through LibreOffice first with Bloom best-effort fallback; keep PDF → XLSX on Bloom → PP-StructureV3 fallback
+- [x] Re-run the 18-case synthetic corpus through final auto routing: 97.78% overall, DOCX 96.40%, PPTX 98.76%, XLSX 98.17%, with zero page-count/unmatched/geometry mismatches and editable DOCX/PPTX text in 12/12 cases
 - [ ] Run representative PDF → DOCX release corpus
 - [ ] Run representative PDF → XLSX release corpus
 - [ ] Run representative PDF → PPTX release corpus
 
-PDF-to-Office stays labelled **Experimental** until representative release corpora meet agreed target-specific thresholds. The existing public real-world corpus is a pinned diagnostic baseline, not yet a release gate.
+PDF-to-Office stays labelled **Experimental** until the versioned representative release corpus meets fixed target-specific thresholds. Current synthetic and pinned public real-world corpora now establish the routing policy and measured baseline; the next gate promotes representative cases into a permanent V1 release corpus rather than weakening the measured criteria.
 
 ## Phase 5 — Advanced tools
 
@@ -169,7 +173,7 @@ PDF-to-Office stays labelled **Experimental** until representative release corpo
 
 ## Release decisions / external inputs still required
 
-- [ ] Promote/version representative PDF → Office release corpora and define acceptable target-specific fidelity thresholds; the current 9-case public corpus remains diagnostic only
+- [ ] Version the representative PDF → Office V1 release corpus and lock its target-specific fidelity/editability thresholds against the measured auto-routing baselines
 - [ ] Choose whether multi-party remote signing belongs in V1 or a later release
 - [ ] Choose cloud-storage providers and provide credentials if connectors are wanted
 - [ ] Choose model/provider if AI summarization is wanted
