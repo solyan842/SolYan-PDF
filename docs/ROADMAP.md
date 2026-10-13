@@ -111,7 +111,16 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] Add booklet / imposition layout
 - [x] Add crop / resize-page utilities with deterministic page geometry
 
-V1.1 self-hosted utility parity is complete. The remaining unchecked items in the project require product/provider decisions or external credentials rather than additional self-contained PDF-engine work.
+V1.1 self-hosted utility parity is complete and released as v0.1.4.
+
+## V1.2 — Self-contained parity expansion
+
+- [x] Add browser-local PDF overlay with repeat-first/page-matched modes, opacity and CropBox/rotation-aware fitting
+- [x] Add browser-local PDF → one long page with vector/text preservation and a bounded 14,400 pt compatibility ceiling
+- [x] Extend PDF split with exact pages-per-part mode and clearly labeled best-effort target-size mode, returning parts in one ZIP
+- [x] Add bounded qpdf embedded-file management: list, add, extract and remove attachments
+- [ ] Evaluate PDF sanitization only if JavaScript/actions/links/metadata/embedded-file removal can be implemented and regression-tested without misleading partial coverage
+- [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
 
@@ -159,6 +168,9 @@ V1.1 self-hosted utility parity is complete. The remaining unchecked items in th
 - [x] Real browser-local N-up gate with A4 geometry, ordering, RTL, source rotation and retained text checks
 - [x] Real browser-local booklet gate with saddle-stitch order, blank padding, duplex/spine behavior, source rotation and retained text checks
 - [x] Real browser-local crop/resize geometry gate with selective page boxes, rotated sources, A4/custom target sizes, qpdf validation and retained text checks
+- [x] Real browser-local overlay/single-page gate with qpdf validity, page geometry, rotation handling and retained-text checks
+- [x] Real browser-local advanced-split gate with exact page grouping, bounded target-size estimation, qpdf validity and retained-text checks
+- [x] Real qpdf 11.9 attachment round-trip gate covering add/list/extract/remove and binary payload equality
 - [x] OCR XLSX binary proxy regression coverage
 - [x] Private-network Ping blocked by default
 - [x] Untrusted proxy IP headers ignored by default
