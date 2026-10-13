@@ -79,11 +79,12 @@
 - [x] A/B pinned Bloom vs LibreOffice PDF import on the same 6-case / 41-page public DOCX/PPTX corpus: LibreOffice 96.44% average similarity vs Bloom 84.56%, with editable native text in all 6 cases
 - [x] Route PDF → DOCX/PPTX `auto` through LibreOffice first with Bloom best-effort fallback; keep PDF → XLSX on Bloom → PP-StructureV3 fallback
 - [x] Re-run the 18-case synthetic corpus through final auto routing: 97.78% overall, DOCX 96.40%, PPTX 98.76%, XLSX 98.17%, with zero page-count/unmatched/geometry mismatches and editable DOCX/PPTX text in 12/12 cases
-- [ ] Run representative PDF → DOCX release corpus
-- [ ] Run representative PDF → XLSX release corpus
-- [ ] Run representative PDF → PPTX release corpus
+- [x] Run representative PDF → DOCX release corpus
+- [x] Run representative PDF → XLSX release corpus
+- [x] Run representative PDF → PPTX release corpus
+- [x] Version and lock the permanent PDF-to-Office V1 release gate: 27 cases / 68 source pages with fixed target-specific fidelity, page/geometry, editability and scanned-XLSX acceptance thresholds
 
-PDF-to-Office stays labelled **Experimental** until the versioned representative release corpus meets fixed target-specific thresholds. Current synthetic and pinned public real-world corpora now establish the routing policy and measured baseline; the next gate promotes representative cases into a permanent V1 release corpus rather than weakening the measured criteria.
+PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy combines the controlled 18-case synthetic corpus with the pinned 9-case / 50-page public real-world corpus. Current measured baselines are 97.78% overall on synthetic auto routing, 96.44% on the 6-case / 41-page public DOCX/PPTX corpus, and 9/9 source pages preserved for the scanned-XLSX corpus. These are reproducible release baselines, not universal fidelity claims for every possible PDF.
 
 ## Phase 5 — Advanced tools
 
@@ -151,6 +152,8 @@ PDF-to-Office stays labelled **Experimental** until the versioned representative
 - [x] Real PDF/A smoke test
 - [x] Compose validation + frontend/backend container build CI
 - [x] Run all six runtime images as non-root with writable HOME enforced by CI
+- [x] PDF-to-Office synthetic V1 release gate
+- [x] PDF-to-Office public real-world V1 release gate
 
 ## Release packaging
 
@@ -173,7 +176,7 @@ PDF-to-Office stays labelled **Experimental** until the versioned representative
 
 ## Release decisions / external inputs still required
 
-- [ ] Version the representative PDF → Office V1 release corpus and lock its target-specific fidelity/editability thresholds against the measured auto-routing baselines
+- [x] Version the representative PDF → Office V1 release corpus and lock its target-specific fidelity/editability thresholds against the measured auto-routing baselines
 - [ ] Choose whether multi-party remote signing belongs in V1 or a later release
 - [ ] Choose cloud-storage providers and provide credentials if connectors are wanted
 - [ ] Choose model/provider if AI summarization is wanted
