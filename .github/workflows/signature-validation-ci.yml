@@ -47,9 +47,9 @@ jobs:
           python -m pip install --no-deps -r requirements.txt
           python -m pip check
 
-      - name: Install test-only dependency
+      - name: Install test-only dependencies
         run: |
-          python -m pip install httpx==0.28.1
+          python -m pip install httpx==0.28.1 pypdf==6.1.1
           python -m pip check
 
       - name: Compile sign service
@@ -71,7 +71,15 @@ jobs:
             -out /tmp/solyan-sign-validation/test.p12 \
             -passout pass:test-pass \
             -name 'SolYan Signature CI'
-          qpdf --empty /tmp/solyan-sign-validation/base.pdf
+          python - <<'PY'
+          from pypdf import PdfWriter
+
+          writer = PdfWriter()
+          writer.add_blank_page(width=595, height=842)
+          with open('/tmp/solyan-sign-validation/base.pdf', 'wb') as output:
+              writer.write(output)
+          PY
+          qpdf --check /tmp/solyan-sign-validation/base.pdf
 
       - name: Verify no-signature signed-signature and tamper detection
         run: |
