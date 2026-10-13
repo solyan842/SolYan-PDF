@@ -17,6 +17,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Browser-local saddle-stitch booklet imposition with automatic blank padding, left/right spine, gutter and duplex/manual-pass controls
 - Browser-local PDF crop with page-range selection and deterministic page-box updates
 - Browser-local resize/scale to A0-A6, Letter, Legal or custom page sizes with rotation-aware fitting
+- Browser-local bookmark/outline editor with Unicode titles, nested hierarchy, sibling reordering and page destinations
 - Browser-side PDF viewer and basic editor
 - AcroForm discovery/filling
 
@@ -27,7 +28,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
 - JSON/Markdown/text exports
 - CER/WER benchmark harness for Vietnamese OCR quality measurement
-- Reproducible 59-sample real-scan Tesseract regression corpus: 9 public-domain modern documents plus 50 proofread historical scan pages from two public-domain works
+- Reproducible 59-sample real-scan Tesseract regression corpus: 9 public-domain modern documents plus 50 proofread historical scan pages from two public-domain Vietnamese works
 - Expanded real-scan baseline: average CER **9.41%**, average WER **22.18%** on the pinned corpus/environment
 
 ### Conversion
@@ -106,6 +107,7 @@ GitHub Actions currently verifies:
 - Real browser-local N-up generation with A4 geometry, ordering, RTL, source rotation and retained-text checks
 - Real browser-local booklet imposition with saddle-stitch order, blank padding, duplex/spine behavior, source rotation and retained-text checks
 - Real browser-local crop/resize geometry with selective page boxes, rotated source pages, A4/custom target sizes, qpdf validation and retained-text checks
+- Real browser-local bookmark/outline round-trip with Unicode titles, nested hierarchy, sibling links, page clamping, replacement/removal and qpdf object-graph validation
 - OCR binary proxy behavior for scanned-table XLSX downloads
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
@@ -138,6 +140,7 @@ See `docs/BENCHMARKING.md` for:
 - Embedded-image extraction is bounded to 100 MB input, 2,000 listed images, 100 megapixels per image, 1 gigapixel aggregate and 512 MB extracted/archive payload to limit decompression/resource abuse.
 - Blank-page removal is bounded to 100 MB / 300 pages / 700 million raster-analysis pixels. The default 10 / 99.9% threshold is configurable, and the service refuses to emit a zero-page PDF when every page is classified blank.
 - N-up, booklet, crop and page-resize operations are browser-local and bounded to 100 MB / 500 source pages. N-up/booklet/resize embed visible page content into new pages, so interactive form/annotation controls are not preserved as interactive controls.
+- The bookmark editor writes standards-based direct page destinations. It reads direct `/Dest` and `/A /GoTo` outline destinations; named or unusual destination forms that cannot be resolved are shown as page 1 instead of being guessed. Writing a new outline changes the PDF and invalidates existing digital signatures.
 - Crop changes page boxes rather than securely deleting clipped content. It must not be used as a substitute for secure redaction; data outside the visible crop can remain in the PDF content streams.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
