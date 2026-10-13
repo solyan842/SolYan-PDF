@@ -15,7 +15,10 @@ from PIL import Image, ImageChops, ImageStat
 _GEOMETRY_DIMENSION_TOLERANCE = 0.01
 _GEOMETRY_ASPECT_TOLERANCE = 0.005
 _SHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+_WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+_DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 _NS = {'x': _SHEET_NS}
+_MODES = {'auto', 'bloom', 'libreoffice'}
 
 
 def render_pages(pdf_bytes: bytes, scale: float = 1.25):
@@ -85,9 +88,6 @@ def visual_similarity(left: bytes, right: bytes) -> dict:
                 if resized is not None:
                     resized.close()
 
-        # Missing or extra round-trip pages are a structural fidelity failure.
-        # Represent each unmatched page as a zero-similarity slot so a conversion
-        # cannot score highly by reproducing only the first N matching pages.
         scores.extend([0.0] * (total_slots - compared))
     finally:
         for image in [*a_pages, *b_pages]:
@@ -195,21 +195,94 @@ def _xlsx_diagnostics(xlsx_bytes: bytes) -> dict:
         return {'error': 'unable to inspect XLSX package'}
 
 
-def benchmark_pdf(source: bytes, filename: str, target: str, api: str) -> tuple[dict, bytes, bytes]:
+def _ooxml_editability_diagnostics(package_bytes: bytes, target: str) -> dict:
+    """Measure native OOXML text separately from visual round-trip fidelity.
+
+    PDF import can score very highly by embedding page images. That is useful for
+    visual preservation but is not equivalent to an editable Word/PowerPoint
+    conversion. Count actual OOXML text nodes and media so routing decisions can
+    use both signals without guessing from rendered similarity alone.
+    """
+
+    if target == 'docx':
+        text_tag = f'{{{_WORD_NS}}}t'
+        xml_prefix = 'word/'
+        primary_xml = lambda name: (
+            name == 'word/document.xml'
+            or name.startswith('word/header')
+            or name.startswith('word/footer')
+        ) and name.endswith('.xml')
+        media_prefix = 'word/media/'
+    elif target == 'pptx':
+        text_tag = f'{{{_DRAWING_NS}}}t'
+        xml_prefix = 'ppt/slides/'
+        primary_xml = lambda name: name.startswith(xml_prefix) and name.endswith('.xml')
+        media_prefix = 'ppt/media/'
+    else:
+        raise ValueError(f'OOXML editability diagnostics do not support {target}')
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(package_bytes), 'r') as archive:
+            names = archive.namelist()
+            xml_paths = sorted(name for name in names if primary_xml(name))
+            media_paths = sorted(name for name in names if name.startswith(media_prefix) and not name.endswith('/'))
+            text_values: list[str] = []
+            parsed_parts = 0
+            for path in xml_paths:
+                try:
+                    root = ET.fromstring(archive.read(path))
+                except ET.ParseError:
+                    continue
+                parsed_parts += 1
+                for node in root.iter(text_tag):
+                    value = (node.text or '').strip()
+                    if value:
+                        text_values.append(value)
+
+            return {
+                'xml_parts': parsed_parts,
+                'text_nodes': len(text_values),
+                'text_characters': sum(len(value) for value in text_values),
+                'editable_text_present': bool(text_values),
+                'embedded_media_files': len(media_paths),
+                'text_preview': text_values[:16],
+            }
+    except (zipfile.BadZipFile, OSError):
+        return {
+            'error': f'unable to inspect {target.upper()} package',
+            'xml_parts': 0,
+            'text_nodes': 0,
+            'text_characters': 0,
+            'editable_text_present': False,
+            'embedded_media_files': 0,
+            'text_preview': [],
+        }
+
+
+def benchmark_pdf(
+    source: bytes,
+    filename: str,
+    target: str,
+    api: str,
+    mode: str = 'auto',
+) -> tuple[dict, bytes, bytes]:
     if not source.startswith(b'%PDF-'):
         raise ValueError('Input is not a PDF')
     if target not in {'docx', 'xlsx', 'pptx'}:
         raise ValueError(f'Unsupported target: {target}')
+    if mode not in _MODES:
+        raise ValueError(f'Unsupported conversion mode: {mode}')
 
     start = time.perf_counter()
     with httpx.Client(timeout=360.0) as client:
         converted = client.post(
             f"{api.rstrip('/')}/experimental/pdf-to-office",
             files={'file': (filename, source, 'application/pdf')},
-            data={'target': target},
+            data={'target': target, 'mode': mode},
         )
         converted.raise_for_status()
         office_bytes = converted.content
+        conversion_engine = converted.headers.get('x-solyan-conversion-engine', 'unknown')
         convert_seconds = time.perf_counter() - start
 
         roundtrip_start = time.perf_counter()
@@ -225,6 +298,8 @@ def benchmark_pdf(source: bytes, filename: str, target: str, api: str) -> tuple[
     report = {
         'source': filename,
         'target': target,
+        'mode': mode,
+        'conversion_engine': conversion_engine,
         'source_bytes': len(source),
         'office_bytes': len(office_bytes),
         'roundtrip_pdf_bytes': len(roundtrip_pdf),
@@ -234,6 +309,8 @@ def benchmark_pdf(source: bytes, filename: str, target: str, api: str) -> tuple[
     }
     if target == 'xlsx':
         report['xlsx_diagnostics'] = _xlsx_diagnostics(office_bytes)
+    else:
+        report['ooxml_diagnostics'] = _ooxml_editability_diagnostics(office_bytes, target)
     return report, office_bytes, roundtrip_pdf
 
 
@@ -241,13 +318,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Round-trip fidelity benchmark for experimental PDF -> Office conversion.')
     parser.add_argument('pdf', type=Path)
     parser.add_argument('--target', choices=['docx', 'xlsx', 'pptx'], default='docx')
+    parser.add_argument('--mode', choices=sorted(_MODES), default='auto')
     parser.add_argument('--api', default='http://localhost:8000')
     parser.add_argument('--save-dir', type=Path)
     args = parser.parse_args()
 
     source = args.pdf.read_bytes()
     try:
-        report, office_bytes, roundtrip_pdf = benchmark_pdf(source, args.pdf.name, args.target, args.api)
+        report, office_bytes, roundtrip_pdf = benchmark_pdf(
+            source,
+            args.pdf.name,
+            args.target,
+            args.api,
+            mode=args.mode,
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 

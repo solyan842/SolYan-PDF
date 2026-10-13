@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import httpx
@@ -17,6 +17,21 @@ def _load_thresholds(path: Path | None) -> dict[str, float]:
     return {str(key): float(value) for key, value in raw.items()}
 
 
+def _editability_summary(items: list[dict]) -> dict:
+    diagnostics = [
+        item.get('ooxml_diagnostics', {})
+        for item in items
+        if item.get('target') in {'docx', 'pptx'}
+    ]
+    return {
+        'ooxml_cases': len(diagnostics),
+        'editable_text_cases': sum(1 for diag in diagnostics if bool(diag.get('editable_text_present', False))),
+        'text_nodes': sum(int(diag.get('text_nodes', 0)) for diag in diagnostics),
+        'text_characters': sum(int(diag.get('text_characters', 0)) for diag in diagnostics),
+        'embedded_media_files': sum(int(diag.get('embedded_media_files', 0)) for diag in diagnostics),
+    }
+
+
 def _summary(results: list[dict]) -> dict:
     grouped: dict[str, list[dict]] = defaultdict(list)
     for result in results:
@@ -25,7 +40,7 @@ def _summary(results: list[dict]) -> dict:
     targets = {}
     for target, items in sorted(grouped.items()):
         similarities = [float(item['average_similarity']) for item in items]
-        targets[target] = {
+        target_summary = {
             'cases': len(items),
             'average_similarity': sum(similarities) / max(1, len(similarities)),
             'minimum_similarity': min(similarities) if similarities else 0.0,
@@ -37,7 +52,12 @@ def _summary(results: list[dict]) -> dict:
             'geometry_mismatches': sum(int(item.get('geometry_mismatches', 0)) for item in items),
             'convert_seconds': sum(float(item['convert_seconds']) for item in items),
             'roundtrip_seconds': sum(float(item['roundtrip_seconds']) for item in items),
+            'engines': dict(sorted(Counter(str(item.get('conversion_engine', 'unknown')) for item in items).items())),
         }
+        if target in {'docx', 'pptx'}:
+            target_summary['editability'] = _editability_summary(items)
+        targets[target] = target_summary
+
     all_scores = [float(item['average_similarity']) for item in results]
     return {
         'cases': len(results),
@@ -47,6 +67,8 @@ def _summary(results: list[dict]) -> dict:
         'unmatched_pages': sum(int(item.get('unmatched_pages', 0)) for item in results),
         'geometry_normalized_pages': sum(int(item.get('geometry_normalized_pages', 0)) for item in results),
         'geometry_mismatches': sum(int(item.get('geometry_mismatches', 0)) for item in results),
+        'engines': dict(sorted(Counter(str(item.get('conversion_engine', 'unknown')) for item in results).items())),
+        'editability': _editability_summary(results),
         'targets': targets,
     }
 
@@ -71,20 +93,39 @@ def main() -> None:
     parser.add_argument('--manifest', type=Path, default=Path('benchmarks/corpora/pdf_to_office_synthetic_v1.json'))
     parser.add_argument('--corpus-dir', type=Path, required=True)
     parser.add_argument('--api', default='http://localhost:8000')
+    parser.add_argument('--mode', choices=['auto', 'bloom', 'libreoffice'], default='auto')
+    parser.add_argument('--target', action='append', choices=['docx', 'xlsx', 'pptx'], dest='targets')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--thresholds', type=Path, help='Optional JSON object with target minimum average similarity, e.g. {"docx": 90}.')
     args = parser.parse_args()
 
     manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
     thresholds = _load_thresholds(args.thresholds)
-    results = []
+    selected_targets = set(args.targets or [])
+    cases = [
+        case for case in manifest['cases']
+        if not selected_targets or case['target'] in selected_targets
+    ]
+    if not cases:
+        raise SystemExit('No corpus cases match the requested targets')
 
-    for case in manifest['cases']:
+    results = []
+    for case in cases:
         pdf_path = args.corpus_dir / case['filename']
         source = pdf_path.read_bytes()
-        print(f"RUN {case['id']} target={case['target']} source={pdf_path.name} bytes={len(source)}", flush=True)
+        print(
+            f"RUN {case['id']} target={case['target']} mode={args.mode} "
+            f"source={pdf_path.name} bytes={len(source)}",
+            flush=True,
+        )
         try:
-            report, _, _ = benchmark_pdf(source, pdf_path.name, case['target'], args.api)
+            report, _, _ = benchmark_pdf(
+                source,
+                pdf_path.name,
+                case['target'],
+                args.api,
+                mode=args.mode,
+            )
         except httpx.HTTPStatusError as exc:
             response = exc.response
             print(
@@ -95,16 +136,29 @@ def main() -> None:
             raise
         report.update(_case_metadata(case))
         results.append(report)
+        editability = report.get('ooxml_diagnostics')
+        editability_text = ''
+        if isinstance(editability, dict):
+            editability_text = (
+                f" editable_text={editability.get('editable_text_present', False)}"
+                f" text_nodes={editability.get('text_nodes', 0)}"
+                f" text_chars={editability.get('text_characters', 0)}"
+                f" media={editability.get('embedded_media_files', 0)}"
+            )
         print(
-            f"{case['id']}: {report['average_similarity']:.2f}% "
+            f"{case['id']}: engine={report.get('conversion_engine', 'unknown')} "
+            f"{report['average_similarity']:.2f}% "
             f"pages={report['source_pages']}->{report['roundtrip_pages']} "
             f"geometry_normalized={report.get('geometry_normalized_pages', 0)} "
             f"geometry_mismatches={report.get('geometry_mismatches', 0)}"
+            f"{editability_text}"
         )
 
     summary = _summary(results)
     failures = []
     for target, minimum in thresholds.items():
+        if selected_targets and target not in selected_targets:
+            continue
         actual = summary['targets'].get(target, {}).get('average_similarity')
         if actual is None:
             failures.append(f'{target}: no results')
@@ -115,6 +169,8 @@ def main() -> None:
         'manifest_version': manifest['version'],
         'corpus_kind': manifest.get('corpus_kind', 'controlled-synthetic'),
         'release_gate': bool(manifest.get('release_gate', False)),
+        'mode': args.mode,
+        'selected_targets': sorted(selected_targets) if selected_targets else ['docx', 'xlsx', 'pptx'],
         'thresholds': thresholds,
         'summary': summary,
         'results': results,

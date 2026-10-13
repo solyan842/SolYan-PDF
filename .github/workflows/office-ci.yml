@@ -48,10 +48,11 @@ jobs:
       - name: Compile service
         run: python -m compileall app
 
-      - name: Convert DOCX through API
+      - name: Convert Office and exercise target-specific PDF import filters
         run: |
           python - <<'PY'
           import io
+          import zipfile
           from docx import Document
           from fastapi.testclient import TestClient
           from app.main import app
@@ -59,18 +60,37 @@ jobs:
           buffer = io.BytesIO()
           document = Document()
           document.add_heading('SolYan PDF Office CI', 1)
-          document.add_paragraph('LibreOffice conversion smoke test.')
+          document.add_paragraph('LibreOffice conversion smoke test with target-specific PDF import filters.')
           document.save(buffer)
 
           client = TestClient(app)
           health = client.get('/health')
           assert health.status_code == 200, health.text
-          response = client.post(
+
+          pdf_response = client.post(
               '/convert/to-pdf',
               files={'file': ('test.docx', buffer.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
           )
-          assert response.status_code == 200, response.text
-          assert response.content.startswith(b'%PDF-')
-          assert len(response.content) > 500
-          print('office conversion ok', len(response.content))
+          assert pdf_response.status_code == 200, pdf_response.text
+          assert pdf_response.content.startswith(b'%PDF-')
+          assert len(pdf_response.content) > 500
+
+          for target, required in (
+              ('docx', 'word/document.xml'),
+              ('pptx', 'ppt/presentation.xml'),
+          ):
+              response = client.post(
+                  '/convert/pdf-to-office',
+                  files={'file': ('source.pdf', pdf_response.content, 'application/pdf')},
+                  data={'target': target},
+              )
+              assert response.status_code == 200, (target, response.text)
+              assert response.headers['x-solyan-conversion-engine'] == 'LibreOffice-PDF-import'
+              with zipfile.ZipFile(io.BytesIO(response.content), 'r') as archive:
+                  names = set(archive.namelist())
+                  assert '[Content_Types].xml' in names, target
+                  assert required in names, target
+                  if target == 'pptx':
+                      assert any(name.startswith('ppt/slides/slide') and name.endswith('.xml') for name in names), names
+              print('pdf import ok', target, len(response.content))
           PY
