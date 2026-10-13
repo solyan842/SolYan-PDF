@@ -1,4 +1,4 @@
-name: PDF-to-Office LibreOffice Routing Diagnostic
+name: PDF-to-Office Auto Routing Diagnostic
 
 on:
   push:
@@ -66,7 +66,7 @@ jobs:
           retention-days: 7
 
   diagnostic:
-    name: LibreOffice DOCX/PPTX routing diagnostic
+    name: Auto DOCX/PPTX routing diagnostic
     needs: materialize-corpus
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -151,7 +151,7 @@ jobs:
               raise SystemExit(f'Health checks timed out: {sorted(pending)}')
           PY
 
-      - name: Run LibreOffice routing diagnostic with preserved log
+      - name: Run auto routing diagnostic with preserved log
         run: |
           set +e
           set -o pipefail
@@ -159,7 +159,7 @@ jobs:
             --manifest "$REAL_MANIFEST" \
             --corpus-dir /tmp/pdf-office-routing-stage/corpus \
             --api http://127.0.0.1:8000 \
-            --mode libreoffice \
+            --mode auto \
             --target docx \
             --target pptx \
             --output /tmp/pdf-office-routing-report.json \
@@ -191,7 +191,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Validate routing report shape
+      - name: Validate auto routing report shape
         run: |
           python - <<'PY'
           import json
@@ -201,11 +201,12 @@ jobs:
           report = json.loads(Path('/tmp/pdf-office-routing-report.json').read_text())
           results = report['results']
           summary = report['summary']
-          assert report['mode'] == 'libreoffice', report
+          assert report['mode'] == 'auto', report
           assert report['selected_targets'] == ['docx', 'pptx'], report
           assert len(results) == 6, len(results)
           assert Counter(item['target'] for item in results) == {'docx': 3, 'pptx': 3}
           assert summary['engines'] == {'LibreOffice-PDF-import': 6}, summary
+          assert summary['editability']['editable_text_cases'] == 6, summary
           assert report['failures'] == [], report
           for item in results:
               assert item['conversion_engine'] == 'LibreOffice-PDF-import', item
@@ -213,6 +214,7 @@ jobs:
               assert item['roundtrip_pdf_bytes'] > 0, item
               assert item['source_pages'] >= 1, item
               assert item['roundtrip_pages'] >= 1, item
+              assert item['ooxml_diagnostics']['editable_text_present'], item
               assert 0.0 <= item['average_similarity'] <= 100.0, item
           print(json.dumps(summary, indent=2))
           PY
