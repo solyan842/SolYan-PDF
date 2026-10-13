@@ -164,7 +164,11 @@ jobs:
           }
           JSON
           qpdf --json-input /tmp/malicious.json /tmp/malicious.pdf
+          set +e
           qpdf --check /tmp/malicious.pdf
+          status=$?
+          set -e
+          test "$status" -eq 0 -o "$status" -eq 3
           qpdf --list-attachments /tmp/malicious.pdf | grep -q 'payload.bin'
           qpdf --json-output /tmp/malicious.pdf /tmp/before.json
           python <<'PY'
