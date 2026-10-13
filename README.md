@@ -11,6 +11,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - AES-256 protect/unlock, repair and structural compression through qpdf
 - qpdf web optimization (linearization), annotation/form flattening, and optional image recompression
 - qpdf JSON sanitization for regression-tested JavaScript/actions, link annotations, document/XMP metadata and embedded-file structures
+- qpdf JSON active-content inspection for reachable JavaScript/actions/triggers, active annotations and attachment references without executing document JavaScript
 - Embedded raster-image extraction to ZIP through Poppler `pdfimages`, preserving native encoded formats where supported
 - Conservative blank-page detection/removal: text pages are always kept; text-free pages use bounded Poppler grayscale analysis before qpdf page selection
 - Browser-local N-up / multi-page-per-sheet layout with A4 portrait/landscape, custom grids, margins, borders and LTR/RTL ordering
@@ -105,6 +106,7 @@ GitHub Actions currently verifies:
 - FastAPI/qpdf backend and hardened network routes
 - Real qpdf smoke coverage for linearization, annotation/form flattening and image optimization routes
 - Real qpdf JSON active-content sanitization across catalog/page additional actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures, plus selective-mode preservation of unselected categories
+- Real qpdf JSON active-content inspection covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input and dead-object exclusion
 - Real Poppler `pdfimages` extraction on a PDF containing an embedded Image XObject, including ZIP validation and no-image/error cases
 - Real conservative blank-page removal on controlled blank/vector/text pages, requiring only the truly blank page to be removed
 - Real browser-local N-up generation with A4 geometry, ordering, RTL, source rotation and retained-text checks
@@ -143,6 +145,7 @@ See `docs/BENCHMARKING.md` for:
 - PDF -> XLSX still depends on the optional external Bloom service for its primary route; PP-StructureV3 is a bounded fallback for scanned/no-logical-table cases rather than a universal spreadsheet reconstruction engine.
 - qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
 - PDF sanitization is a bounded removal of regression-tested standard PDF active-content structures, **not antivirus or universal exploit detection**. It does not claim to detect every malicious PDF technique. Rewriting/removing content changes the document and therefore invalidates existing digital signatures.
+- Active-content inspection is structural-only and bounded to 100 MB input, 500 findings, 64 KiB per displayed script and 256 KiB aggregate displayed script text. It walks only the object graph reachable from the trailer/root, never executes document JavaScript, and **does not claim antivirus coverage or prove that a PDF is safe**.
 - Embedded-image extraction is bounded to 100 MB input, 2,000 listed images, 100 megapixels per image, 1 gigapixel aggregate and 512 MB extracted/archive payload to limit decompression/resource abuse.
 - Blank-page removal is bounded to 100 MB / 300 pages / 700 million raster-analysis pixels. The default 10 / 99.9% threshold is configurable, and the service refuses to emit a zero-page PDF when every page is classified blank.
 - N-up, booklet, crop and page-resize operations are browser-local and bounded to 100 MB / 500 source pages. N-up/booklet/resize embed visible page content into new pages, so interactive form/annotation controls are not preserved as interactive controls.
