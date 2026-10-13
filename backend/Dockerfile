@@ -20,7 +20,7 @@ RUN rm -f /etc/apt/sources.list \
       'Check-Valid-Until: no' \
       > /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=3 update \
-    && apt-get install -y --no-install-recommends qpdf iputils-ping \
+    && apt-get install -y --no-install-recommends qpdf iputils-ping poppler-utils \
     && groupadd --system solyan \
     && useradd --system --gid solyan --create-home --home-dir /home/solyan solyan \
     && rm -rf /var/lib/apt/lists/*
