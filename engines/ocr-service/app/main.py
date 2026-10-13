@@ -18,6 +18,8 @@ MAX_FILE_SIZE = int(os.getenv("OCR_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
 SUPPORTED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
 IMAGE_SUFFIXES = SUPPORTED_SUFFIXES - {".pdf"}
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PRINT_LONG_EDGE_INCHES = 14.0
+TABLE_GAP_ROWS = 2
 
 app = FastAPI(title="SolYan OCR Service", version="0.3.0")
 
@@ -187,10 +189,12 @@ def _copy_style(source: Any, target: Any) -> None:
         target.pivotButton = source.pivotButton
 
 
-def _copy_sheet(source: Any, target: Any) -> None:
+def _copy_sheet(source: Any, target: Any, row_offset: int = 0) -> None:
+    from openpyxl.utils.cell import range_boundaries
+
     for row in source.iter_rows():
         for cell in row:
-            dst = target[cell.coordinate]
+            dst = target.cell(row=cell.row + row_offset, column=cell.column)
             dst.value = cell.value
             _copy_style(cell, dst)
             if cell.hyperlink:
@@ -199,21 +203,28 @@ def _copy_sheet(source: Any, target: Any) -> None:
                 dst.comment = copy(cell.comment)
 
     for merged_range in source.merged_cells.ranges:
-        target.merge_cells(str(merged_range))
+        min_col, min_row, max_col, max_row = range_boundaries(str(merged_range))
+        target.merge_cells(
+            start_row=min_row + row_offset,
+            start_column=min_col,
+            end_row=max_row + row_offset,
+            end_column=max_col,
+        )
 
     for key, dimension in source.column_dimensions.items():
         target_dimension = target.column_dimensions[key]
-        target_dimension.width = dimension.width
-        target_dimension.hidden = dimension.hidden
-        target_dimension.bestFit = dimension.bestFit
-        target_dimension.outlineLevel = dimension.outlineLevel
-        target_dimension.collapsed = dimension.collapsed
+        if dimension.width is not None:
+            target_dimension.width = max(target_dimension.width or 0, dimension.width)
+        target_dimension.hidden = bool(target_dimension.hidden or dimension.hidden)
+        target_dimension.bestFit = bool(target_dimension.bestFit or dimension.bestFit)
+        target_dimension.outlineLevel = max(target_dimension.outlineLevel or 0, dimension.outlineLevel or 0)
+        target_dimension.collapsed = bool(target_dimension.collapsed or dimension.collapsed)
         target_dimension.min = dimension.min
         target_dimension.max = dimension.max
         _copy_style(dimension, target_dimension)
 
     for key, dimension in source.row_dimensions.items():
-        target_dimension = target.row_dimensions[key]
+        target_dimension = target.row_dimensions[key + row_offset]
         target_dimension.height = dimension.height
         target_dimension.hidden = dimension.hidden
         target_dimension.outlineLevel = dimension.outlineLevel
@@ -224,33 +235,107 @@ def _copy_sheet(source: Any, target: Any) -> None:
             target_dimension.thickBot = dimension.thickBot
         _copy_style(dimension, target_dimension)
 
-    target.freeze_panes = source.freeze_panes
-    target.sheet_format = copy(source.sheet_format)
-    target.sheet_properties = copy(source.sheet_properties)
-    target.page_margins = copy(source.page_margins)
-    target.page_setup = copy(source.page_setup)
-    target.print_options = copy(source.print_options)
+    if row_offset == 0:
+        target.freeze_panes = source.freeze_panes
+        target.sheet_format = copy(source.sheet_format)
+        target.sheet_properties = copy(source.sheet_properties)
+        target.page_margins = copy(source.page_margins)
+        target.page_setup = copy(source.page_setup)
+        target.print_options = copy(source.print_options)
 
 
-def _merge_xlsx_files(generated: list[tuple[int, Path]]) -> bytes:
+def _source_page_sizes(input_path: Path, suffix: str) -> dict[int, tuple[float, float]]:
+    """Return source page/image dimensions for print-layout preservation.
+
+    Scanned PDFs often carry custom page dimensions rather than a standard paper
+    code. Only the aspect ratio is needed: the XLSX print sheet is normalized to
+    a practical 14-inch long edge while preserving the source page orientation.
+    """
+
+    try:
+        if suffix == ".pdf":
+            import pypdfium2 as pdfium
+
+            pdf = pdfium.PdfDocument(str(input_path))
+            try:
+                return {
+                    index + 1: (float(pdf[index].get_width()), float(pdf[index].get_height()))
+                    for index in range(len(pdf))
+                }
+            finally:
+                pdf.close()
+
+        from PIL import Image
+
+        with Image.open(input_path) as image:
+            return {1: (float(image.width), float(image.height))}
+    except Exception:
+        return {}
+
+
+def _configure_page_print_layout(target: Any, page_size: tuple[float, float] | None) -> None:
+    """Keep one recognized source page printable as one aspect-correct sheet."""
+
+    target.page_setup.scale = None
+    target.page_setup.fitToWidth = 1
+    target.page_setup.fitToHeight = 1
+    target.sheet_properties.pageSetUpPr.fitToPage = True
+    target.page_margins.left = 0.2
+    target.page_margins.right = 0.2
+    target.page_margins.top = 0.3
+    target.page_margins.bottom = 0.3
+
+    if page_size is not None:
+        width, height = page_size
+        if width > 0 and height > 0:
+            long_edge = max(width, height)
+            paper_width = PRINT_LONG_EDGE_INCHES * width / long_edge
+            paper_height = PRINT_LONG_EDGE_INCHES * height / long_edge
+            target.page_setup.paperSize = None
+            target.page_setup.paperWidth = f"{paper_width:.4f}in"
+            target.page_setup.paperHeight = f"{paper_height:.4f}in"
+            target.page_setup.orientation = "landscape" if width > height else "portrait"
+
+    target.print_area = target.calculate_dimension()
+
+
+def _merge_xlsx_files(
+    generated: list[tuple[int, Path]],
+    page_sizes: dict[int, tuple[float, float]] | None = None,
+) -> bytes:
+    """Merge PP-Structure XLSX outputs into one worksheet per source page.
+
+    PP-Structure may emit multiple workbooks/tables for one page. Keeping those
+    tables on separate worksheets makes a single scanned page print as multiple
+    pages. SolYan instead stacks tables from the same source page vertically,
+    preserves their styles/merged cells, and applies one-page print scaling.
+    """
+
     from openpyxl import Workbook, load_workbook
 
     output = Workbook()
     output.remove(output.active)
     used_names: set[str] = set()
+    page_sizes = page_sizes or {}
 
+    grouped: dict[int, list[Path]] = {}
     for page_index, path in generated:
-        source_book = load_workbook(path, data_only=False)
-        try:
-            for table_index, source_sheet in enumerate(source_book.worksheets, start=1):
-                name = _safe_sheet_name(
-                    f"P{page_index}-T{table_index}-{source_sheet.title}",
-                    used_names,
-                )
-                target_sheet = output.create_sheet(name)
-                _copy_sheet(source_sheet, target_sheet)
-        finally:
-            source_book.close()
+        grouped.setdefault(page_index, []).append(path)
+
+    for page_index, paths in grouped.items():
+        target_sheet = output.create_sheet(_safe_sheet_name(f"Page {page_index}", used_names))
+        row_offset = 0
+
+        for path in paths:
+            source_book = load_workbook(path, data_only=False)
+            try:
+                for source_sheet in source_book.worksheets:
+                    _copy_sheet(source_sheet, target_sheet, row_offset=row_offset)
+                    row_offset += max(source_sheet.max_row, 1) + TABLE_GAP_ROWS
+            finally:
+                source_book.close()
+
+        _configure_page_print_layout(target_sheet, page_sizes.get(page_index))
 
     if not output.worksheets:
         raise ValueError("PP-StructureV3 produced no table worksheets")
@@ -353,8 +438,8 @@ def ocr_xlsx(file: UploadFile = File(...)) -> Response:
     """Recognize scanned tables and return one XLSX workbook.
 
     PP-StructureV3 may emit one or more workbooks per page/table. SolYan merges
-    those outputs into a single workbook while keeping each recognized table on
-    its own worksheet, which makes multi-page scanned PDFs usable as one download.
+    those outputs into one worksheet per source page, stacking multiple detected
+    tables on the same page while preserving source-page print orientation/aspect.
     """
     data, suffix = _read_upload(file)
     with tempfile.TemporaryDirectory(prefix="solyan-xlsx-") as temp_dir:
@@ -385,7 +470,7 @@ def ocr_xlsx(file: UploadFile = File(...)) -> Response:
             raise HTTPException(status_code=422, detail="PP-StructureV3 found no exportable tables")
 
         try:
-            workbook = _merge_xlsx_files(generated)
+            workbook = _merge_xlsx_files(generated, page_sizes=_source_page_sizes(input_path, suffix))
         except Exception as exc:
             traceback.print_exc()
             generated_names = ", ".join(f"page={page_index}:{path.name}" for page_index, path in generated)
