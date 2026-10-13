@@ -1,6 +1,7 @@
 const tools = [
   { href: '/compare', title: 'So sánh PDF', description: 'So sánh nội dung văn bản giữa hai PDF ngay trên thiết bị.', local: true },
   { href: '/sign', title: 'Ký số PDF', description: 'Ký cryptographic bằng chứng thư PKCS#12 với pyHanko.', local: false, badge: 'pyHanko' },
+  { href: '/verify-signature', title: 'Kiểm tra chữ ký số', description: 'Xác minh integrity, crypto validity, trust chain và thay đổi sau ký bằng pyHanko.', local: false, badge: 'pyHanko' },
   { href: '/pdfa', title: 'PDF/A', description: 'Tạo PDF/A bằng internal validator, không fallback Ghostscript.', local: false, badge: 'OCRmyPDF' },
   { href: '/workflow', title: 'Workflow PDF', description: 'Chạy nhiều thao tác local trong một lần xử lý.', local: true },
   { href: '/pdf-to-office', title: 'PDF → Office', description: 'DOCX/PPTX theo LibreOffice-first; XLSX theo Bloom → PP-StructureV3 fallback.', local: false, badge: 'V1 Gate' },
@@ -27,7 +28,7 @@ const tools = [
   { href: '/watermark', title: 'Watermark', description: 'Đóng watermark chữ lên PDF.', local: true },
   { href: '/page-numbers', title: 'Đánh số trang', description: 'Thêm số trang vào chân trang.', local: true },
   { href: '/metadata', title: 'Metadata', description: 'Xem và chỉnh sửa metadata PDF.', local: true },
-  { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa PDF bằng AES-256 với qpdf.', local: false, badge: 'qpdf server' },
+  { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa AES-256 và đặt quyền in/sửa/copy bằng qpdf.', local: false, badge: 'qpdf server' },
   { href: '/unlock', title: 'Mở khóa PDF', description: 'Giải mã PDF bằng mật khẩu hợp lệ.', local: false, badge: 'qpdf server' },
   { href: '/compress', title: 'Tối ưu cấu trúc PDF', description: 'Tối ưu object streams và Flate bằng qpdf, không thay đổi chất lượng ảnh.', local: false, badge: 'qpdf server' },
   { href: '/compress-images', title: 'Nén ảnh trong PDF', description: 'Tối ưu ảnh bằng JPEG khi qpdf xác định kết quả nhỏ hơn.', local: false, badge: 'qpdf server' },
