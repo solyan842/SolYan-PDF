@@ -5,7 +5,14 @@ import { ChangeEvent, useState } from 'react';
 type Props = {
   title: string;
   description: string;
-  endpoint: '/pdf/protect' | '/pdf/unlock' | '/pdf/repair' | '/pdf/compress';
+  endpoint:
+    | '/pdf/protect'
+    | '/pdf/unlock'
+    | '/pdf/repair'
+    | '/pdf/compress'
+    | '/pdf/web-optimize'
+    | '/pdf/flatten'
+    | '/pdf/compress-images';
   actionLabel: string;
   outputName: string;
   passwordMode?: 'required' | 'optional';

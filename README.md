@@ -9,6 +9,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Drag-and-drop page organizer
 - Watermark, page numbers and metadata editing
 - AES-256 protect/unlock, repair and structural compression through qpdf
+- qpdf web optimization (linearization), annotation/form flattening, and optional image recompression
 - Browser-side PDF viewer and basic editor
 - AcroForm discovery/filling
 
@@ -91,6 +92,7 @@ GitHub Actions currently verifies:
 - production dependency audit with a patched PostCSS override
 - Next.js production build
 - FastAPI/qpdf backend and hardened network routes
+- Real qpdf smoke coverage for linearization, annotation/form flattening and image optimization routes
 - OCR binary proxy behavior for scanned-table XLSX downloads
 - PaddleOCR service API/lazy-load wiring
 - Real Vietnamese Tesseract fallback smoke test
@@ -118,6 +120,7 @@ See `docs/BENCHMARKING.md` for:
 - The 59-sample OCR corpus is a regression baseline, not a claim of universal Vietnamese OCR accuracy across every scan style or document class.
 - Passing the PDF-to-Office V1 release gate establishes a reproducible supported baseline for the pinned representative corpus; it is not a claim that every arbitrary PDF will convert with the same fidelity.
 - PDF -> XLSX still depends on the optional external Bloom service for its primary route; PP-StructureV3 is a bounded fallback for scanned/no-logical-table cases rather than a universal spreadsheet reconstruction engine.
+- qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
 ## License
