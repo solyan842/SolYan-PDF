@@ -1,0 +1,173 @@
+name: Booklet Imposition CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/lib/n-up.ts'
+      - 'frontend/lib/booklet.ts'
+      - 'frontend/app/booklet/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/booklet-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/lib/n-up.ts'
+      - 'frontend/lib/booklet.ts'
+      - 'frontend/app/booklet/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/booklet-ci.yml'
+
+jobs:
+  booklet:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Install PDF verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf poppler-utils
+          qpdf --version
+          pdfinfo -v
+
+      - name: Compile shared layout and booklet helpers
+        run: |
+          rm -rf .tmp-booklet
+          npx tsc lib/n-up.ts lib/booklet.ts \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --esModuleInterop \
+            --skipLibCheck \
+            --noEmit false \
+            --outDir .tmp-booklet
+
+      - name: Verify saddle-stitch order and real booklet PDFs
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { PDFDocument, StandardFonts, degrees } = require('pdf-lib');
+          const {
+            createBookletPdf,
+            padBookletPageCount,
+            planBookletSides,
+            visualBookletSide,
+          } = require('./.tmp-booklet/booklet.js');
+
+          const base = {
+            spine: 'left',
+            gutter: 12,
+            outerMargin: 9,
+            border: true,
+            duplexPass: 'both',
+            flipOnShortEdge: false,
+          };
+
+          assert.equal(padBookletPageCount(1), 4);
+          assert.equal(padBookletPageCount(4), 4);
+          assert.equal(padBookletPageCount(5), 8);
+          assert.equal(padBookletPageCount(8), 8);
+
+          const eight = planBookletSides(8, base);
+          assert.deepEqual(eight.map((s) => [s.left, s.right, s.isBack]), [
+            [7, 0, false],
+            [1, 6, true],
+            [5, 2, false],
+            [3, 4, true],
+          ]);
+          assert.deepEqual(visualBookletSide(eight[0], 'left'), { left: 7, right: 0 });
+          assert.deepEqual(visualBookletSide(eight[0], 'right'), { left: 0, right: 7 });
+
+          const five = planBookletSides(5, base);
+          assert.deepEqual(five.map((s) => [s.left, s.right]), [
+            [null, 0],
+            [1, null],
+            [null, 2],
+            [3, 4],
+          ]);
+
+          const flipped = planBookletSides(8, { ...base, flipOnShortEdge: true });
+          assert.deepEqual(flipped.map((s) => [s.left, s.right]), [
+            [7, 0],
+            [6, 1],
+            [5, 2],
+            [4, 3],
+          ]);
+
+          const fronts = planBookletSides(8, { ...base, duplexPass: 'fronts' });
+          assert.deepEqual(fronts.map((s) => [s.left, s.right]), [[7, 0], [5, 2]]);
+          const backs = planBookletSides(8, { ...base, duplexPass: 'backs', flipOnShortEdge: true });
+          assert.deepEqual(backs.map((s) => [s.left, s.right]), [[1, 6], [3, 4]], 'manual backs are not auto-duplex swapped');
+
+          (async () => {
+            const source = await PDFDocument.create();
+            const font = await source.embedFont(StandardFonts.Helvetica);
+            for (let i = 0; i < 8; i += 1) {
+              const page = source.addPage([200, 260]);
+              if (i === 1) page.setRotation(degrees(90));
+              page.drawText(`BOOKLET PAGE ${i + 1}`, { x: 20, y: 55, size: 13, font });
+              page.drawRectangle({ x: 16 + i * 2, y: 90, width: 30, height: 18 });
+            }
+            const sourceBytes = await source.save();
+            const bytes = await createBookletPdf(sourceBytes, base);
+            fs.writeFileSync('/tmp/solyan-booklet.pdf', Buffer.from(bytes));
+
+            const output = await PDFDocument.load(bytes);
+            assert.equal(output.getPageCount(), 4);
+            for (const page of output.getPages()) {
+              const size = page.getSize();
+              assert.ok(Math.abs(size.width - 260) < 0.05, size.width);
+              assert.ok(Math.abs(size.height - 200) < 0.05, size.height);
+            }
+
+            const frontsBytes = await createBookletPdf(sourceBytes, { ...base, duplexPass: 'fronts' });
+            const frontsDoc = await PDFDocument.load(frontsBytes);
+            assert.equal(frontsDoc.getPageCount(), 2);
+
+            const rightShortBytes = await createBookletPdf(sourceBytes, {
+              ...base,
+              spine: 'right',
+              flipOnShortEdge: true,
+            });
+            fs.writeFileSync('/tmp/solyan-booklet-right-short.pdf', Buffer.from(rightShortBytes));
+            const rightShortDoc = await PDFDocument.load(rightShortBytes);
+            assert.equal(rightShortDoc.getPageCount(), 4);
+            console.log('booklet order, padding, duplex, spine and real PDF generation ok');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+          qpdf --check /tmp/solyan-booklet.pdf
+          qpdf --check /tmp/solyan-booklet-right-short.pdf
+          test "$(pdfinfo /tmp/solyan-booklet.pdf | awk '/^Pages:/ {print $2}')" = "4"
+          test "$(pdfinfo /tmp/solyan-booklet-right-short.pdf | awk '/^Pages:/ {print $2}')" = "4"
+          pdftotext /tmp/solyan-booklet.pdf /tmp/solyan-booklet.txt
+          pdftotext /tmp/solyan-booklet-right-short.pdf /tmp/solyan-booklet-right-short.txt
+          for page in 1 2 3 4 5 6 7 8; do
+            test "$(grep -c "BOOKLET PAGE ${page}" /tmp/solyan-booklet.txt)" = "1"
+            test "$(grep -c "BOOKLET PAGE ${page}" /tmp/solyan-booklet-right-short.txt)" = "1"
+          done
+          pdftotext -f 1 -l 1 /tmp/solyan-booklet.pdf /tmp/booklet-front-1.txt
+          grep -q 'BOOKLET PAGE 8' /tmp/booklet-front-1.txt
+          grep -q 'BOOKLET PAGE 1' /tmp/booklet-front-1.txt
+          pdftotext -f 2 -l 2 /tmp/solyan-booklet.pdf /tmp/booklet-back-1.txt
+          grep -q 'BOOKLET PAGE 2' /tmp/booklet-back-1.txt
+          grep -q 'BOOKLET PAGE 7' /tmp/booklet-back-1.txt
+
+      - name: Remove temporary compiled helpers
+        if: always()
+        run: rm -rf .tmp-booklet
