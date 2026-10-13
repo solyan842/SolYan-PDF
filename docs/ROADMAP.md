@@ -105,7 +105,7 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] Add qpdf linearization / web optimization
 - [x] Add qpdf annotation and form-field flattening with generated appearances
 - [x] Add qpdf image recompression as an explicit lossy-capable mode separate from structural compression
-- [ ] Extract embedded PDF images as a downloadable archive
+- [x] Extract embedded PDF images as a downloadable archive
 - [ ] Detect and remove blank pages with a bounded, testable threshold
 - [ ] Add N-up / multi-page-per-sheet layout
 - [ ] Add booklet / imposition layout
@@ -152,6 +152,7 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] Patched PostCSS transitive dependency override
 - [x] Backend/qpdf CI
 - [x] Real qpdf smoke coverage for web optimization, flattening and image recompression routes
+- [x] Real Poppler embedded-image extraction gate with bounded Image XObject / ZIP validation
 - [x] OCR XLSX binary proxy regression coverage
 - [x] Private-network Ping blocked by default
 - [x] Untrusted proxy IP headers ignored by default
