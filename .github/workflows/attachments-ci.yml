@@ -1,0 +1,138 @@
+name: PDF Attachments CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/attachments.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/attachments/**'
+      - '.github/workflows/attachments-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/attachments.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/attachments/**'
+      - '.github/workflows/attachments-ci.yml'
+
+jobs:
+  attachments:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install qpdf 11-compatible engine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf
+          qpdf --version
+          qpdf --help=embedded-files
+
+      - name: Install hash-verified backend dependencies
+        run: |
+          python -m pip install --require-hashes -r requirements.hashed.lock
+          python -m pip install --no-deps -r requirements.txt
+          python -m pip check
+
+      - name: Compile attachment routes
+        run: python -m compileall app
+
+      - name: Verify add list extract and remove with real qpdf attachments
+        run: |
+          python - <<'PY'
+          import subprocess
+          import tempfile
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          client = TestClient(app)
+          note = b'SolYan attachment payload\nline two\n'
+          second = b'{"source":"solyan","kind":"attachment-test"}\n'
+
+          with tempfile.TemporaryDirectory(prefix='solyan-attachment-ci-') as temp_dir:
+              temp = Path(temp_dir)
+              base = temp / 'base.pdf'
+              subprocess.run(['qpdf', '--empty', str(base)], check=True)
+              source = base.read_bytes()
+
+              empty = client.post('/pdf/attachments/list', files={'file': ('base.pdf', source, 'application/pdf')})
+              assert empty.status_code == 200, empty.text
+              assert empty.json() == {'attachments': [], 'count': 0}, empty.json()
+
+              added = client.post(
+                  '/pdf/attachments/add',
+                  files=[
+                      ('file', ('base.pdf', source, 'application/pdf')),
+                      ('attachments', ('note.txt', note, 'text/plain')),
+                      ('attachments', ('data.json', second, 'application/json')),
+                  ],
+              )
+              assert added.status_code == 200, added.text
+              assert added.content.startswith(b'%PDF-')
+              attached_pdf = temp / 'attached.pdf'
+              attached_pdf.write_bytes(added.content)
+              subprocess.run(['qpdf', '--check', str(attached_pdf)], check=True)
+
+              listed = client.post('/pdf/attachments/list', files={'file': ('attached.pdf', added.content, 'application/pdf')})
+              assert listed.status_code == 200, listed.text
+              inventory = listed.json()
+              assert inventory['count'] == 2, inventory
+              by_key = {item['key']: item for item in inventory['attachments']}
+              assert set(by_key) == {'note.txt', 'data.json'}, inventory
+              assert by_key['note.txt']['filename'] == 'note.txt', inventory
+              assert by_key['data.json']['filename'] == 'data.json', inventory
+
+              extracted = client.post(
+                  '/pdf/attachments/extract',
+                  files={'file': ('attached.pdf', added.content, 'application/pdf')},
+                  data={'key': 'note.txt'},
+              )
+              assert extracted.status_code == 200, extracted.text
+              assert extracted.content == note
+
+              missing = client.post(
+                  '/pdf/attachments/extract',
+                  files={'file': ('attached.pdf', added.content, 'application/pdf')},
+                  data={'key': 'missing.txt'},
+              )
+              assert missing.status_code == 404, missing.text
+
+              removed = client.post(
+                  '/pdf/attachments/remove',
+                  files={'file': ('attached.pdf', added.content, 'application/pdf')},
+                  data={'key': 'note.txt'},
+              )
+              assert removed.status_code == 200, removed.text
+              removed_pdf = temp / 'removed.pdf'
+              removed_pdf.write_bytes(removed.content)
+              subprocess.run(['qpdf', '--check', str(removed_pdf)], check=True)
+
+              after = client.post('/pdf/attachments/list', files={'file': ('removed.pdf', removed.content, 'application/pdf')})
+              assert after.status_code == 200, after.text
+              remaining = after.json()
+              assert remaining['count'] == 1, remaining
+              assert remaining['attachments'][0]['key'] == 'data.json', remaining
+
+              raw_keys = subprocess.run(
+                  ['qpdf', '--list-attachments', str(attached_pdf)],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout
+              assert 'note.txt' in raw_keys and 'data.json' in raw_keys, raw_keys
+
+          print('qpdf attachment add/list/extract/remove ok')
+          PY
