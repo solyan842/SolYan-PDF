@@ -56,13 +56,18 @@ jobs:
             --noEmit false \
             --outDir .tmp-booklet
 
-      - name: Verify saddle-stitch order and real booklet PDF
+      - name: Verify saddle-stitch order and real booklet PDFs
         run: |
           node <<'NODE'
           const assert = require('node:assert/strict');
           const fs = require('node:fs');
           const { PDFDocument, StandardFonts, degrees } = require('pdf-lib');
-          const { createBookletPdf, padBookletPageCount, planBookletSides } = require('./.tmp-booklet/booklet.js');
+          const {
+            createBookletPdf,
+            padBookletPageCount,
+            planBookletSides,
+            visualBookletSide,
+          } = require('./.tmp-booklet/booklet.js');
 
           const base = {
             spine: 'left',
@@ -76,6 +81,7 @@ jobs:
           assert.equal(padBookletPageCount(1), 4);
           assert.equal(padBookletPageCount(4), 4);
           assert.equal(padBookletPageCount(5), 8);
+          assert.equal(padBookletPageCount(8), 8);
 
           const eight = planBookletSides(8, base);
           assert.deepEqual(eight.map((s) => [s.left, s.right, s.isBack]), [
@@ -84,6 +90,8 @@ jobs:
             [5, 2, false],
             [3, 4, true],
           ]);
+          assert.deepEqual(visualBookletSide(eight[0], 'left'), { left: 7, right: 0 });
+          assert.deepEqual(visualBookletSide(eight[0], 'right'), { left: 0, right: 7 });
 
           const five = planBookletSides(5, base);
           assert.deepEqual(five.map((s) => [s.left, s.right]), [
@@ -131,18 +139,27 @@ jobs:
             const frontsDoc = await PDFDocument.load(frontsBytes);
             assert.equal(frontsDoc.getPageCount(), 2);
 
-            const rightSpineBytes = await createBookletPdf(sourceBytes, { ...base, spine: 'right' });
-            const rightSpineDoc = await PDFDocument.load(rightSpineBytes);
-            assert.equal(rightSpineDoc.getPageCount(), 4);
-            console.log('booklet order and real PDF generation ok');
+            const rightShortBytes = await createBookletPdf(sourceBytes, {
+              ...base,
+              spine: 'right',
+              flipOnShortEdge: true,
+            });
+            fs.writeFileSync('/tmp/solyan-booklet-right-short.pdf', Buffer.from(rightShortBytes));
+            const rightShortDoc = await PDFDocument.load(rightShortBytes);
+            assert.equal(rightShortDoc.getPageCount(), 4);
+            console.log('booklet order, padding, duplex, spine and real PDF generation ok');
           })().catch((error) => { console.error(error); process.exit(1); });
           NODE
 
           qpdf --check /tmp/solyan-booklet.pdf
+          qpdf --check /tmp/solyan-booklet-right-short.pdf
           test "$(pdfinfo /tmp/solyan-booklet.pdf | awk '/^Pages:/ {print $2}')" = "4"
+          test "$(pdfinfo /tmp/solyan-booklet-right-short.pdf | awk '/^Pages:/ {print $2}')" = "4"
           pdftotext /tmp/solyan-booklet.pdf /tmp/solyan-booklet.txt
+          pdftotext /tmp/solyan-booklet-right-short.pdf /tmp/solyan-booklet-right-short.txt
           for page in 1 2 3 4 5 6 7 8; do
             test "$(grep -c "BOOKLET PAGE ${page}" /tmp/solyan-booklet.txt)" = "1"
+            test "$(grep -c "BOOKLET PAGE ${page}" /tmp/solyan-booklet-right-short.txt)" = "1"
           done
           pdftotext -f 1 -l 1 /tmp/solyan-booklet.pdf /tmp/booklet-front-1.txt
           grep -q 'BOOKLET PAGE 8' /tmp/booklet-front-1.txt
