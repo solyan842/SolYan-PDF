@@ -26,10 +26,11 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Word/Excel/PowerPoint/OpenDocument/RTF -> PDF through LibreOffice headless
 - Images -> PDF in the browser
 - PDF -> PNG/JPEG ZIP in the browser
-- Experimental PDF -> DOCX/PPTX auto routing through LibreOffice PDF import, with pinned Bloom as a best-effort fallback
-- Experimental PDF -> XLSX through pinned Bloom, with PP-StructureV3 fallback only when Bloom reports no logical tables
+- PDF -> DOCX/PPTX auto routing through LibreOffice PDF import, with pinned Bloom as a best-effort fallback
+- PDF -> XLSX through pinned Bloom, with PP-StructureV3 fallback only when Bloom reports no logical tables
 - Round-trip visual-fidelity plus native-OOXML editability benchmark harness for PDF -> Office
-- Current routing evidence: 18-case synthetic auto benchmark averages **97.78%** with zero page/geometry mismatches; 6-case / 41-page public real-world DOCX/PPTX auto benchmark averages **96.44%** with editable native text in all 6 cases
+- Permanent versioned PDF-to-Office V1 release gate: **27 cases / 68 source pages**, combining the controlled synthetic corpus with pinned public real-world cases and fixed target-specific thresholds
+- Current release baselines: synthetic auto benchmark **97.78%** overall with zero page/geometry mismatches; public real-world DOCX/PPTX **96.44%** with editable native text in all 6 cases; scanned-XLSX **9/9 pages** preserved
 
 ### Advanced
 - Text-level and pixel/layout PDF compare
@@ -51,7 +52,7 @@ FastAPI orchestration backend (qpdf + network utilities)
       |---------------- Office service (LibreOffice + PDF import routing)
       |---------------- Signature service (pyHanko)
       |---------------- Archive service (OCRmyPDF internal PDF/A)
-      `---------------- Bloom adapter (optional / experimental / external)
+      `---------------- Bloom adapter (optional / external)
 ```
 
 Browser-side features use `pdf-lib`, `PDF.js` and JSZip where appropriate. Server engines are intentionally isolated so they can be upgraded or replaced independently.
@@ -79,7 +80,7 @@ Important variables are documented in `.env.example`.
 
 - `NEXT_PUBLIC_API_URL` is baked into the Next.js client at image build time.
 - `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_CX` are required only for Google keyword-position lookup.
-- The default self-hosted stack can run experimental PDF -> DOCX/PPTX through the bundled Office service. `BLOOM_SERVICE_URL` / `BLOOM_API_KEY` enable the optional Bloom fallback and are still required for the experimental PDF -> XLSX primary route. Bloom itself is not bundled into the default compose stack.
+- The default self-hosted stack handles PDF -> DOCX/PPTX through the bundled Office service. `BLOOM_SERVICE_URL` / `BLOOM_API_KEY` enable the optional Bloom fallback and are still required for the PDF -> XLSX primary route. Bloom itself is not bundled into the default compose stack.
 - `OCR_XLSX_FALLBACK_TIMEOUT_SECONDS` controls the best-effort PP-StructureV3 fallback used when Bloom finds no logical XLSX table; the default is 900 seconds because CPU-only multi-page scans can take several minutes.
 - Private/loopback Ping targets are blocked by default. `ALLOW_PRIVATE_NETWORK_UTILITIES=1` is intended only for trusted self-hosted/LAN deployments.
 - `X-Forwarded-For` is ignored unless `TRUST_PROXY_HEADERS=1` is explicitly enabled behind a trusted reverse proxy.
@@ -97,6 +98,8 @@ GitHub Actions currently verifies:
 - Real LibreOffice DOCX -> PDF conversion
 - PDF -> DOCX/PPTX LibreOffice import compatibility and auto-routing benchmark coverage
 - Pinned Bloom PDF -> Office canary/synthetic compatibility coverage
+- Permanent PDF-to-Office synthetic V1 release gate
+- Permanent PDF-to-Office public real-world V1 release gate, including scanned-XLSX preservation
 - Real PKCS#12 PDF signing
 - Real PDF/A conversion using the internal non-Ghostscript backend
 - Docker Compose model and frontend/backend image builds
@@ -108,11 +111,13 @@ The frontend also sends baseline `nosniff`, frame-denial, referrer and permissio
 See `docs/BENCHMARKING.md` for:
 - Vietnamese OCR CER/WER measurement and pinned real-scan provenance
 - PDF -> Office round-trip visual-fidelity and OOXML-editability testing
+- the versioned PDF-to-Office V1 release policy and target-specific acceptance thresholds
 
 ## Known boundaries
 
 - The 59-sample OCR corpus is a regression baseline, not a claim of universal Vietnamese OCR accuracy across every scan style or document class.
-- PDF -> DOCX/XLSX/PPTX remains **Experimental** until the versioned representative release corpus passes target-specific release thresholds. Current synthetic and public real-world results are strong routing evidence, not a universal fidelity claim.
+- Passing the PDF-to-Office V1 release gate establishes a reproducible supported baseline for the pinned representative corpus; it is not a claim that every arbitrary PDF will convert with the same fidelity.
+- PDF -> XLSX still depends on the optional external Bloom service for its primary route; PP-StructureV3 is a bounded fallback for scanned/no-logical-table cases rather than a universal spreadsheet reconstruction engine.
 - Cloud-storage connectors, multi-party remote signing, AI summarization and PDF translation require product/provider decisions and are not part of the self-contained V1 stack yet.
 
 ## License
