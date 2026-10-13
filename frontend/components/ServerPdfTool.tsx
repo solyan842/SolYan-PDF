@@ -12,15 +12,29 @@ type Props = {
     | '/pdf/compress'
     | '/pdf/web-optimize'
     | '/pdf/flatten'
-    | '/pdf/compress-images';
+    | '/pdf/compress-images'
+    | '/pdf/extract-images';
   actionLabel: string;
   outputName: string;
   passwordMode?: 'required' | 'optional';
+  engineLabel?: string;
+  eyebrow?: string;
+  hint?: string;
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
-export default function ServerPdfTool({ title, description, endpoint, actionLabel, outputName, passwordMode }: Props) {
+export default function ServerPdfTool({
+  title,
+  description,
+  endpoint,
+  actionLabel,
+  outputName,
+  passwordMode,
+  engineLabel = 'qpdf server',
+  eyebrow = 'CORE PDF · QPDF',
+  hint = 'Tác vụ này cần backend qpdf. Giới hạn mặc định: 100 MB/file.',
+}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -55,12 +69,12 @@ export default function ServerPdfTool({ title, description, endpoint, actionLabe
   }
 
   return <main className="shell">
-    <header className="topbar"><a className="brand" href="/">SolYan PDF</a><div className="privacy-pill server-pill">Xử lý bằng qpdf server</div></header>
-    <section className="hero compact-hero"><p className="eyebrow">CORE PDF · QPDF</p><h1>{title}</h1><p className="subtitle">{description}</p><label className="picker"><input type="file" accept="application/pdf,.pdf" onChange={onFile}/><span>+ Chọn file PDF</span></label></section>
+    <header className="topbar"><a className="brand" href="/">SolYan PDF</a><div className="privacy-pill server-pill">Xử lý bằng {engineLabel}</div></header>
+    <section className="hero compact-hero"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="subtitle">{description}</p><label className="picker"><input type="file" accept="application/pdf,.pdf" onChange={onFile}/><span>+ Chọn file PDF</span></label></section>
     <section className="workspace form-workspace">
       {passwordMode && <label className="field"><span>Mật khẩu {passwordMode === 'optional' ? '(nếu có)' : ''}</span><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="new-password" /></label>}
       {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong></p>}
-      <p className="hint">Tác vụ này cần backend qpdf. Giới hạn mặc định: 100 MB/file.</p>
+      <p className="hint">{hint}</p>
       {error && <div className="error">{error}</div>}
       <button className="merge-button" type="button" onClick={run} disabled={!file || busy || (passwordMode === 'required' && !password)}>{busy ? 'Đang xử lý…' : actionLabel}</button>
     </section>
