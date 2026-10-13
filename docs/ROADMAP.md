@@ -126,6 +126,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add browser-local split-by-bookmark/chapter ZIP export with selectable outline depth, physical-page ranges, duplicate-start handling and bounded real-PDF regression coverage
 - [x] Add browser-local Poster PDF tiling with X×Y grids, A3/A4/A5/Letter/Legal/Tabloid sheets, RTL ordering and CropBox/rotation-aware visible-page normalization
 - [x] Add browser-local split-sections with all/custom/except-first/except-last page selection, rows×columns grids, merged-PDF or per-part ZIP output, CropBox/rotation normalization and bounded regression coverage
+- [x] Add bounded qpdf JSON active-content inspector for reachable JavaScript/actions/triggers, active annotations and attachment references, including direct/stream JavaScript display without execution, encrypted input support and dead-object exclusion
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
@@ -170,6 +171,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Backend/qpdf CI
 - [x] Real qpdf smoke coverage for web optimization, flattening and image recompression routes
 - [x] Real qpdf JSON sanitization gate covering catalog/page actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures and selective-mode preservation
+- [x] Real qpdf JSON active-content inspection gate covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input, harmless `/A` false-positive rejection and dead-object exclusion
 - [x] Real qpdf JSON annotation-removal gate covering comment/markup cleanup, optional all-non-widget cleanup and Widget/AcroForm preservation
 - [x] Real Poppler embedded-image extraction gate with bounded Image XObject / ZIP validation
 - [x] Real conservative blank-page removal gate across blank, vector-content and text-content pages
