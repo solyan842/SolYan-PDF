@@ -112,7 +112,7 @@ jobs:
           from fastapi.testclient import TestClient
           from unittest.mock import patch
 
-          from app.bloom_proxy import _is_bloom_no_tables_placeholder
+          from app.bloom_proxy import OCR_XLSX_FALLBACK_TIMEOUT_SECONDS, _is_bloom_no_tables_placeholder
           from app.main import app
 
           NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
@@ -137,6 +137,10 @@ jobs:
           assert _is_bloom_no_tables_placeholder(placeholder) is True
           assert _is_bloom_no_tables_placeholder(recognized) is False
           assert _is_bloom_no_tables_placeholder(b'not-an-xlsx') is False
+          # The pinned real-scan diagnostic needs more than 300 seconds for some
+          # CPU-only PP-Structure cases, so prevent the fallback budget from
+          # silently regressing to the old five-minute timeout.
+          assert OCR_XLSX_FALLBACK_TIMEOUT_SECONDS >= 900
 
           class FakeBloomClient:
               def __init__(self, *args, **kwargs):
