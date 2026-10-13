@@ -122,6 +122,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Extend AES-256 protection with qpdf printing/modification/extraction permissions and generate a distinct random owner password when omitted
 - [x] Add bounded qpdf JSON sanitization with independent regression-tested removal of JavaScript/actions/active annotations, link annotations, Info/XMP metadata and EmbeddedFiles/AF/FileAttachment structures; selective mode must preserve unselected categories and the product explicitly does not claim antivirus/universal exploit coverage
 - [x] Add form-safe qpdf JSON comment/annotation removal: safe mode removes standard markup/comment subtypes while preserving Widget/AcroForm, Link and FileAttachment; optional all-non-widget mode removes every annotation except Widget
+- [x] Add browser-local PDF bookmark/outline editor with Unicode titles, nested hierarchy, sibling reordering, page destinations, bounded extraction/writing and deterministic outline replacement/removal
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
@@ -174,6 +175,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Real browser-local crop/resize geometry gate with selective page boxes, rotated sources, A4/custom target sizes, qpdf validation and retained text checks
 - [x] Real browser-local overlay/single-page gate with qpdf validity, page geometry, rotation handling and retained-text checks
 - [x] Real browser-local advanced-split gate with exact page grouping, bounded target-size estimation, qpdf validity and retained-text checks
+- [x] Real browser-local bookmark/outline gate covering Unicode title round-trip, hierarchy, sibling links, page clamping, replacement/removal and qpdf object-graph validation
 - [x] Real qpdf 11.9 attachment round-trip gate covering add/list/extract/remove and binary payload equality
 - [x] Real qpdf 11.9 AES-256 permission gate covering deny-all, permissive defaults, low-print/form-only rights, user-vs-owner identity and user-password decrypt compatibility
 - [x] OCR XLSX binary proxy regression coverage
