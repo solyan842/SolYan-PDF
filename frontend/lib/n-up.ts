@@ -1,6 +1,7 @@
 import { degrees, grayscale, PDFDocument, PDFPage, PDFEmbeddedPage } from 'pdf-lib';
 
 export const A4_PORTRAIT = { width: 595.28, height: 841.89 } as const;
+export const MAX_LAYOUT_SOURCE_PAGES = 500;
 
 export type NUpOrientation = 'portrait' | 'landscape';
 export type NUpArrangement = 'rows' | 'columns';
@@ -23,10 +24,7 @@ export type NUpSourcePage = {
   rotation: number;
 };
 
-export type NUpPlacement = {
-  sourceIndex: number;
-  row: number;
-  column: number;
+export type PageFit = {
   x: number;
   y: number;
   width: number;
@@ -37,17 +35,22 @@ export type NUpPlacement = {
   drawY: number;
 };
 
+export type NUpPlacement = PageFit & {
+  sourceIndex: number;
+  row: number;
+  column: number;
+};
+
 export type NUpSheetPlan = {
   pageWidth: number;
   pageHeight: number;
   placements: NUpPlacement[];
 };
 
-const MAX_SOURCE_PAGES = 500;
 const MAX_GRID_SIDE = 8;
 const MAX_MARGIN = 144;
 
-function normalizeRotation(angle: number): 0 | 90 | 180 | 270 {
+export function normalizePageRotation(angle: number): 0 | 90 | 180 | 270 {
   const normalized = ((Math.round(angle / 90) * 90) % 360 + 360) % 360;
   if (normalized === 90 || normalized === 180 || normalized === 270) return normalized;
   return 0;
@@ -102,19 +105,46 @@ function drawOrigin(
   return { x, y };
 }
 
+export function fitSourcePageToBox(
+  source: NUpSourcePage,
+  box: { x: number; y: number; width: number; height: number },
+  innerMargin = 0,
+  pageNumber?: number,
+): PageFit {
+  const usableWidth = box.width - 2 * innerMargin;
+  const usableHeight = box.height - 2 * innerMargin;
+  if (!(usableWidth > 0 && usableHeight > 0)) throw new Error('Lề quá lớn so với vùng đặt trang.');
+
+  const rotation = normalizePageRotation(source.rotation);
+  const rotated = rotation === 90 || rotation === 270;
+  const displayWidth = rotated ? source.height : source.width;
+  const displayHeight = rotated ? source.width : source.height;
+  if (!(displayWidth > 0 && displayHeight > 0)) {
+    throw new Error(pageNumber ? `Trang ${pageNumber} có kích thước không hợp lệ.` : 'Trang có kích thước không hợp lệ.');
+  }
+
+  const scale = Math.min(usableWidth / displayWidth, usableHeight / displayHeight);
+  const width = displayWidth * scale;
+  const height = displayHeight * scale;
+  const x = box.x + innerMargin + (usableWidth - width) / 2;
+  const y = box.y + innerMargin + (usableHeight - height) / 2;
+  const origin = drawOrigin(x, y, source.width, source.height, scale, rotation);
+  return { x, y, width, height, scale, rotation, drawX: origin.x, drawY: origin.y };
+}
+
 export function planNUpSheets(sourcePages: NUpSourcePage[], options: NUpOptions): NUpSheetPlan[] {
   validateOptions(options);
   if (!sourcePages.length) throw new Error('PDF không có trang.');
-  if (sourcePages.length > MAX_SOURCE_PAGES) throw new Error(`N-up giới hạn ${MAX_SOURCE_PAGES} trang nguồn.`);
+  if (sourcePages.length > MAX_LAYOUT_SOURCE_PAGES) throw new Error(`N-up giới hạn ${MAX_LAYOUT_SOURCE_PAGES} trang nguồn.`);
 
   const { width: pageWidth, height: pageHeight } = outputSize(options.orientation);
   const contentWidth = pageWidth - 2 * options.outerMargin;
   const contentHeight = pageHeight - 2 * options.outerMargin;
   const cellWidth = contentWidth / options.columns;
   const cellHeight = contentHeight / options.rows;
-  const usableWidth = cellWidth - 2 * options.innerMargin;
-  const usableHeight = cellHeight - 2 * options.innerMargin;
-  if (usableWidth <= 0 || usableHeight <= 0) throw new Error('Lề quá lớn so với kích thước lưới N-up.');
+  if (cellWidth - 2 * options.innerMargin <= 0 || cellHeight - 2 * options.innerMargin <= 0) {
+    throw new Error('Lề quá lớn so với kích thước lưới N-up.');
+  }
 
   const perSheet = options.rows * options.columns;
   const sheets: NUpSheetPlan[] = [];
@@ -124,31 +154,23 @@ export function planNUpSheets(sourcePages: NUpSourcePage[], options: NUpOptions)
     const count = Math.min(perSheet, sourcePages.length - sheetStart);
     for (let slot = 0; slot < count; slot += 1) {
       const sourceIndex = sheetStart + slot;
-      const source = sourcePages[sourceIndex];
-      const rotation = normalizeRotation(source.rotation);
-      const rotated = rotation === 90 || rotation === 270;
-      const displayWidth = rotated ? source.height : source.width;
-      const displayHeight = rotated ? source.width : source.height;
-      if (!(displayWidth > 0 && displayHeight > 0)) throw new Error(`Trang ${sourceIndex + 1} có kích thước không hợp lệ.`);
-
-      const scale = Math.min(usableWidth / displayWidth, usableHeight / displayHeight);
-      const width = displayWidth * scale;
-      const height = displayHeight * scale;
       const { row, column } = slotPosition(slot, options);
       const cellX = options.outerMargin + column * cellWidth;
       const cellY = pageHeight - options.outerMargin - (row + 1) * cellHeight;
-      const x = cellX + options.innerMargin + (usableWidth - width) / 2;
-      const y = cellY + options.innerMargin + (usableHeight - height) / 2;
-      const origin = drawOrigin(x, y, source.width, source.height, scale, rotation);
-
-      placements.push({ sourceIndex, row, column, x, y, width, height, scale, rotation, drawX: origin.x, drawY: origin.y });
+      const fit = fitSourcePageToBox(
+        sourcePages[sourceIndex],
+        { x: cellX, y: cellY, width: cellWidth, height: cellHeight },
+        options.innerMargin,
+        sourceIndex + 1,
+      );
+      placements.push({ sourceIndex, row, column, ...fit });
     }
     sheets.push({ pageWidth, pageHeight, placements });
   }
   return sheets;
 }
 
-async function embedVisiblePage(output: PDFDocument, sourcePage: PDFPage): Promise<PDFEmbeddedPage> {
+export async function embedVisiblePage(output: PDFDocument, sourcePage: PDFPage): Promise<PDFEmbeddedPage> {
   const crop = sourcePage.getCropBox();
   return output.embedPage(sourcePage, {
     left: crop.x,
@@ -161,7 +183,7 @@ async function embedVisiblePage(output: PDFDocument, sourcePage: PDFPage): Promi
 export async function createNUpPdf(sourceBytes: ArrayBuffer | Uint8Array, options: NUpOptions): Promise<Uint8Array> {
   validateOptions(options);
   const source = await PDFDocument.load(sourceBytes);
-  if (source.getPageCount() > MAX_SOURCE_PAGES) throw new Error(`N-up giới hạn ${MAX_SOURCE_PAGES} trang nguồn.`);
+  if (source.getPageCount() > MAX_LAYOUT_SOURCE_PAGES) throw new Error(`N-up giới hạn ${MAX_LAYOUT_SOURCE_PAGES} trang nguồn.`);
 
   const sourcePages = source.getPages();
   const descriptors = sourcePages.map((page) => {
