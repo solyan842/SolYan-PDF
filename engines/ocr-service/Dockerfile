@@ -47,4 +47,4 @@ RUN chown -R solyan:solyan /app /home/solyan
 USER solyan
 EXPOSE 8010
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1"]
+CMD ["uvicorn", "app.auto_rotate_api:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1"]
