@@ -54,6 +54,9 @@ app.add_middleware(
         "X-SolYan-Comments-Removed",
         "X-SolYan-Other-Annotations-Removed",
         "X-SolYan-Widgets-Preserved",
+        "X-SolYan-Auto-Split-Dividers",
+        "X-SolYan-Auto-Split-Parts",
+        "X-SolYan-Auto-Split-Duplex",
     ],
 )
 app.include_router(network_router)
