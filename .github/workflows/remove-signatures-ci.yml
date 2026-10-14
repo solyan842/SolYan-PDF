@@ -1,0 +1,215 @@
+name: Remove Signatures CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/remove_signatures.py'
+      - 'backend/app/main.py'
+      - 'engines/sign-service/**'
+      - 'frontend/app/remove-signatures/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/remove-signatures-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/remove_signatures.py'
+      - 'backend/app/main.py'
+      - 'engines/sign-service/**'
+      - 'frontend/app/remove-signatures/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/remove-signatures-ci.yml'
+
+jobs:
+  remove-signatures:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install OpenSSL and qpdf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssl qpdf
+          openssl version
+          qpdf --version
+
+      - name: Install hash-verified signing and backend dependencies
+        run: |
+          python -m pip install --require-hashes -r engines/sign-service/requirements.hashed.lock
+          python -m pip install --no-deps -r engines/sign-service/requirements.txt
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip install httpx==0.28.1 pypdf==6.1.1
+          python -m pip check
+
+      - name: Compile backend signature removal
+        run: python -m compileall backend/app
+
+      - name: Reject cyclic AcroForm trees safely
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from fastapi import HTTPException
+          from app.remove_signatures import _build_signature_removal_update
+
+          cyclic = {
+              'qpdf': [
+                  {'jsonversion': 2},
+                  {
+                      'trailer': {'value': {'/Root': '1 0 R'}},
+                      'obj:1 0 R': {'value': {'/Type': '/Catalog', '/AcroForm': '2 0 R'}},
+                      'obj:2 0 R': {'value': {'/Fields': ['3 0 R']}},
+                      'obj:3 0 R': {'value': {'/Kids': ['4 0 R']}},
+                      'obj:4 0 R': {'value': {'/Kids': ['3 0 R']}},
+                  },
+              ]
+          }
+          try:
+              _build_signature_removal_update(cyclic)
+          except HTTPException as exc:
+              assert exc.status_code == 422, exc
+              assert 'cycle' in str(exc.detail).lower(), exc.detail
+          else:
+              raise AssertionError('cyclic AcroForm tree must be rejected')
+          print('cyclic AcroForm rejected with bounded 422 response')
+          PY
+
+      - name: Generate certificate and PDF with a normal form field
+        run: |
+          mkdir -p /tmp/solyan-remove-signatures
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+            -keyout /tmp/solyan-remove-signatures/key.pem \
+            -out /tmp/solyan-remove-signatures/cert.pem \
+            -days 2 \
+            -subj '/CN=SolYan Remove Signature CI/O=SolYan Test/C=VN' \
+            -addext 'keyUsage=critical,digitalSignature' \
+            -addext 'basicConstraints=critical,CA:TRUE'
+          openssl pkcs12 -export \
+            -inkey /tmp/solyan-remove-signatures/key.pem \
+            -in /tmp/solyan-remove-signatures/cert.pem \
+            -out /tmp/solyan-remove-signatures/test.p12 \
+            -passout pass:test-pass \
+            -name 'SolYan Remove Signature CI'
+          python - <<'PY'
+          from pypdf import PdfWriter
+          from pypdf.generic import ArrayObject, DictionaryObject, NameObject, TextStringObject
+
+          root = '/tmp/solyan-remove-signatures/base.pdf'
+          writer = PdfWriter()
+          writer.add_blank_page(width=595, height=842)
+          keep_field = DictionaryObject({
+              NameObject('/FT'): NameObject('/Tx'),
+              NameObject('/T'): TextStringObject('KeepMe'),
+              NameObject('/V'): TextStringObject('Preserve this value'),
+          })
+          keep_ref = writer._add_object(keep_field)
+          acroform = DictionaryObject({NameObject('/Fields'): ArrayObject([keep_ref])})
+          writer._root_object[NameObject('/AcroForm')] = writer._add_object(acroform)
+          with open(root, 'wb') as output:
+              writer.write(output)
+          PY
+          qpdf --check /tmp/solyan-remove-signatures/base.pdf
+
+      - name: Sign fixture with SolYan pyHanko service
+        working-directory: engines/sign-service
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          root = Path('/tmp/solyan-remove-signatures')
+          base = root.joinpath('base.pdf').read_bytes()
+          p12 = root.joinpath('test.p12').read_bytes()
+          client = TestClient(app)
+
+          signed = client.post(
+              '/sign/pkcs12',
+              files={
+                  'file': ('base.pdf', base, 'application/pdf'),
+                  'certificate': ('test.p12', p12, 'application/x-pkcs12'),
+              },
+              data={
+                  'passphrase': 'test-pass',
+                  'field_name': 'ValidationSignature',
+                  'reason': 'Remove signatures CI',
+                  'location': 'Hanoi',
+              },
+          )
+          assert signed.status_code == 200, signed.text
+          root.joinpath('signed.pdf').write_bytes(signed.content)
+
+          validated = client.post('/validate', files={'file': ('signed.pdf', signed.content, 'application/pdf')})
+          assert validated.status_code == 200, validated.text
+          report = validated.json()
+          assert report['signature_count'] == 1, report
+          assert report['all_intact'] is True, report
+          assert report['all_cryptographically_valid'] is True, report
+          PY
+          qpdf --check /tmp/solyan-remove-signatures/signed.pdf
+
+      - name: Remove signature and preserve ordinary form fields
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import io
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from pypdf import PdfReader
+          from app.main import app
+
+          root = Path('/tmp/solyan-remove-signatures')
+          base = root.joinpath('base.pdf').read_bytes()
+          signed = root.joinpath('signed.pdf').read_bytes()
+          client = TestClient(app)
+
+          unsigned_noop = client.post('/pdf/remove-signatures', files={'file': ('base.pdf', base, 'application/pdf')})
+          assert unsigned_noop.status_code == 200, unsigned_noop.text
+          assert unsigned_noop.content == base, 'unsigned PDF must be byte-identical on no-op path'
+          assert int(unsigned_noop.headers['X-SolYan-Signature-Fields-Removed']) == 0
+
+          removed = client.post('/pdf/remove-signatures', files={'file': ('signed.pdf', signed, 'application/pdf')})
+          assert removed.status_code == 200, removed.text
+          assert int(removed.headers['X-SolYan-Signature-Fields-Removed']) >= 1, removed.headers
+          assert int(removed.headers['X-SolYan-Signature-Values-Removed']) >= 1, removed.headers
+          root.joinpath('removed.pdf').write_bytes(removed.content)
+
+          reader = PdfReader(io.BytesIO(removed.content))
+          fields = reader.get_fields() or {}
+          assert 'KeepMe' in fields, fields
+          assert fields['KeepMe'].get('/V') == 'Preserve this value', fields['KeepMe']
+          assert 'ValidationSignature' not in fields, fields
+          print('ordinary form field preserved; signature field removed')
+          PY
+
+          qpdf --check /tmp/solyan-remove-signatures/removed.pdf
+          qpdf --qdf --object-streams=disable /tmp/solyan-remove-signatures/removed.pdf /tmp/solyan-remove-signatures/removed-qdf.pdf
+          ! grep -aq '/FT /Sig' /tmp/solyan-remove-signatures/removed-qdf.pdf
+          ! grep -aq '/ByteRange' /tmp/solyan-remove-signatures/removed-qdf.pdf
+
+      - name: Verify SolYan validator sees zero signatures after removal
+        working-directory: engines/sign-service
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          removed = Path('/tmp/solyan-remove-signatures/removed.pdf').read_bytes()
+          client = TestClient(app)
+          validated = client.post('/validate', files={'file': ('removed.pdf', removed, 'application/pdf')})
+          assert validated.status_code == 200, validated.text
+          report = validated.json()
+          assert report['signature_count'] == 0, report
+          assert report['all_intact'] is False, report
+          print('pyHanko validator confirms zero embedded signatures')
+          PY
