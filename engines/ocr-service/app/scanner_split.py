@@ -10,13 +10,14 @@ SCAN_RENDER_DPI = 300
 MAX_RENDER_LONG_EDGE = 4200
 MAX_TOTAL_RENDER_PIXELS = 400_000_000
 MAX_PHOTOS = 500
+MAX_TOTAL_OUTPUT_BYTES = 250 * 1024 * 1024
 
 
 @dataclass
 class PhotoCrop:
     page: int
     index: int
-    image: Any
+    png: bytes
     bounds: tuple[int, int, int, int]
     rotation: float
 
@@ -60,11 +61,7 @@ def _edge_samples(image: Any, max_samples_per_edge: int = 256) -> Any:
 
 
 def estimate_background_color(image: Any) -> Any:
-    """Estimate scanner-bed/background color from image edges only.
-
-    Using edge samples avoids the upstream failure mode where the center sample
-    may land inside a photo and pull the background estimate toward foreground.
-    """
+    """Estimate scanner-bed/background color from image edges only."""
 
     import numpy as np
 
@@ -76,12 +73,13 @@ def foreground_mask(image: Any, background_color: Any, tolerance: int) -> Any:
     import cv2
     import numpy as np
 
+    # Work in signed space. uint8 +/- tolerance can wrap at 0/255 and classify
+    # scanner backgrounds incorrectly.
     pixels = image[:, :, :3].astype(np.int16)
     background = np.asarray(background_color, dtype=np.int16).reshape((1, 1, 3))
     delta = np.max(np.abs(pixels - background), axis=2)
     mask = np.where(delta > tolerance, 255, 0).astype(np.uint8)
 
-    # Bridge small scan gaps without aggressively joining nearby photographs.
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
     mask = cv2.dilate(mask, kernel, iterations=1)
@@ -112,8 +110,7 @@ def detect_photo_regions(
             continue
         regions.append((int(x), int(y), int(width), int(height)))
 
-    # Deterministic reading order. Contour enumeration order is not stable
-    # across OpenCV versions, so never expose it as output ordering.
+    # OpenCV contour enumeration is not a stable product ordering.
     regions.sort(key=lambda rect: (rect[1], rect[0], rect[3], rect[2]))
     return regions, mask, background
 
@@ -150,8 +147,6 @@ def _normalized_rect_angle(contour: Any) -> float:
             longest_length = length
             longest_angle = math.degrees(math.atan2(dy, dx))
 
-    # A rectangle is symmetric every 90 degrees. Fold the selected long edge
-    # into [-45, 45] so we only perform deskew, not arbitrary page rotation.
     while longest_angle <= -45.0:
         longest_angle += 90.0
     while longest_angle > 45.0:
@@ -202,9 +197,17 @@ def _deskew_crop(
     angle = _normalized_rect_angle(contour)
     if abs(angle) < angle_threshold:
         return crop, 0.0
-    # Rotate in the opposite direction of the detected long edge.
     correction = -angle
     return _rotate_bound(crop, correction, background_color), correction
+
+
+def _encode_png(image: Any) -> bytes:
+    import cv2
+
+    ok, encoded = cv2.imencode(".png", image, [cv2.IMWRITE_PNG_COMPRESSION, 3])
+    if not ok:
+        raise ValueError("OpenCV failed to encode an extracted photo")
+    return encoded.tobytes()
 
 
 def split_image(
@@ -246,7 +249,7 @@ def split_image(
             PhotoCrop(
                 page=page,
                 index=index,
-                image=crop,
+                png=_encode_png(crop),
                 bounds=(x, y, crop_width, crop_height),
                 rotation=correction,
             )
@@ -329,6 +332,7 @@ def split_scanned_photos_file(
         images = iter([(1, _load_image(input_path))])
 
     results: list[PhotoCrop] = []
+    output_bytes = 0
     for page, image in images:
         page_results = split_image(
             image,
@@ -342,4 +346,7 @@ def split_scanned_photos_file(
         results.extend(page_results)
         if len(results) > MAX_PHOTOS:
             raise ValueError(f"Scanner split exceeds the {MAX_PHOTOS}-photo output limit")
+        output_bytes += sum(len(item.png) for item in page_results)
+        if output_bytes > MAX_TOTAL_OUTPUT_BYTES:
+            raise ValueError("Scanner split exceeds the 250 MB encoded output limit")
     return results
