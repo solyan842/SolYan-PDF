@@ -4,9 +4,11 @@ on:
   pull_request:
     paths:
       - 'engines/ocr-service/app/orientation.py'
+      - 'engines/ocr-service/app/auto_rotate_api.py'
       - 'engines/ocr-service/app/main.py'
       - 'engines/ocr-service/Dockerfile'
       - 'backend/app/auto_rotate.py'
+      - 'backend/app/ocr_proxy.py'
       - 'backend/app/main.py'
       - 'frontend/app/auto-rotate/**'
       - 'frontend/app/page.tsx'
@@ -19,9 +21,11 @@ on:
       - main
     paths:
       - 'engines/ocr-service/app/orientation.py'
+      - 'engines/ocr-service/app/auto_rotate_api.py'
       - 'engines/ocr-service/app/main.py'
       - 'engines/ocr-service/Dockerfile'
       - 'backend/app/auto_rotate.py'
+      - 'backend/app/ocr_proxy.py'
       - 'backend/app/main.py'
       - 'frontend/app/auto-rotate/**'
       - 'frontend/app/page.tsx'
@@ -53,10 +57,14 @@ jobs:
           qpdf --help=--rotate >/dev/null
 
       - name: Install lightweight orientation dependencies
-        run: pip install pytesseract==0.3.13 pypdfium2==5.14.0 Pillow
+        run: pip install pytesseract==0.3.13 pypdfium2==5.14.0 Pillow -r backend/requirements.txt
 
-      - name: Verify production image includes OSD data
-        run: grep -q 'tesseract-ocr-osd' engines/ocr-service/Dockerfile
+      - name: Verify production image includes OSD data and orientation entrypoint
+        run: |
+          grep -q 'tesseract-ocr-osd' engines/ocr-service/Dockerfile
+          grep -q 'app.auto_rotate_api:app' engines/ocr-service/Dockerfile
+          grep -q '@app.post("/ocr/orientation")' engines/ocr-service/app/auto_rotate_api.py
+          grep -q '@router.post("/auto-rotate")' backend/app/ocr_proxy.py
 
       - name: Gate real Tesseract OSD orientation and PDFium rendering
         env:
@@ -171,4 +179,69 @@ jobs:
           )
           assert conflict[1]['method'] == 'none' and conflict[1]['apply'] is False, conflict
           print('orientation planning gate: PASS')
+          PY
+
+      - name: Gate qpdf relative application and no-op byte preservation
+        env:
+          PYTHONPATH: backend
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          import pypdfium2 as pdfium
+          from PIL import Image, ImageDraw
+          from app.auto_rotate import qpdf_rotation_args
+          from app.ocr_proxy import _apply_qpdf_rotations
+
+          plan = [
+              {'page': 1, 'apply': True, 'correction': 90},
+              {'page': 2, 'apply': True, 'correction': 180},
+              {'page': 3, 'apply': False, 'correction': 270},
+          ]
+          args = qpdf_rotation_args(plan)
+          assert args == ['--rotate=+90:1', '--rotate=+180:2'], args
+
+          with tempfile.TemporaryDirectory(prefix='solyan-auto-rotate-ci-') as temp_dir:
+              root = Path(temp_dir)
+              image = Image.new('RGB', (600, 800), 'white')
+              draw = ImageDraw.Draw(image)
+              draw.text((60, 80), 'SolYan Auto Rotate qpdf gate', fill='black')
+              source = root / 'source.pdf'
+              image.save(source, 'PDF', resolution=120.0, save_all=True, append_images=[image.copy()])
+              source_bytes = source.read_bytes()
+
+              assert _apply_qpdf_rotations(source_bytes, []) == source_bytes
+              rotated_bytes = _apply_qpdf_rotations(source_bytes, args)
+              rotated = root / 'rotated.pdf'
+              rotated.write_bytes(rotated_bytes)
+              subprocess.run(['qpdf', '--check', str(rotated)], check=True)
+
+              pdf = pdfium.PdfDocument(str(rotated))
+              try:
+                  first = pdf[0]
+                  second = pdf[1]
+                  assert first.get_width() > first.get_height(), (first.get_width(), first.get_height())
+                  assert second.get_width() < second.get_height(), (second.get_width(), second.get_height())
+              finally:
+                  pdf.close()
+
+              pre_rotated = root / 'pre-rotated.pdf'
+              subprocess.run(['qpdf', '--rotate=+90:1', str(source), str(pre_rotated)], check=True)
+              composed_bytes = _apply_qpdf_rotations(
+                  pre_rotated.read_bytes(),
+                  qpdf_rotation_args([{'page': 1, 'apply': True, 'correction': 270}]),
+              )
+              composed = root / 'composed.pdf'
+              composed.write_bytes(composed_bytes)
+              subprocess.run(['qpdf', '--check', str(composed)], check=True)
+              composed_pdf = pdfium.PdfDocument(str(composed))
+              try:
+                  page = composed_pdf[0]
+                  assert page.get_width() < page.get_height(), (page.get_width(), page.get_height())
+              finally:
+                  composed_pdf.close()
+              image.close()
+
+          print('qpdf Auto Rotate gate: PASS')
           PY
