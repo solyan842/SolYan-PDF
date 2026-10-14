@@ -21,6 +21,7 @@ from .office_proxy import router as office_router
 from .remove_annotations import router as remove_annotations_router
 from .remove_blank_pages import router as remove_blank_pages_router
 from .remove_images import router as remove_images_router
+from .remove_signatures import router as remove_signatures_router
 from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
 
@@ -54,6 +55,11 @@ app.add_middleware(
         "X-SolYan-Comments-Removed",
         "X-SolYan-Other-Annotations-Removed",
         "X-SolYan-Widgets-Preserved",
+        "X-SolYan-Signature-Fields-Removed",
+        "X-SolYan-Signature-Widgets-Removed",
+        "X-SolYan-Signature-Values-Removed",
+        "X-SolYan-Signature-Permissions-Removed",
+        "X-SolYan-Signature-DSS-Removed",
         "X-SolYan-Auto-Split-Dividers",
         "X-SolYan-Auto-Split-Parts",
         "X-SolYan-Auto-Split-Duplex",
@@ -71,6 +77,7 @@ app.include_router(remove_blank_pages_router)
 app.include_router(attachments_router)
 app.include_router(sanitize_router)
 app.include_router(remove_annotations_router)
+app.include_router(remove_signatures_router)
 app.include_router(active_content_router)
 
 
