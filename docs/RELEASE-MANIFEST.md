@@ -1,6 +1,6 @@
-# SolYan PDF v0.1.4 — Release Dependency Manifest
+# SolYan PDF v0.1.5 — Release Dependency Manifest
 
-Release date: 2026-10-13
+Release date: 2026-10-14
 
 Project license: **Apache-2.0** (`LICENSE`)
 

@@ -4,6 +4,10 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-14
+
+Patch release completing the **V1.2 self-contained parity expansion and security hardening** roadmap.
+
 ### V1.2 self-contained parity expansion
 - Added browser-local PDF overlay, one-long-page composition, Poster PDF tiling, split-sections, advanced split-by-count/target-size, bookmark/outline editing and split-by-bookmark/chapter export.
 - Added bounded qpdf attachment management, AES-256 permission controls, structural sanitization, form-safe comment/annotation removal, active-content inspection, reachable Image XObject removal and structural decompression.
