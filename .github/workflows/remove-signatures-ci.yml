@@ -51,6 +51,35 @@ jobs:
       - name: Compile backend signature removal
         run: python -m compileall backend/app
 
+      - name: Reject cyclic AcroForm trees safely
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from fastapi import HTTPException
+          from app.remove_signatures import _build_signature_removal_update
+
+          cyclic = {
+              'qpdf': [
+                  {'jsonversion': 2},
+                  {
+                      'trailer': {'value': {'/Root': '1 0 R'}},
+                      'obj:1 0 R': {'value': {'/Type': '/Catalog', '/AcroForm': '2 0 R'}},
+                      'obj:2 0 R': {'value': {'/Fields': ['3 0 R']}},
+                      'obj:3 0 R': {'value': {'/Kids': ['4 0 R']}},
+                      'obj:4 0 R': {'value': {'/Kids': ['3 0 R']}},
+                  },
+              ]
+          }
+          try:
+              _build_signature_removal_update(cyclic)
+          except HTTPException as exc:
+              assert exc.status_code == 422, exc
+              assert 'cycle' in str(exc.detail).lower(), exc.detail
+          else:
+              raise AssertionError('cyclic AcroForm tree must be rejected')
+          print('cyclic AcroForm rejected with bounded 422 response')
+          PY
+
       - name: Generate certificate and PDF with a normal form field
         run: |
           mkdir -p /tmp/solyan-remove-signatures
