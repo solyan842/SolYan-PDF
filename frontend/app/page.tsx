@@ -30,6 +30,7 @@ const tools = [
   { href: '/forms', title: 'Form PDF', description: 'Đọc và điền AcroForm trực tiếp trong trình duyệt.', local: true },
   { href: '/merge', title: 'Gộp PDF', description: 'Gộp nhiều file PDF theo đúng thứ tự.', local: true },
   { href: '/split', title: 'Tách PDF', description: 'Tách thủ công, theo số trang hoặc dung lượng mục tiêu best-effort rồi tải ZIP.', local: true },
+  { href: '/auto-split', title: 'Tự động tách bằng QR', description: 'Nhận diện trang QR phân cách bằng OpenCV/PDFium rồi tách bản gốc bằng qpdf, hỗ trợ scan hai mặt.', local: false, badge: 'QR + qpdf' },
   { href: '/split-by-bookmarks', title: 'Tách theo Bookmark / Chương', description: 'Dùng outline để chia tài liệu thành chapter theo độ sâu bookmark và tải ZIP.', local: true },
   { href: '/organize', title: 'Sắp xếp trang', description: 'Đổi thứ tự, bỏ trang hoặc trích xuất trang.', local: true },
   { href: '/rotate', title: 'Xoay PDF', description: 'Xoay toàn bộ hoặc một số trang.', local: true },
