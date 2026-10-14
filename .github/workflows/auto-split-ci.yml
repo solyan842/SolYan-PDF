@@ -1,0 +1,215 @@
+name: Auto Split QR CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/ocr-service/app/qr_dividers.py'
+      - 'engines/ocr-service/app/auto_rotate_api.py'
+      - 'engines/ocr-service/requirements.txt'
+      - 'engines/ocr-service/requirements.lock'
+      - 'engines/ocr-service/requirements.hashed.lock'
+      - 'backend/app/auto_split.py'
+      - 'backend/app/ocr_proxy.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/auto-split/**'
+      - 'frontend/public/solyan-auto-split-divider.svg'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-split-ci.yml'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/ROADMAP.md'
+      - 'docs/DEPENDENCIES.md'
+      - 'docs/RELEASE-MANIFEST.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/ocr-service/app/qr_dividers.py'
+      - 'engines/ocr-service/app/auto_rotate_api.py'
+      - 'engines/ocr-service/requirements.txt'
+      - 'engines/ocr-service/requirements.lock'
+      - 'engines/ocr-service/requirements.hashed.lock'
+      - 'backend/app/auto_split.py'
+      - 'backend/app/ocr_proxy.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/auto-split/**'
+      - 'frontend/public/solyan-auto-split-divider.svg'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-split-ci.yml'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/ROADMAP.md'
+      - 'docs/DEPENDENCIES.md'
+      - 'docs/RELEASE-MANIFEST.md'
+
+jobs:
+  auto-split:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install QR, PDF and SVG test engines
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf librsvg2-bin
+          python -m pip install --upgrade pip
+          python -m pip install \
+            fastapi==0.119.0 \
+            python-multipart==0.0.20 \
+            httpx==0.28.1 \
+            opencv-contrib-python==4.10.0.84 \
+            pypdfium2==5.14.0 \
+            Pillow
+          qpdf --version
+          rsvg-convert --version
+
+      - name: Gate static divider, PDFium QR detection, split semantics and qpdf output
+        env:
+          PYTHONPATH: engines/ocr-service:backend
+        run: |
+          set -euo pipefail
+          python <<'PY' 2>&1 | tee /tmp/auto-split-qr-ci.log
+          from __future__ import annotations
+
+          import io
+          import subprocess
+          import tempfile
+          import zipfile
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+          import pypdfium2 as pdfium
+          from PIL import Image, ImageDraw
+
+          from app.qr_dividers import DEFAULT_DIVIDER_MARKER, analyze_qr_dividers_file
+          from backend.app.auto_split import build_split_groups, split_pdf_to_zip
+
+          root = Path('/tmp/solyan-auto-split-ci')
+          root.mkdir(parents=True, exist_ok=True)
+          svg = Path('frontend/public/solyan-auto-split-divider.svg')
+          divider_png = root / 'divider.png'
+          subprocess.run(
+              ['rsvg-convert', '-w', '1240', '-h', '1754', str(svg), '-o', str(divider_png)],
+              check=True,
+          )
+
+          divider_image = Image.open(divider_png).convert('RGB')
+          decoded, _points, _straight = cv2.QRCodeDetector().detectAndDecode(
+              cv2.cvtColor(np.asarray(divider_image), cv2.COLOR_RGB2BGR)
+          )
+          print('static divider decoded:', decoded)
+          assert decoded == DEFAULT_DIVIDER_MARKER, decoded
+
+          def content_page(label: str) -> Image.Image:
+              image = Image.new('RGB', (1240, 1754), 'white')
+              draw = ImageDraw.Draw(image)
+              draw.rectangle((80, 80, 1160, 1674), outline='black', width=4)
+              draw.text((120, 140), label, fill='black')
+              draw.text((120, 220), 'This content page must be retained by Auto Split.', fill='black')
+              return image
+
+          pages = [
+              content_page('Document A'),
+              divider_image.copy(),
+              content_page('Document B'),
+              divider_image.copy(),
+              content_page('Document C'),
+          ]
+          source = root / 'source.pdf'
+          pages[0].save(source, 'PDF', resolution=150.0, save_all=True, append_images=pages[1:])
+          for page in pages:
+              page.close()
+          divider_image.close()
+
+          detected = analyze_qr_dividers_file(source, '.pdf')
+          print('detected pages:', detected)
+          dividers = [item['page'] for item in detected if item['divider']]
+          assert dividers == [2, 4], dividers
+          assert all(item['matchedAtDpi'] in (150, 300) for item in detected if item['divider'])
+
+          assert build_split_groups(5, [2, 4], duplex=False) == [[1], [3], [5]]
+          assert build_split_groups(7, [2, 5], duplex=True) == [[1], [4], [7]]
+          assert build_split_groups(3, [1], duplex=False) == [[2, 3]]
+          assert build_split_groups(5, [2, 3], duplex=False) == [[1], [4, 5]]
+          try:
+              build_split_groups(2, [1, 2], duplex=False)
+          except ValueError as exc:
+              print('all-divider refusal:', exc)
+          else:
+              raise AssertionError('all-divider input must refuse an empty result')
+
+          source_bytes = source.read_bytes()
+          archive_bytes = split_pdf_to_zip(source_bytes, [[1], [3], [5]], 5)
+          with zipfile.ZipFile(io.BytesIO(archive_bytes), 'r') as archive:
+              names = archive.namelist()
+              assert names == [
+                  'solyan-auto-split-001.pdf',
+                  'solyan-auto-split-002.pdf',
+                  'solyan-auto-split-003.pdf',
+              ], names
+              for name in names:
+                  part = root / name
+                  part.write_bytes(archive.read(name))
+                  subprocess.run(['qpdf', '--check', str(part)], check=True)
+                  assert int(subprocess.check_output(['qpdf', '--show-npages', str(part)]).decode().strip()) == 1
+                  pdf = pdfium.PdfDocument(str(part))
+                  try:
+                      assert len(pdf) == 1
+                  finally:
+                      pdf.close()
+
+          noop_bytes = split_pdf_to_zip(source_bytes, [[1, 2, 3, 4, 5]], 5)
+          with zipfile.ZipFile(io.BytesIO(noop_bytes), 'r') as archive:
+              names = archive.namelist()
+              assert names == ['solyan-auto-split-001.pdf'], names
+              assert archive.read(names[0]) == source_bytes
+          print('no-divider exact byte preservation: PASS')
+          print('Auto Split QR real gate: PASS')
+          PY
+
+      - name: Gate production route wiring
+        env:
+          PYTHONPATH: engines/ocr-service:backend
+        run: |
+          set -euo pipefail
+          python <<'PY' 2>&1 | tee -a /tmp/auto-split-qr-ci.log
+          from app.auto_rotate_api import app as ocr_app
+          from backend.app.main import app as backend_app
+
+          ocr_routes = {route.path for route in ocr_app.routes}
+          backend_routes = {route.path for route in backend_app.routes}
+          expected_ocr = {'/ocr/text', '/ocr/xlsx', '/ocr/orientation', '/ocr/qr-dividers'}
+          expected_backend = {'/ocr/auto-rotate', '/ocr/qr-dividers', '/ocr/auto-split'}
+          assert expected_ocr <= ocr_routes, sorted(ocr_routes)
+          assert expected_backend <= backend_routes, sorted(backend_routes)
+          print('OCR routes:', sorted(expected_ocr))
+          print('backend routes:', sorted(expected_backend))
+          print('production route wiring: PASS')
+          PY
+
+      - name: Gate direct dependency and product wiring
+        run: |
+          set -euo pipefail
+          grep -Fxq 'opencv-contrib-python==4.10.0.84' engines/ocr-service/requirements.txt
+          grep -q '/solyan-auto-split-divider.svg' frontend/app/auto-split/page.tsx
+          grep -q '/ocr/auto-split' frontend/app/auto-split/page.tsx
+          grep -q "href: '/auto-split'" frontend/app/page.tsx
+          grep -q 'X-SolYan-Auto-Split-Parts' backend/app/main.py
+          echo 'dependency/UI/CORS wiring: PASS' | tee -a /tmp/auto-split-qr-ci.log
+
+      - name: Upload Auto Split gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-split-qr-ci-evidence
+          path: /tmp/auto-split-qr-ci.log
+          if-no-files-found: warn
+          retention-days: 14
