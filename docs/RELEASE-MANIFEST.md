@@ -73,8 +73,9 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | PaddlePaddle | 3.2.0 | Apache-2.0 | CPU inference runtime; dedicated CPU-index source/version lock |
 | PaddleOCR | 3.7.0 | Apache-2.0 | primary OCR/document intelligence; PyPI artifact hash-verified |
 | pytesseract | 0.3.13 | Apache-2.0 | Python adapter; PyPI artifact hash-verified |
-| pypdfium2 | 5.14.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | PDF rendering; PyPI artifact hash-verified |
-| Tesseract OCR | snapshot-resolved distro package | Apache-2.0 | fallback OCR binary |
+| pypdfium2 | 5.14.0 | BSD-3-Clause / Apache-2.0 plus bundled dependency notices | temporary PDF rendering for OCR fallback, OSD and QR-divider analysis; PyPI artifact hash-verified |
+| opencv-contrib-python | 4.10.0.84 | Apache-2.0 | exact QR-divider detection for Auto Split; direct OCR-service dependency and PyPI artifact hash-verified |
+| Tesseract OCR | snapshot-resolved distro package | Apache-2.0 | fallback OCR and OSD binary |
 | Vietnamese Tesseract data | snapshot-resolved distro package | upstream tessdata licensing applies | `vie` recognition data |
 
 ## Office service
