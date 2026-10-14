@@ -18,6 +18,7 @@ from .extract_images import router as extract_images_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
+from .pdf_info import router as pdf_info_router
 from .remove_annotations import router as remove_annotations_router
 from .remove_blank_pages import router as remove_blank_pages_router
 from .remove_images import router as remove_images_router
@@ -79,6 +80,7 @@ app.include_router(sanitize_router)
 app.include_router(remove_annotations_router)
 app.include_router(remove_signatures_router)
 app.include_router(active_content_router)
+app.include_router(pdf_info_router)
 
 
 def _require_qpdf() -> None:
