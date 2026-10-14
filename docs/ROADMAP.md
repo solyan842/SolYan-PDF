@@ -35,7 +35,7 @@
 - [x] Add image
 - [x] Draw / annotate
 - [x] Highlight
-- [x] Redact
+- [x] Security-first manual redaction: burn the selected region, rasterize only the selected page, and rebuild the output without copying that page's original content stream
 - [x] Basic form support
 - [x] Local/browser-side processing where practical
 
@@ -129,7 +129,15 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add bounded qpdf JSON active-content inspector for reachable JavaScript/actions/triggers, active annotations and attachment references, including direct/stream JavaScript display without execution, encrypted input support and dead-object exclusion
 - [x] Add bounded qpdf JSON Image XObject removal from inherited page resources and nested Form XObject resources while preserving non-image XObjects, text/vector content and original page/Form content streams; inline `BI … ID … EI` images remain an explicit boundary
 - [x] Add bounded OCR-guided Auto Rotate: reuse Tesseract OSD + PDFium for temporary orientation analysis, keep a conservative 14.0 confidence default, optionally infer only a unanimous confident document correction, and apply accepted 90/180/270 corrections as relative qpdf page rotation without rasterizing output content; preserve exact source bytes when no page is changed
-- [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
+- [x] Add QR-divider Auto Split for scanned batches: PDFium/OpenCV detection at bounded 150/300 DPI, exact SolYan divider marker, optional duplex reverse-side skip, qpdf page selection, no empty parts and byte-identical single-part fallback when no divider exists
+- [x] Add qpdf structural Decompress for inspection/debugging with uncompressed streams and disabled object streams, explicitly separate from file-size compression
+- [x] Add browser-local Auto Rename from PDF.js text geometry with deterministic title heuristics, cross-platform filename sanitation and byte-identical PDF download
+- [x] Upgrade Watermark into browser-local text/image Stamp with page ranges, standard/custom positioning, opacity/rotation, image scaling and deterministic page/file/date variables
+- [x] Add explicit rasterized Color Transform with invert, grayscale, high-contrast and custom two-color modes; preserve the product boundary that text/vector/forms/annotations are not retained as interactive source content
+- [x] Harden Editor redaction from visual masking to security-first raster page replacement, with original redacted-page content streams excluded from output and explicit catalog/interaction preservation boundaries
+- [x] Complete the maintained-open-source parity audit for the current self-contained scope; avoid duplicating already-equivalent tools and keep provider-dependent product families outside this release
+
+V1.2 self-contained parity expansion is feature-complete. Remaining unchecked product items require provider/credential/product decisions rather than more core PDF-engine work.
 
 ## Tiện ích Việt Nam — V1
 
@@ -173,6 +181,12 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Backend/qpdf CI
 - [x] Real qpdf smoke coverage for web optimization, flattening and image recompression routes
 - [x] Real Tesseract OSD Auto Rotate gate covering upright/90/180/270 fixtures, PDFium-rendered multipage analysis, conservative confidence/no-op behavior, optional unanimous inference, qpdf relative-rotation application/composition, qpdf validity and exact byte preservation when no page is changed
+- [x] Real QR Auto Split gate covering printable divider decode, PDFium/OpenCV detection, divider/duplex planning, qpdf validity, no-empty-part behavior, dependency wiring and byte-identical no-divider fallback
+- [x] Real qpdf structural Decompress gate covering production route wiring, qpdf validity, retained text and inspectable uncompressed content
+- [x] Real browser-local Auto Rename gate covering PDF.js title geometry, filename sanitation, bounded candidate analysis and byte-identical source download behavior
+- [x] Real browser-local Stamp gate covering selected-page text stamps, image paint operators, deterministic variables and PDF.js read-back
+- [x] Real rasterized Color Transform gate covering exact RGBA transforms, alpha preservation, bounded raster pipeline and explicit loss-of-interactivity boundary
+- [x] Secure Redaction gate covering qpdf validity, retained text on untouched pages and absence of the redacted secret from both `pdftotext` and expanded QDF output
 - [x] Real qpdf JSON sanitization gate covering catalog/page actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures and selective-mode preservation
 - [x] Real qpdf JSON active-content inspection gate covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input, harmless `/A` false-positive rejection and dead-object exclusion
 - [x] Real qpdf JSON annotation-removal gate covering comment/markup cleanup, optional all-non-widget cleanup and Widget/AcroForm preservation
@@ -228,6 +242,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Remove completed `v0.1.3` one-shot publisher after successful publication
 - [x] Publish V1.1 self-hosted utility-parity patch release `v0.1.4`
 - [x] Remove completed `v0.1.4` one-shot publisher after successful publication
+- [ ] Publish V1.2 self-contained parity/hardening patch release
 
 ## Release decisions / external inputs still required
 
