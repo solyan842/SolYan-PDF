@@ -33,6 +33,7 @@ const tools = [
   { href: '/split-by-bookmarks', title: 'Tách theo Bookmark / Chương', description: 'Dùng outline để chia tài liệu thành chapter theo độ sâu bookmark và tải ZIP.', local: true },
   { href: '/organize', title: 'Sắp xếp trang', description: 'Đổi thứ tự, bỏ trang hoặc trích xuất trang.', local: true },
   { href: '/rotate', title: 'Xoay PDF', description: 'Xoay toàn bộ hoặc một số trang.', local: true },
+  { href: '/auto-rotate', title: 'Tự động xoay PDF', description: 'Nhận diện hướng trang bằng Tesseract OSD rồi xoay tương đối bằng qpdf, không rasterize nội dung.', local: false, badge: 'OSD + qpdf' },
   { href: '/watermark', title: 'Watermark', description: 'Đóng watermark chữ lên PDF.', local: true },
   { href: '/page-numbers', title: 'Đánh số trang', description: 'Thêm số trang vào chân trang.', local: true },
   { href: '/metadata', title: 'Metadata', description: 'Xem và chỉnh sửa metadata PDF.', local: true },
