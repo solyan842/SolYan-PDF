@@ -175,6 +175,22 @@ def compress_pdf(file: UploadFile = File(...)) -> Response:
     )
 
 
+@app.post("/pdf/decompress")
+def decompress_pdf(file: UploadFile = File(...)) -> Response:
+    """Expand generalized PDF streams and disable object streams for inspection/debugging.
+
+    This is a structural rewrite, not a repair or size-reduction operation. qpdf
+    preserves page content semantics while making supported streams and indirect
+    objects easier to inspect with ordinary text-oriented PDF tooling.
+    """
+    data = _read_pdf(file)
+    return _run_qpdf(
+        data,
+        ["--stream-data=uncompress", "--object-streams=disable"],
+        "solyan-decompressed.pdf",
+    )
+
+
 @app.post("/pdf/web-optimize")
 def web_optimize_pdf(file: UploadFile = File(...)) -> Response:
     data = _read_pdf(file)
