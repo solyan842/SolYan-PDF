@@ -5,15 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
 
 from .main import _read_upload, app
 from .orientation import analyze_orientation_file, plan_corrections
-from .qr_dividers import (
-    DEFAULT_DIVIDER_MARKER,
-    analyze_qr_dividers_file,
-    make_divider_png,
-)
+from .qr_dividers import DEFAULT_DIVIDER_MARKER, analyze_qr_dividers_file
 
 
 @app.post("/ocr/orientation")
@@ -97,21 +92,3 @@ def qr_dividers(
             "dividers": len(dividers),
         },
     }
-
-
-@app.get("/ocr/qr-divider.png")
-def qr_divider_png(size: int = 1200) -> Response:
-    """Return the canonical SolYan Auto Split QR marker as a printable PNG."""
-
-    try:
-        content = make_divider_png(DEFAULT_DIVIDER_MARKER, size=size)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=content,
-        media_type="image/png",
-        headers={
-            "Content-Disposition": 'inline; filename="solyan-auto-split-divider.png"',
-            "X-SolYan-Auto-Split-Marker": DEFAULT_DIVIDER_MARKER,
-        },
-    )
