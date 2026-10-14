@@ -4,6 +4,38 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-14
+
+Patch release completing the **V1.2 self-contained parity expansion** after a maintained-open-source feature audit. The release adds high-value utilities without introducing a new application service and makes destructive/rasterized boundaries explicit instead of overstating equivalence.
+
+### V1.2 PDF utility expansion
+- Added browser-local PDF overlay and PDF → one-long-page workflows, advanced split by exact page count / best-effort target size, bounded attachment management, and extended AES-256 permission controls.
+- Added qpdf JSON sanitization, form-safe comment/annotation removal, bookmark/outline editing, split by bookmark/chapter, Poster PDF tiling and split-sections.
+- Added a bounded qpdf JSON Active Content Inspector that displays reachable JavaScript/actions/triggers without executing document code.
+- Added qpdf JSON Image XObject removal across inherited page resources and nested Form XObjects while preserving non-image content streams.
+- Added **Auto Rotate** using Tesseract OSD + PDFium analysis with conservative confidence policy and relative qpdf page rotation, preserving original bytes when no rotation is required.
+- Added **Auto Split QR** using an exact SolYan divider marker detected by OpenCV/PDFium, qpdf page extraction and optional duplex handling.
+- Added **Decompress PDF** using qpdf generalized stream decompression plus disabled object streams for inspection/debugging.
+- Added browser-local **Auto Rename** using PDF.js visual text geometry; the original PDF bytes are downloaded unchanged under the sanitized suggested filename.
+- Upgraded Watermark to browser-local **text/image Stamp** with page ranges, nine standard positions plus custom coordinates, opacity, rotation, text variables and PNG/JPG support.
+- Added browser-local **Color Transform** with full inversion, grayscale, high-contrast presets and custom two-color mapping.
+
+### Verification and release hardening
+- Added permanent gates for Auto Rotate, Auto Split QR, Decompress PDF, Auto Rename, Stamp and Color Transform, alongside the existing qpdf/Poppler/layout/signing/OCR/PDF-to-Office gates.
+- Auto Split reuses the already locked OCR stack and declares OpenCV directly because the feature calls it at runtime; no hidden transitive dependency assumption is used.
+- Auto Rename, Stamp and Color Transform reuse the existing locked `pdf-lib` / PDF.js graph and add no new npm runtime dependency.
+- Closed the maintained-OSS V1.2 parity audit in `docs/V1.2-PARITY-AUDIT.md`, documenting covered capabilities and deliberate non-claims.
+- Updated release metadata and dependency manifest for v0.1.5.
+
+### Important boundaries
+- Color Transform intentionally rebuilds pages from raster images. Output does **not** preserve selectable text, vector objects, forms or interactive annotations.
+- Decompress PDF is a structural rewrite for inspection/debugging, not a size-reduction operation.
+- Stamp changes page content and can invalidate existing digital signatures. Text Stamp currently uses pdf-lib standard Helvetica Bold; image Stamp is the preferred path for arbitrary branded Unicode artwork.
+- Auto Rename is a deterministic visual-title heuristic, not AI/semantic summarization. Scanned PDFs without a text layer fall back to the original filename unless OCR is performed separately.
+- The basic Editor's black rectangle is now explicitly labeled a **visual mask**, not secure redaction. Underlying content can remain recoverable; secure auto-redaction is not claimed in V1.2.
+- Removing certificate/signature structures and dedicated extra conversion surfaces remain deferred rather than being represented as generic parity.
+- Cloud connectors, multi-party remote signing, AI summarization and PDF translation remain separate product/provider decisions.
+
 ## [0.1.4] - 2026-10-13
 
 Patch release completing the current **V1.1 self-hosted utility parity and hardening** roadmap with new qpdf/Poppler utilities and browser-local printing/page-geometry tools.
