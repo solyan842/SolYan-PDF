@@ -64,6 +64,7 @@ jobs:
             fastapi==0.119.0 \
             python-multipart==0.0.20 \
             httpx==0.28.1 \
+            pytesseract==0.3.13 \
             opencv-contrib-python==4.10.0.84 \
             pypdfium2==5.14.0 \
             Pillow
@@ -80,7 +81,6 @@ jobs:
 
           import io
           import subprocess
-          import tempfile
           import zipfile
           from pathlib import Path
 
