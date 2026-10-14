@@ -2,6 +2,7 @@ const tools = [
   { href: '/compare', title: 'So sánh PDF', description: 'So sánh nội dung văn bản giữa hai PDF ngay trên thiết bị.', local: true },
   { href: '/sign', title: 'Ký số PDF', description: 'Ký cryptographic bằng chứng thư PKCS#12 với pyHanko.', local: false, badge: 'pyHanko' },
   { href: '/verify-signature', title: 'Kiểm tra chữ ký số', description: 'Xác minh integrity, crypto validity, trust chain và thay đổi sau ký bằng pyHanko.', local: false, badge: 'pyHanko' },
+  { href: '/remove-signatures', title: 'Xóa chữ ký số', description: 'Tạo bản PDF không còn signature field, widget và trạng thái chứng thực; giữ các form field khác.', local: false, badge: 'qpdf JSON' },
   { href: '/active-content', title: 'Kiểm tra Active Content', description: 'Xem JavaScript, actions, triggers, active annotations và attachment refs mà không thực thi code.', local: false, badge: 'qpdf JSON' },
   { href: '/sanitize', title: 'Làm sạch PDF', description: 'Loại JavaScript/actions, link, metadata và file đính kèm theo gate regression qpdf JSON.', local: false, badge: 'qpdf JSON' },
   { href: '/remove-annotations', title: 'Xóa comment / annotation', description: 'Xóa comment/markup an toàn, giữ Widget/Form; tùy chọn xóa mọi annotation trừ form.', local: false, badge: 'qpdf JSON' },
@@ -57,7 +58,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.1 đã phát hành · đang mở rộng V1.2</h2><p>V1.2 tiếp tục đối chiếu các nền tảng PDF mã nguồn mở mạnh và ưu tiên công cụ tự host/browser-local trước; provider/credential chỉ dùng cho các hạng mục thật sự cần dịch vụ ngoài.</p></section>
+      <section className="coming-soon"><h2>V1.2 đã phát hành · đang mở rộng V1.3</h2><p>V1.3 tiếp tục mở rộng parity OSS theo hướng self-host/browser-local, ưu tiên các khoảng trống độc lập trước khi nhận thêm dependency hoặc dịch vụ ngoài.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
