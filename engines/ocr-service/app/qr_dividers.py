@@ -12,8 +12,6 @@ MAX_TOTAL_RENDER_PIXELS = 700_000_000
 
 
 def _render_page(page: Any, dpi: int) -> Any:
-    from PIL import Image
-
     width_pt = float(page.get_width())
     height_pt = float(page.get_height())
     if width_pt <= 0 or height_pt <= 0:
@@ -122,40 +120,3 @@ def analyze_qr_dividers_file(
         return results
     finally:
         pdf.close()
-
-
-def make_divider_png(marker: str = DEFAULT_DIVIDER_MARKER, size: int = 1200) -> bytes:
-    """Create a high-contrast printable QR image for the exact divider marker."""
-
-    marker = marker.strip()
-    if not marker or len(marker) > 512:
-        raise ValueError("Divider marker must contain 1-512 characters")
-    if size < 320 or size > 2400:
-        raise ValueError("Divider image size must be between 320 and 2400 pixels")
-
-    import cv2
-    import numpy as np
-
-    encoder = cv2.QRCodeEncoder_create()
-    matrix = encoder.encode(marker)
-    if matrix is None or matrix.size == 0:
-        raise ValueError("Unable to generate divider QR code")
-
-    quiet_modules = 4
-    module_count = int(matrix.shape[0])
-    canvas_modules = module_count + quiet_modules * 2
-    module_size = max(1, size // canvas_modules)
-    actual = canvas_modules * module_size
-    canvas = np.full((actual, actual), 255, dtype=np.uint8)
-    qr = cv2.resize(
-        matrix,
-        (module_count * module_size, module_count * module_size),
-        interpolation=cv2.INTER_NEAREST,
-    )
-    offset = quiet_modules * module_size
-    canvas[offset : offset + qr.shape[0], offset : offset + qr.shape[1]] = qr
-
-    ok, encoded = cv2.imencode(".png", canvas)
-    if not ok:
-        raise ValueError("Unable to encode divider QR image")
-    return encoded.tobytes()
