@@ -8,15 +8,16 @@ This document tracks third-party components used or evaluated by SolYan PDF. Exa
 
 | Component | Current role | License / model | Integration |
 |---|---|---|---|
-| qpdf | Protect/unlock, repair, structural optimization, web linearization, flattening and image optimization | Apache-2.0 | Backend CLI inside isolated API container |
+| qpdf | Protect/unlock, repair, structural optimization, web linearization, flattening, image optimization and page selection | Apache-2.0 | Backend CLI inside isolated API container |
 | Poppler `pdfimages` | Extract embedded raster images from PDF with native formats preserved where supported | GPL-2.0-or-later for Poppler code, with separately licensed inherited/third-party portions; preserve Debian/upstream notices | `poppler-utils` system CLI inside backend container; invoked as a separate process |
 | pdf-lib | Browser-side merge/page operations/editing/workflows | MIT | Frontend dependency |
 | PDF.js / pdfjs-dist | Viewer, text extraction and visual compare rendering | Apache-2.0 | Frontend dependency |
 | JSZip | Package rendered PDF pages for download | MIT | Frontend dependency |
 | PaddleOCR 3.7 | Primary OCR and PP-StructureV3 document intelligence | Apache-2.0 | Isolated Python service |
 | PaddlePaddle 3.2 | PaddleOCR inference runtime | Apache-2.0 | OCR service runtime |
-| Tesseract OCR | Automatic fallback OCR (`vie+eng`) | Apache-2.0 | Binary inside OCR service |
-| pypdfium2 5.14 | Render PDF pages for Tesseract fallback and benchmark tooling | BSD-3-Clause / Apache-2.0 plus dependency licenses | OCR/benchmark dependency |
+| Tesseract OCR | Automatic fallback OCR (`vie+eng`) and OSD page orientation | Apache-2.0 | Binary inside OCR service |
+| pypdfium2 5.14 | Render temporary PDF analysis rasters for OCR/OSD/QR detection and benchmark tooling | BSD-3-Clause / Apache-2.0 plus dependency licenses | OCR/benchmark dependency |
+| OpenCV 4.10 (`opencv-contrib-python`) | Exact QR divider detection for Auto Split | Apache-2.0 | Direct OCR-service Python dependency; detection-only, with PDFium temporary page rasters |
 | LibreOffice | DOCX/XLSX/PPTX/OpenDocument/RTF → PDF | MPL-2.0 for LibreOffice product; includes separately licensed third-party code | Isolated headless conversion service |
 | pyHanko 0.37 | PKCS#12 cryptographic PDF signing | MIT | Isolated signing service |
 | OCRmyPDF 17.13 | PDF/A orchestration using internal non-Ghostscript backend | MPL-2.0 | Isolated archive service |
