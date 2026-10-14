@@ -6,6 +6,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 
 ### Core PDF
 - Merge, split, extract, reorder/remove and rotate pages
+- OCR-guided Auto Rotate for scanned PDFs: Tesseract OSD analyzes temporary PDFium rasters, then qpdf applies only confident relative page rotations without rasterizing source content
 - Drag-and-drop page organizer
 - Watermark, page numbers and metadata editing
 - AES-256 protect/unlock, repair and structural compression through qpdf
@@ -31,6 +32,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - PP-StructureV3 structured output for layout/table/reading-order workflows
 - Scanned table -> Excel (`.xlsx`) export through PP-StructureV3, with multi-page/table results merged into one workbook
 - Automatic Tesseract `vie+eng` fallback for image/PDF text OCR
+- Tesseract OSD page-orientation analysis with a conservative 14.0 confidence default and optional unanimous-document inference for unresolved pages
 - JSON/Markdown/text exports
 - CER/WER benchmark harness for Vietnamese OCR quality measurement
 - Reproducible 59-sample real-scan Tesseract regression corpus: 9 public-domain modern documents plus 50 proofread historical scan pages from two public-domain Vietnamese works
@@ -62,7 +64,7 @@ Browser / Next.js PWA
       |
       v
 FastAPI orchestration backend (qpdf + Poppler utilities + network utilities)
-      |---------------- OCR service (PaddleOCR + Tesseract fallback)
+      |---------------- OCR service (PaddleOCR + Tesseract fallback/OSD)
       |---------------- Office service (LibreOffice + PDF import routing)
       |---------------- Signature service (pyHanko)
       |---------------- Archive service (OCRmyPDF internal PDF/A)
@@ -106,6 +108,7 @@ GitHub Actions currently verifies:
 - Next.js production build
 - FastAPI/qpdf backend and hardened network routes
 - Real qpdf smoke coverage for linearization, annotation/form flattening and image optimization routes
+- Real Tesseract OSD Auto Rotate coverage for 0/90/180/270 page orientation, low-confidence/no-op policy, optional unanimous inference, qpdf relative-rotation composition, qpdf validity and exact byte preservation when no page is changed
 - Real qpdf JSON active-content sanitization across catalog/page additional actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures, plus selective-mode preservation of unselected categories
 - Real qpdf JSON active-content inspection covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input and dead-object exclusion
 - Real Poppler `pdfimages` extraction on a PDF containing an embedded Image XObject, including ZIP validation and no-image/error cases
@@ -145,6 +148,7 @@ See `docs/BENCHMARKING.md` for:
 - The 59-sample OCR corpus is a regression baseline, not a claim of universal Vietnamese OCR accuracy across every scan style or document class.
 - Passing the PDF-to-Office V1 release gate establishes a reproducible supported baseline for the pinned representative corpus; it is not a claim that every arbitrary PDF will convert with the same fidelity.
 - PDF -> XLSX still depends on the optional external Bloom service for its primary route; PP-StructureV3 is a bounded fallback for scanned/no-logical-table cases rather than a universal spreadsheet reconstruction engine.
+- Auto Rotate is bounded to 50 MB / 300 PDF pages for OCR analysis. The default OSD confidence threshold is 14.0; unresolved, blank or lower-confidence pages remain unchanged unless optional inference is enabled and every confident page agrees on one correction. Only temporary analysis rasters are created; the output PDF is changed through relative qpdf page rotation. If no page needs rotation, the original PDF bytes are returned unchanged. Any actual rotation rewrite can invalidate existing digital signatures.
 - qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
 - PDF sanitization is a bounded removal of regression-tested standard PDF active-content structures, **not antivirus or universal exploit detection**. It does not claim to detect every malicious PDF technique. Rewriting/removing content changes the document and therefore invalidates existing digital signatures.
 - Active-content inspection is structural-only and bounded to 100 MB input, 500 findings, 64 KiB per displayed script and 256 KiB aggregate displayed script text. It walks only the object graph reachable from the trailer/root, never executes document JavaScript, and **does not claim antivirus coverage or prove that a PDF is safe**.

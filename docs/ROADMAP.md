@@ -128,6 +128,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Add browser-local split-sections with all/custom/except-first/except-last page selection, rows×columns grids, merged-PDF or per-part ZIP output, CropBox/rotation normalization and bounded regression coverage
 - [x] Add bounded qpdf JSON active-content inspector for reachable JavaScript/actions/triggers, active annotations and attachment references, including direct/stream JavaScript display without execution, encrypted input support and dead-object exclusion
 - [x] Add bounded qpdf JSON Image XObject removal from inherited page resources and nested Form XObject resources while preserving non-image XObjects, text/vector content and original page/Form content streams; inline `BI … ID … EI` images remain an explicit boundary
+- [x] Add bounded OCR-guided Auto Rotate: reuse Tesseract OSD + PDFium for temporary orientation analysis, keep a conservative 14.0 confidence default, optionally infer only a unanimous confident document correction, and apply accepted 90/180/270 corrections as relative qpdf page rotation without rasterizing output content; preserve exact source bytes when no page is changed
 - [ ] Continue maintained open-source parity audit for additional self-contained high-value tools before adding provider-dependent features
 
 ## Tiện ích Việt Nam — V1
@@ -171,6 +172,7 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 - [x] Patched PostCSS transitive dependency override
 - [x] Backend/qpdf CI
 - [x] Real qpdf smoke coverage for web optimization, flattening and image recompression routes
+- [x] Real Tesseract OSD Auto Rotate gate covering upright/90/180/270 fixtures, PDFium-rendered multipage analysis, conservative confidence/no-op behavior, optional unanimous inference, qpdf relative-rotation application/composition, qpdf validity and exact byte preservation when no page is changed
 - [x] Real qpdf JSON sanitization gate covering catalog/page actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures and selective-mode preservation
 - [x] Real qpdf JSON active-content inspection gate covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input, harmless `/A` false-positive rejection and dead-object exclusion
 - [x] Real qpdf JSON annotation-removal gate covering comment/markup cleanup, optional all-non-widget cleanup and Widget/AcroForm preservation

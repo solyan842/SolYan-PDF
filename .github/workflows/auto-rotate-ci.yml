@@ -1,0 +1,247 @@
+name: Auto Rotate CI
+
+on:
+  pull_request:
+    paths:
+      - 'engines/ocr-service/app/orientation.py'
+      - 'engines/ocr-service/app/auto_rotate_api.py'
+      - 'engines/ocr-service/app/main.py'
+      - 'engines/ocr-service/Dockerfile'
+      - 'backend/app/auto_rotate.py'
+      - 'backend/app/ocr_proxy.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/auto-rotate/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-rotate-ci.yml'
+      - '.github/workflows/ocr-ci.yml'
+      - 'README.md'
+      - 'docs/ROADMAP.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engines/ocr-service/app/orientation.py'
+      - 'engines/ocr-service/app/auto_rotate_api.py'
+      - 'engines/ocr-service/app/main.py'
+      - 'engines/ocr-service/Dockerfile'
+      - 'backend/app/auto_rotate.py'
+      - 'backend/app/ocr_proxy.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/auto-rotate/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-rotate-ci.yml'
+      - '.github/workflows/ocr-ci.yml'
+      - 'README.md'
+      - 'docs/ROADMAP.md'
+
+jobs:
+  orientation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Tesseract OSD and qpdf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-osd qpdf fonts-dejavu-core
+          tesseract --version | head -n 1
+          tesseract --list-langs | grep -Fx osd
+          qpdf --version
+          qpdf --help=--rotate >/dev/null
+
+      - name: Install lightweight orientation dependencies
+        run: pip install pytesseract==0.3.13 pypdfium2==5.14.0 Pillow -r backend/requirements.txt
+
+      - name: Verify production image includes OSD data and orientation entrypoint
+        run: |
+          grep -q 'tesseract-ocr-osd' engines/ocr-service/Dockerfile
+          grep -q 'app.auto_rotate_api:app' engines/ocr-service/Dockerfile
+          grep -q '@app.post("/ocr/orientation")' engines/ocr-service/app/auto_rotate_api.py
+          grep -q '@router.post("/auto-rotate")' backend/app/ocr_proxy.py
+
+      - name: Gate real Tesseract OSD orientation and PDFium rendering
+        env:
+          PYTHONPATH: engines/ocr-service
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import textwrap
+          from PIL import Image, ImageDraw, ImageFont
+          from app.orientation import analyze_orientation_file, detect_image_orientation
+
+          root = Path('/tmp/auto-rotate')
+          root.mkdir(parents=True, exist_ok=True)
+          font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf', 34)
+          image = Image.new('RGB', (1600, 2200), 'white')
+          draw = ImageDraw.Draw(image)
+          paragraphs = [
+              'Automatic page rotation should work on ordinary scanned documents, not only on ideal test images. The detector must recognize natural word shapes, punctuation, ascenders and descenders before deciding how a page should be turned.',
+              'SolYan PDF keeps the original document content intact while using a temporary raster preview only for orientation analysis. When confidence is too low, the page should remain unchanged instead of being rotated on a weak guess.',
+              'This regression fixture intentionally contains mixed case English prose, several sentence lengths, commas, periods, digits such as 2026 and 48, and enough independent words for Tesseract orientation and script detection to make a stable decision.',
+              'A reliable test should also cover pages turned left, pages turned right, and pages that are upside down. After analysis, the reported correction is applied later as relative PDF page rotation rather than rebuilding the page as an image.',
+          ]
+          y = 100
+          for repeat in range(3):
+              for paragraph in paragraphs:
+                  for line in textwrap.wrap(paragraph, width=72):
+                      draw.text((110, y), line, font=font, fill='black')
+                      y += 50
+                  y += 30
+                  if y > 2050:
+                      break
+              if y > 2050:
+                  break
+
+          upright = image.copy()
+          ccw90 = image.rotate(90, expand=True, fillcolor='white')
+          upside = image.rotate(180, expand=True, fillcolor='white')
+          cw90 = image.rotate(270, expand=True, fillcolor='white')
+          blank = Image.new('RGB', (1200, 1600), 'white')
+
+          expected = [(upright, 0), (ccw90, 90), (upside, 180), (cw90, 270)]
+          for test_image, correction in expected:
+              result = detect_image_orientation(test_image)
+              print('image OSD:', result)
+              assert result['resolved'] is True, result
+              assert result['correction'] == correction, (correction, result)
+              assert result['confidence'] >= 14.0, result
+              assert result['script'] == 'Latin', result
+
+          blank_result = detect_image_orientation(blank)
+          print('blank OSD:', blank_result)
+          assert blank_result['correction'] == 0, blank_result
+
+          pdf_path = root / 'rotated-pages.pdf'
+          upright.save(
+              pdf_path,
+              'PDF',
+              resolution=150.0,
+              save_all=True,
+              append_images=[ccw90, upside, cw90],
+          )
+          pages = analyze_orientation_file(pdf_path, '.pdf')
+          print('PDF OSD:', pages)
+          assert len(pages) == 4, pages
+          assert [item['correction'] for item in pages] == [0, 90, 180, 270], pages
+          assert all(item['resolved'] for item in pages), pages
+          assert all(item['confidence'] >= 14.0 for item in pages), pages
+          assert all(item['script'] == 'Latin' for item in pages), pages
+
+          for item in [image, upright, ccw90, upside, cw90, blank]:
+              item.close()
+          PY
+
+      - name: Gate conservative confidence and inference policy
+        env:
+          PYTHONPATH: engines/ocr-service
+        run: |
+          python <<'PY'
+          from app.orientation import plan_corrections
+
+          pages = [
+              {'page': 1, 'resolved': True, 'correction': 90, 'confidence': 21.5},
+              {'page': 2, 'resolved': True, 'correction': 180, 'confidence': 13.9},
+              {'page': 3, 'resolved': False, 'correction': 0, 'confidence': 0.0, 'note': 'osdUnavailableForPage'},
+          ]
+          planned = plan_corrections(pages, confidence_threshold=14.0)
+          assert planned[0]['apply'] is True and planned[0]['method'] == 'osd', planned
+          assert planned[1]['apply'] is False and planned[1]['method'] == 'none', planned
+          assert planned[1]['note'] == 'lowConfidence', planned
+          assert planned[2]['apply'] is False and planned[2]['method'] == 'none', planned
+
+          consensus = plan_corrections(
+              [
+                  {'page': 1, 'resolved': True, 'correction': 90, 'confidence': 25.0},
+                  {'page': 2, 'resolved': False, 'correction': 0, 'confidence': 0.0},
+                  {'page': 3, 'resolved': True, 'correction': 90, 'confidence': 30.0},
+              ],
+              confidence_threshold=14.0,
+              infer_undetected=True,
+          )
+          assert consensus[1]['method'] == 'inferred', consensus
+          assert consensus[1]['correction'] == 90 and consensus[1]['apply'] is True, consensus
+
+          conflict = plan_corrections(
+              [
+                  {'page': 1, 'resolved': True, 'correction': 90, 'confidence': 25.0},
+                  {'page': 2, 'resolved': False, 'correction': 0, 'confidence': 0.0},
+                  {'page': 3, 'resolved': True, 'correction': 180, 'confidence': 30.0},
+              ],
+              confidence_threshold=14.0,
+              infer_undetected=True,
+          )
+          assert conflict[1]['method'] == 'none' and conflict[1]['apply'] is False, conflict
+          print('orientation planning gate: PASS')
+          PY
+
+      - name: Gate qpdf relative application and no-op byte preservation
+        env:
+          PYTHONPATH: backend
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          import pypdfium2 as pdfium
+          from PIL import Image, ImageDraw
+          from app.auto_rotate import qpdf_rotation_args
+          from app.ocr_proxy import _apply_qpdf_rotations
+
+          plan = [
+              {'page': 1, 'apply': True, 'correction': 90},
+              {'page': 2, 'apply': True, 'correction': 180},
+              {'page': 3, 'apply': False, 'correction': 270},
+          ]
+          args = qpdf_rotation_args(plan)
+          assert args == ['--rotate=+90:1', '--rotate=+180:2'], args
+
+          with tempfile.TemporaryDirectory(prefix='solyan-auto-rotate-ci-') as temp_dir:
+              root = Path(temp_dir)
+              image = Image.new('RGB', (600, 800), 'white')
+              draw = ImageDraw.Draw(image)
+              draw.text((60, 80), 'SolYan Auto Rotate qpdf gate', fill='black')
+              source = root / 'source.pdf'
+              image.save(source, 'PDF', resolution=120.0, save_all=True, append_images=[image.copy()])
+              source_bytes = source.read_bytes()
+
+              assert _apply_qpdf_rotations(source_bytes, []) == source_bytes
+              rotated_bytes = _apply_qpdf_rotations(source_bytes, args)
+              rotated = root / 'rotated.pdf'
+              rotated.write_bytes(rotated_bytes)
+              subprocess.run(['qpdf', '--check', str(rotated)], check=True)
+
+              pdf = pdfium.PdfDocument(str(rotated))
+              try:
+                  first = pdf[0]
+                  second = pdf[1]
+                  assert first.get_width() > first.get_height(), (first.get_width(), first.get_height())
+                  assert second.get_width() < second.get_height(), (second.get_width(), second.get_height())
+              finally:
+                  pdf.close()
+
+              pre_rotated = root / 'pre-rotated.pdf'
+              subprocess.run(['qpdf', '--rotate=+90:1', str(source), str(pre_rotated)], check=True)
+              composed_bytes = _apply_qpdf_rotations(
+                  pre_rotated.read_bytes(),
+                  qpdf_rotation_args([{'page': 1, 'apply': True, 'correction': 270}]),
+              )
+              composed = root / 'composed.pdf'
+              composed.write_bytes(composed_bytes)
+              subprocess.run(['qpdf', '--check', str(composed)], check=True)
+              composed_pdf = pdfium.PdfDocument(str(composed))
+              try:
+                  page = composed_pdf[0]
+                  assert page.get_width() < page.get_height(), (page.get_width(), page.get_height())
+              finally:
+                  composed_pdf.close()
+              image.close()
+
+          print('qpdf Auto Rotate gate: PASS')
+          PY
