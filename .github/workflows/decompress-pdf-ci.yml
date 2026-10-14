@@ -6,6 +6,7 @@ on:
       - 'backend/app/main.py'
       - 'frontend/app/decompress/**'
       - 'frontend/app/page.tsx'
+      - 'frontend/components/ServerPdfTool.tsx'
       - '.github/workflows/decompress-pdf-ci.yml'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -17,6 +18,7 @@ on:
       - 'backend/app/main.py'
       - 'frontend/app/decompress/**'
       - 'frontend/app/page.tsx'
+      - 'frontend/components/ServerPdfTool.tsx'
       - '.github/workflows/decompress-pdf-ci.yml'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -56,7 +58,6 @@ jobs:
           python <<'PY' 2>&1 | tee /tmp/decompress-pdf-ci.log
           from __future__ import annotations
 
-          import io
           import subprocess
           import tempfile
           from pathlib import Path
@@ -115,11 +116,14 @@ jobs:
           print('real qpdf decompress route: PASS')
           PY
 
-      - name: Gate exact qpdf decompression flags
+      - name: Gate exact qpdf decompression flags and UI wiring
         run: |
           set -euo pipefail
           grep -q '"--stream-data=uncompress", "--object-streams=disable"' backend/app/main.py
-          echo 'qpdf decompression flags: PASS' | tee -a /tmp/decompress-pdf-ci.log
+          grep -q "| '/pdf/decompress'" frontend/components/ServerPdfTool.tsx
+          grep -q 'endpoint="/pdf/decompress"' frontend/app/decompress/page.tsx
+          grep -q "href: '/decompress'" frontend/app/page.tsx
+          echo 'qpdf decompression flags/UI wiring: PASS' | tee -a /tmp/decompress-pdf-ci.log
 
       - name: Upload Decompress gate evidence
         if: always()
