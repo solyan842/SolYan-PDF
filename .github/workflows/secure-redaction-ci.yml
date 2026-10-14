@@ -132,7 +132,7 @@ jobs:
           set -euo pipefail
           grep -q "SECURE_REDACTION_DPI = 150" app/editor/page.tsx
           grep -q "rebuildPdfWithRasterizedPage" app/editor/page.tsx
-          grep -q "page.render({ canvas, canvasContext: context, viewport, background: '#ffffff' })" app/editor/page.tsx
+          grep -q "renderedPage.render({ canvas, canvasContext: context, viewport, background: '#ffffff' })" app/editor/page.tsx
           grep -q "Redact an toàn · raster trang" app/editor/page.tsx
           grep -q "không copy content stream gốc" app/editor/page.tsx
           grep -q "MAX_REDACTION_PIXELS = 25_000_000" app/editor/page.tsx
