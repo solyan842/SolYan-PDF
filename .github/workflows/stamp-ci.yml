@@ -44,14 +44,14 @@ jobs:
 
       - name: Compile Stamp helper for direct regression
         run: |
-          rm -rf /tmp/solyan-stamp-ts
+          rm -rf .tmp-stamp-ci
           npx tsc lib/stamp.ts \
             --target ES2020 \
             --module commonjs \
             --moduleResolution node \
             --esModuleInterop \
             --skipLibCheck \
-            --outDir /tmp/solyan-stamp-ts
+            --outDir .tmp-stamp-ci
 
       - name: Gate text/image stamping, page selection and variables
         run: |
@@ -59,7 +59,7 @@ jobs:
           node <<'NODE' 2>&1 | tee /tmp/stamp-ci.log
           const assert = require('node:assert/strict');
           const { PDFDocument, StandardFonts } = require('pdf-lib');
-          const { applyStamp, expandStampText, stampPosition } = require('/tmp/solyan-stamp-ts/stamp.js');
+          const { applyStamp, expandStampText, stampPosition } = require('./.tmp-stamp-ci/stamp.js');
 
           (async () => {
             assert.equal(
