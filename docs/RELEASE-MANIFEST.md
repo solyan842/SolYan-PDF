@@ -1,6 +1,6 @@
-# SolYan PDF v0.1.4 — Release Dependency Manifest
+# SolYan PDF v0.1.5 — Release Dependency Manifest
 
-Release date: 2026-10-13
+Release date: 2026-10-14
 
 Project license: **Apache-2.0** (`LICENSE`)
 
@@ -49,10 +49,12 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Next.js | 15.5.27 | MIT | bundled npm runtime |
 | React | 19.1.1 | MIT | bundled npm runtime |
 | React DOM | 19.1.1 | MIT | bundled npm runtime |
-| pdf-lib | 1.17.1 | MIT | bundled browser PDF engine; core PDF, N-up, booklet, crop and resize |
-| pdfjs-dist / PDF.js | 6.4.299 | Apache-2.0 | bundled browser viewer/rendering engine |
+| pdf-lib | 1.17.1 | MIT | bundled browser PDF engine; core PDF, layout/imposition, crop/resize, Stamp and raster-rebuild output |
+| pdfjs-dist / PDF.js | 6.4.299 | Apache-2.0 | bundled browser viewer/rendering engine; Auto Rename text geometry and Color Transform raster source |
 | JSZip | 3.10.2 | MIT | bundled browser ZIP engine |
 | PostCSS override | 8.5.29 | MIT | transitive security override |
+
+V1.2 browser-local additions reuse this already locked graph; Auto Rename, Stamp and Color Transform add no new npm runtime package.
 
 ## Backend orchestration
 
@@ -62,7 +64,7 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | httpx | 0.28.1 | BSD-3-Clause | Python runtime dependency |
-| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI for protect/unlock/repair/compression, linearization, flattening and page selection |
+| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI for protect/unlock/repair/compression, decompression, linearization, flattening, page selection, Auto Rotate and Auto Split output |
 | Poppler utilities | snapshot-resolved distro package | GPL-2.0-or-later family; verify exact Debian package metadata at release build | separate CLI tools (`pdfimages`, `pdftotext`, `pdftoppm`) for image extraction and bounded blank-page analysis |
 | iputils-ping | snapshot-resolved distro package | BSD/GPL-family package licensing; verify image package metadata at release build | CLI for network utility |
 
