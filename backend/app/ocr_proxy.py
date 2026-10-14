@@ -40,11 +40,12 @@ def _post_bytes(
 ) -> httpx.Response:
     try:
         with httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
-            response = client.post(
-                f"{OCR_SERVICE_URL}{path}",
-                files={"file": (filename, data, content_type)},
-                data=form or {},
-            )
+            request_kwargs: dict[str, Any] = {
+                "files": {"file": (filename, data, content_type)},
+            }
+            if form:
+                request_kwargs["data"] = form
+            response = client.post(f"{OCR_SERVICE_URL}{path}", **request_kwargs)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail="OCR service is unavailable") from exc
 
