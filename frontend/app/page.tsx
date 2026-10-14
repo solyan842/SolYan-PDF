@@ -41,6 +41,7 @@ const tools = [
   { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa AES-256 và đặt quyền in/sửa/copy bằng qpdf.', local: false, badge: 'qpdf server' },
   { href: '/unlock', title: 'Mở khóa PDF', description: 'Giải mã PDF bằng mật khẩu hợp lệ.', local: false, badge: 'qpdf server' },
   { href: '/compress', title: 'Tối ưu cấu trúc PDF', description: 'Tối ưu object streams và Flate bằng qpdf, không thay đổi chất lượng ảnh.', local: false, badge: 'qpdf server' },
+  { href: '/decompress', title: 'Giải nén cấu trúc PDF', description: 'Mở stream hỗ trợ và tắt object streams để PDF dễ kiểm tra/debug hơn.', local: false, badge: 'qpdf server' },
   { href: '/compress-images', title: 'Nén ảnh trong PDF', description: 'Tối ưu ảnh bằng JPEG khi qpdf xác định kết quả nhỏ hơn.', local: false, badge: 'qpdf server' },
   { href: '/web-optimize', title: 'Tối ưu PDF cho Web', description: 'Linearize PDF để reader tương thích có thể bắt đầu hiển thị sớm hơn.', local: false, badge: 'qpdf server' },
   { href: '/flatten', title: 'Flatten PDF', description: 'Đóng băng annotation và form field vào nội dung trang.', local: false, badge: 'qpdf server' },

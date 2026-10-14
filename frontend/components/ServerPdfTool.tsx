@@ -10,6 +10,7 @@ type Props = {
     | '/pdf/unlock'
     | '/pdf/repair'
     | '/pdf/compress'
+    | '/pdf/decompress'
     | '/pdf/web-optimize'
     | '/pdf/flatten'
     | '/pdf/compress-images'
