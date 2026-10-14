@@ -4,3 +4,4 @@ python-multipart==0.0.20
 paddleocr[doc-parser]==3.7.0
 pytesseract==0.3.13
 pypdfium2==5.14.0
+opencv-contrib-python==4.10.0.84

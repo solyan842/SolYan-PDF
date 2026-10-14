@@ -8,6 +8,7 @@ from fastapi import File, Form, HTTPException, UploadFile
 
 from .main import _read_upload, app
 from .orientation import analyze_orientation_file, plan_corrections
+from .qr_dividers import DEFAULT_DIVIDER_MARKER, analyze_qr_dividers_file
 
 
 @app.post("/ocr/orientation")
@@ -54,5 +55,40 @@ def ocr_orientation(
             "resolved": sum(1 for item in plan if item.get("resolved")),
             "lowConfidence": sum(1 for item in plan if item.get("note") == "lowConfidence"),
             "inferred": sum(1 for item in plan if item.get("method") == "inferred"),
+        },
+    }
+
+
+@app.post("/ocr/qr-dividers")
+def qr_dividers(
+    file: UploadFile = File(...),
+    marker: str = Form(default=DEFAULT_DIVIDER_MARKER, min_length=1, max_length=512),
+) -> dict[str, Any]:
+    """Detect exact-match QR divider pages without changing the PDF."""
+
+    data, suffix = _read_upload(file)
+    if suffix != ".pdf":
+        raise HTTPException(status_code=400, detail="QR Auto Split accepts PDF input only")
+
+    with tempfile.TemporaryDirectory(prefix="solyan-qr-dividers-") as temp_dir:
+        input_path = Path(temp_dir) / "input.pdf"
+        input_path.write_bytes(data)
+        try:
+            pages = analyze_qr_dividers_file(input_path, suffix, marker=marker)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"QR divider analysis failed: {exc}") from exc
+
+    dividers = [int(item["page"]) for item in pages if item.get("divider")]
+    return {
+        "mode": "qr-dividers",
+        "engine": "OpenCV QRCodeDetector + PDFium",
+        "marker": marker,
+        "pages": pages,
+        "dividers": dividers,
+        "summary": {
+            "pages": len(pages),
+            "dividers": len(dividers),
         },
     }
