@@ -30,6 +30,7 @@ const tools = [
   { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
   { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, che nội dung và khung chú thích.', local: true },
   { href: '/forms', title: 'Form PDF', description: 'Đọc và điền AcroForm trực tiếp trong trình duyệt.', local: true },
+  { href: '/unlock-forms', title: 'Mở khóa Form PDF', description: 'Gỡ ReadOnly/Lock khỏi AcroForm và mở thuộc tính XFA readOnly mà không flatten field.', local: false, badge: 'qpdf JSON' },
   { href: '/merge', title: 'Gộp PDF', description: 'Gộp nhiều file PDF theo đúng thứ tự.', local: true },
   { href: '/split', title: 'Tách PDF', description: 'Tách thủ công, theo số trang hoặc dung lượng mục tiêu best-effort rồi tải ZIP.', local: true },
   { href: '/auto-split', title: 'Tự động tách bằng QR', description: 'Nhận diện trang QR phân cách bằng OpenCV/PDFium rồi tách bản gốc bằng qpdf, hỗ trợ scan hai mặt.', local: false, badge: 'QR + qpdf' },

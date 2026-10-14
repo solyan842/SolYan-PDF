@@ -25,6 +25,7 @@ from .remove_images import router as remove_images_router
 from .remove_signatures import router as remove_signatures_router
 from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
+from .unlock_forms import router as unlock_forms_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
 PRINT_MODES = {"none", "low", "full"}
@@ -61,6 +62,11 @@ app.add_middleware(
         "X-SolYan-Signature-Values-Removed",
         "X-SolYan-Signature-Permissions-Removed",
         "X-SolYan-Signature-DSS-Removed",
+        "X-SolYan-Form-Fields-Visited",
+        "X-SolYan-Readonly-Flags-Cleared",
+        "X-SolYan-Form-Locks-Removed",
+        "X-SolYan-XFA-Streams-Modified",
+        "X-SolYan-XFA-Attributes-Opened",
         "X-SolYan-Auto-Split-Dividers",
         "X-SolYan-Auto-Split-Parts",
         "X-SolYan-Auto-Split-Duplex",
@@ -81,6 +87,7 @@ app.include_router(remove_annotations_router)
 app.include_router(remove_signatures_router)
 app.include_router(active_content_router)
 app.include_router(pdf_info_router)
+app.include_router(unlock_forms_router)
 
 
 def _require_qpdf() -> None:
