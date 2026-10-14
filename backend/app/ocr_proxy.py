@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
+
+from .auto_rotate import qpdf_rotation_args
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 OCR_SERVICE_URL = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8010").rstrip("/")
@@ -24,13 +31,19 @@ def _read_upload(upload: UploadFile) -> tuple[bytes, str, str]:
     return data, filename, content_type
 
 
-def _post(path: str, upload: UploadFile) -> httpx.Response:
-    data, filename, content_type = _read_upload(upload)
+def _post_bytes(
+    path: str,
+    data: bytes,
+    filename: str,
+    content_type: str,
+    form: dict[str, str] | None = None,
+) -> httpx.Response:
     try:
         with httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
             response = client.post(
                 f"{OCR_SERVICE_URL}{path}",
                 files={"file": (filename, data, content_type)},
+                data=form or {},
             )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail="OCR service is unavailable") from exc
@@ -45,12 +58,23 @@ def _post(path: str, upload: UploadFile) -> httpx.Response:
     return response
 
 
-def _forward(path: str, upload: UploadFile) -> dict:
-    response = _post(path, upload)
+def _post(path: str, upload: UploadFile, form: dict[str, str] | None = None) -> httpx.Response:
+    data, filename, content_type = _read_upload(upload)
+    return _post_bytes(path, data, filename, content_type, form)
+
+
+def _json_response(response: httpx.Response) -> dict[str, Any]:
     try:
-        return response.json()
+        payload = response.json()
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="OCR service returned invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="OCR service returned an invalid JSON object")
+    return payload
+
+
+def _forward(path: str, upload: UploadFile) -> dict:
+    return _json_response(_post(path, upload))
 
 
 def _forward_binary(path: str, upload: UploadFile, default_media_type: str) -> Response:
@@ -67,6 +91,41 @@ def _forward_binary(path: str, upload: UploadFile, default_media_type: str) -> R
         if value:
             headers[name] = value
     return Response(content=response.content, media_type=media_type or default_media_type, headers=headers)
+
+
+def _orientation_form(confidence_threshold: float, infer_undetected: bool) -> dict[str, str]:
+    if not 0.0 <= confidence_threshold <= 100.0:
+        raise HTTPException(status_code=422, detail="confidence_threshold must be between 0 and 100")
+    return {
+        "confidence_threshold": f"{confidence_threshold:g}",
+        "infer_undetected": "true" if infer_undetected else "false",
+    }
+
+
+def _apply_qpdf_rotations(data: bytes, args: list[str]) -> bytes:
+    if not args:
+        # Preserve byte identity (and any existing signature) when OSD makes no
+        # confident rotation decision.
+        return data
+    if shutil.which("qpdf") is None:
+        raise HTTPException(status_code=503, detail="qpdf engine is unavailable")
+
+    with tempfile.TemporaryDirectory(prefix="solyan-auto-rotate-") as temp_dir:
+        input_path = Path(temp_dir) / "input.pdf"
+        output_path = Path(temp_dir) / "output.pdf"
+        input_path.write_bytes(data)
+        result = subprocess.run(
+            ["qpdf", *args, str(input_path), str(output_path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode not in (0, 3):
+            detail = (result.stderr or result.stdout or "qpdf failed").strip()[-1200:]
+            raise HTTPException(status_code=422, detail=detail)
+        if not output_path.exists():
+            raise HTTPException(status_code=500, detail="qpdf did not produce an Auto Rotate output")
+        return output_path.read_bytes()
 
 
 @router.get("/health")
@@ -92,3 +151,49 @@ def ocr_structured(file: UploadFile = File(...)) -> dict:
 @router.post("/xlsx")
 def ocr_xlsx(file: UploadFile = File(...)) -> Response:
     return _forward_binary("/ocr/xlsx", file, XLSX_MEDIA_TYPE)
+
+
+@router.post("/orientation")
+def ocr_orientation(
+    file: UploadFile = File(...),
+    confidence_threshold: float = Form(default=14.0),
+    infer_undetected: bool = Form(default=False),
+) -> dict[str, Any]:
+    form = _orientation_form(confidence_threshold, infer_undetected)
+    return _json_response(_post("/ocr/orientation", file, form))
+
+
+@router.post("/auto-rotate")
+def ocr_auto_rotate(
+    file: UploadFile = File(...),
+    confidence_threshold: float = Form(default=14.0),
+    infer_undetected: bool = Form(default=False),
+) -> Response:
+    data, filename, content_type = _read_upload(file)
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Auto Rotate accepts PDF input only")
+
+    form = _orientation_form(confidence_threshold, infer_undetected)
+    analysis = _json_response(
+        _post_bytes("/ocr/orientation", data, filename, content_type, form)
+    )
+    pages = analysis.get("pages")
+    if not isinstance(pages, list):
+        raise HTTPException(status_code=502, detail="OCR orientation response is missing page results")
+    try:
+        rotation_args = qpdf_rotation_args(pages)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Invalid OCR orientation plan: {exc}") from exc
+
+    output = _apply_qpdf_rotations(data, rotation_args)
+    summary = analysis.get("summary") if isinstance(analysis.get("summary"), dict) else {}
+    return Response(
+        content=output,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="solyan-auto-rotated.pdf"',
+            "X-SolYan-Auto-Rotated-Pages": str(len(rotation_args)),
+            "X-SolYan-Auto-Rotate-Low-Confidence": str(summary.get("lowConfidence", 0)),
+            "X-SolYan-Auto-Rotate-Inferred": str(summary.get("inferred", 0)),
+        },
+    )
