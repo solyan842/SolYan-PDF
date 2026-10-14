@@ -1,0 +1,213 @@
+name: PDF Info Inspector CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/pdf_info.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/pdf-info/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-info-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/pdf_info.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/pdf-info/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-info-ci.yml'
+
+jobs:
+  pdf-info:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install qpdf and Poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf poppler-utils
+          qpdf --version
+          pdfinfo -v 2>&1 | head -n 1
+
+      - name: Install hash-verified backend dependencies
+        run: |
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip install pypdf==6.1.1
+          python -m pip check
+
+      - name: Compile backend inspector
+        run: python -m compileall backend/app
+
+      - name: Generate feature-rich PDF fixture
+        run: |
+          mkdir -p /tmp/solyan-pdf-info
+          python - <<'PY'
+          from pypdf import PdfWriter
+          from pypdf.generic import (
+              ArrayObject,
+              DecodedStreamObject,
+              DictionaryObject,
+              NameObject,
+              NumberObject,
+              TextStringObject,
+          )
+
+          out = '/tmp/solyan-pdf-info/fixture.pdf'
+          writer = PdfWriter()
+          page = writer.add_blank_page(width=595, height=842)
+          writer.add_metadata({
+              '/Title': '<img src=x onerror=alert(1)>',
+              '/Author': 'SolYan PDF Inspector CI',
+              '/Subject': 'Inspector regression',
+          })
+
+          font = DictionaryObject({
+              NameObject('/Type'): NameObject('/Font'),
+              NameObject('/Subtype'): NameObject('/Type1'),
+              NameObject('/BaseFont'): NameObject('/Helvetica'),
+          })
+          font_ref = writer._add_object(font)
+
+          image = DecodedStreamObject()
+          image.set_data(bytes([255, 0, 0]))
+          image.update({
+              NameObject('/Type'): NameObject('/XObject'),
+              NameObject('/Subtype'): NameObject('/Image'),
+              NameObject('/Width'): NumberObject(1),
+              NameObject('/Height'): NumberObject(1),
+              NameObject('/ColorSpace'): NameObject('/DeviceRGB'),
+              NameObject('/BitsPerComponent'): NumberObject(8),
+          })
+          image_ref = writer._add_object(image)
+
+          resources = DictionaryObject({
+              NameObject('/Font'): DictionaryObject({NameObject('/F1'): font_ref}),
+              NameObject('/XObject'): DictionaryObject({NameObject('/Im1'): image_ref}),
+          })
+          page[NameObject('/Resources')] = resources
+
+          content = DecodedStreamObject()
+          content.set_data(b'BT /F1 12 Tf 72 760 Td (SolYan Inspector) Tj ET\nq 10 0 0 10 72 720 cm /Im1 Do Q\n')
+          page[NameObject('/Contents')] = writer._add_object(content)
+
+          keep_field = DictionaryObject({
+              NameObject('/FT'): NameObject('/Tx'),
+              NameObject('/T'): TextStringObject('KeepMe'),
+              NameObject('/V'): TextStringObject('Visible value'),
+          })
+          sig_field = DictionaryObject({
+              NameObject('/FT'): NameObject('/Sig'),
+              NameObject('/T'): TextStringObject('SignatureSlot'),
+          })
+          keep_ref = writer._add_object(keep_field)
+          sig_ref = writer._add_object(sig_field)
+          acroform = DictionaryObject({NameObject('/Fields'): ArrayObject([keep_ref, sig_ref])})
+          writer._root_object[NameObject('/AcroForm')] = writer._add_object(acroform)
+
+          action = DictionaryObject({
+              NameObject('/S'): NameObject('/JavaScript'),
+              NameObject('/JS'): TextStringObject("app.alert('CI')"),
+          })
+          writer._root_object[NameObject('/OpenAction')] = writer._add_object(action)
+          writer.add_attachment('note.txt', b'embedded payload')
+
+          with open(out, 'wb') as handle:
+              writer.write(handle)
+          PY
+          qpdf --check /tmp/solyan-pdf-info/fixture.pdf
+          pdfinfo /tmp/solyan-pdf-info/fixture.pdf | grep -q 'Pages:'
+          pdffonts /tmp/solyan-pdf-info/fixture.pdf
+          pdfimages -list /tmp/solyan-pdf-info/fixture.pdf
+
+      - name: Gate production API report
+        working-directory: backend
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee /tmp/solyan-pdf-info/api-report.log
+          from pathlib import Path
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          path = Path('/tmp/solyan-pdf-info/fixture.pdf')
+          data = path.read_bytes()
+          client = TestClient(app)
+          response = client.post('/pdf/info', files={'file': ('fixture.pdf', data, 'application/pdf')})
+          assert response.status_code == 200, response.text
+          report = response.json()
+
+          assert report['file']['name'] == 'fixture.pdf', report['file']
+          assert len(report['file']['sha256']) == 64, report['file']
+          assert report['document']['Pages'] == '1', report['document']
+          assert report['metadata']['Title'] == '<img src=x onerror=alert(1)>', report['metadata']
+          assert report['structure']['pages'] == 1, report['structure']
+          assert report['structure']['fonts'] >= 1, report['structure']
+          assert report['structure']['images'] >= 1, report['structure']
+          assert report['structure']['formFields'] >= 2, report['structure']
+          assert report['structure']['signatureFields'] >= 1, report['structure']
+          assert report['structure']['embeddedFiles'] >= 1, report['structure']
+          assert report['structure']['javascriptActions'] >= 1, report['structure']
+          assert report['fonts']['count'] >= 1, report['fonts']
+          assert report['images']['count'] >= 1, report['images']
+          assert report['encryption']['encrypted'] is False, report['encryption']
+          print('PDF inspector report:', report)
+          PY
+
+      - name: Gate encrypted PDF password handling
+        run: |
+          set -o pipefail
+          qpdf --encrypt user-pass owner-pass 256 -- /tmp/solyan-pdf-info/fixture.pdf /tmp/solyan-pdf-info/encrypted.pdf
+          qpdf --check /tmp/solyan-pdf-info/encrypted.pdf
+          cd backend
+          python - <<'PY' 2>&1 | tee /tmp/solyan-pdf-info/encrypted-report.log
+          from pathlib import Path
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          data = Path('/tmp/solyan-pdf-info/encrypted.pdf').read_bytes()
+          client = TestClient(app)
+
+          ok = client.post(
+              '/pdf/info',
+              files={'file': ('encrypted.pdf', data, 'application/pdf')},
+              data={'password': 'user-pass'},
+          )
+          assert ok.status_code == 200, ok.text
+          report = ok.json()
+          assert report['encryption']['encrypted'] is True, report['encryption']
+          assert report['document']['Pages'] == '1', report['document']
+
+          wrong = client.post(
+              '/pdf/info',
+              files={'file': ('encrypted.pdf', data, 'application/pdf')},
+              data={'password': 'wrong-pass'},
+          )
+          assert wrong.status_code == 422, (wrong.status_code, wrong.text)
+          print('encrypted inspection accepts valid password and rejects invalid password')
+          PY
+
+      - name: Gate frontend safe text rendering and route wiring
+        run: |
+          grep -q "'/pdf-info'" frontend/app/page.tsx
+          grep -q '/pdf/info' frontend/app/pdf-info/page.tsx
+          grep -q 'app.include_router(pdf_info_router)' backend/app/main.py
+          ! grep -Eq 'dangerouslySetInnerHTML|\.innerHTML' frontend/app/pdf-info/page.tsx
+
+      - name: Upload PDF inspector diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-info-diagnostics
+          path: |
+            /tmp/solyan-pdf-info/api-report.log
+            /tmp/solyan-pdf-info/encrypted-report.log
+          if-no-files-found: ignore
