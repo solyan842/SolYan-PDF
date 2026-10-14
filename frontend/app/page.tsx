@@ -1,5 +1,6 @@
 const tools = [
   { href: '/compare', title: 'So sánh PDF', description: 'So sánh nội dung văn bản giữa hai PDF ngay trên thiết bị.', local: true },
+  { href: '/pdf-info', title: 'Thông tin toàn bộ PDF', description: 'Phân tích metadata, trang, cấu trúc, font, ảnh, form/chữ ký, attachment, mã hóa/quyền và active-content summary.', local: false, badge: 'qpdf + Poppler' },
   { href: '/sign', title: 'Ký số PDF', description: 'Ký cryptographic bằng chứng thư PKCS#12 với pyHanko.', local: false, badge: 'pyHanko' },
   { href: '/verify-signature', title: 'Kiểm tra chữ ký số', description: 'Xác minh integrity, crypto validity, trust chain và thay đổi sau ký bằng pyHanko.', local: false, badge: 'pyHanko' },
   { href: '/remove-signatures', title: 'Xóa chữ ký số', description: 'Tạo bản PDF không còn signature field, widget và trạng thái chứng thực; giữ các form field khác.', local: false, badge: 'qpdf JSON' },
