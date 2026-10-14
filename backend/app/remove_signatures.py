@@ -16,6 +16,7 @@ from .sanitize import OBJECT_REF_RE, _qpdf_json, _read_pdf, _require_qpdf_json, 
 router = APIRouter()
 
 MAX_FIELD_NODES = 10_000
+MAX_FIELD_DEPTH = 128
 MAX_PARENT_DEPTH = 128
 
 
@@ -58,6 +59,14 @@ def _resolve_dictionary(objects: dict[str, Any], value: Any) -> dict[str, Any] |
     return _entry_dictionary(objects.get(f"obj:{value}"))
 
 
+def _field_identity(value: Any) -> str | int | None:
+    if isinstance(value, str) and OBJECT_REF_RE.fullmatch(value):
+        return value
+    if isinstance(value, dict):
+        return id(value)
+    return None
+
+
 def _effective_field_type(objects: dict[str, Any], value: Any) -> str | None:
     current_value = value
     seen: set[str] = set()
@@ -84,15 +93,16 @@ def _collect_signature_subtree(
     signature_value_refs: set[str],
     visited: set[str | int],
     counter: list[int],
+    depth: int,
 ) -> None:
-    identity: str | int
-    if isinstance(value, str) and OBJECT_REF_RE.fullmatch(value):
-        identity = value
-        removed_refs.add(value)
-    elif isinstance(value, dict):
-        identity = id(value)
-    else:
+    if depth > MAX_FIELD_DEPTH:
+        raise HTTPException(status_code=422, detail="PDF form field tree is too deep")
+
+    identity = _field_identity(value)
+    if identity is None:
         return
+    if isinstance(identity, str):
+        removed_refs.add(identity)
     if identity in visited:
         return
     visited.add(identity)
@@ -117,6 +127,7 @@ def _collect_signature_subtree(
                 signature_value_refs=signature_value_refs,
                 visited=visited,
                 counter=counter,
+                depth=depth + 1,
             )
 
 
@@ -128,48 +139,70 @@ def _prune_field(
     removed_refs: set[str],
     signature_value_refs: set[str],
     visited_collect: set[str | int],
+    active_path: set[str | int],
     counter: list[int],
     stats: SignatureRemovalStats,
+    depth: int,
 ) -> bool:
-    field = _resolve_dictionary(objects, value)
-    if field is None:
-        return True
+    if depth > MAX_FIELD_DEPTH:
+        raise HTTPException(status_code=422, detail="PDF form field tree is too deep")
 
-    local_type = field.get("/FT")
-    effective_type = local_type if isinstance(local_type, str) else inherited_type
-    if effective_type == "/Sig":
-        stats.signature_fields_removed += 1
-        _collect_signature_subtree(
-            objects,
-            value,
-            removed_refs=removed_refs,
-            signature_value_refs=signature_value_refs,
-            visited=visited_collect,
-            counter=counter,
-        )
-        return False
+    identity = _field_identity(value)
+    if identity is not None:
+        if identity in active_path:
+            raise HTTPException(status_code=422, detail="PDF form field tree contains a cycle")
+        active_path.add(identity)
 
-    kids = field.get("/Kids")
-    if isinstance(kids, list):
-        kept: list[Any] = []
-        for child in kids:
-            if _prune_field(
+    try:
+        field = _resolve_dictionary(objects, value)
+        if field is None:
+            return True
+
+        counter[0] += 1
+        if counter[0] > MAX_FIELD_NODES:
+            raise HTTPException(status_code=422, detail="PDF form field tree is too large")
+
+        local_type = field.get("/FT")
+        effective_type = local_type if isinstance(local_type, str) else inherited_type
+        if effective_type == "/Sig":
+            stats.signature_fields_removed += 1
+            _collect_signature_subtree(
                 objects,
-                child,
-                inherited_type=effective_type,
+                value,
                 removed_refs=removed_refs,
                 signature_value_refs=signature_value_refs,
-                visited_collect=visited_collect,
+                visited=visited_collect,
                 counter=counter,
-                stats=stats,
-            ):
-                kept.append(child)
-        if kept != kids:
-            if kept:
-                field["/Kids"] = kept
-            else:
-                field.pop("/Kids", None)
-    return True
+                depth=depth,
+            )
+            return False
+
+        kids = field.get("/Kids")
+        if isinstance(kids, list):
+            kept: list[Any] = []
+            for child in kids:
+                if _prune_field(
+                    objects,
+                    child,
+                    inherited_type=effective_type,
+                    removed_refs=removed_refs,
+                    signature_value_refs=signature_value_refs,
+                    visited_collect=visited_collect,
+                    active_path=active_path,
+                    counter=counter,
+                    stats=stats,
+                    depth=depth + 1,
+                ):
+                    kept.append(child)
+            if kept != kids:
+                if kept:
+                    field["/Kids"] = kept
+                else:
+                    field.pop("/Kids", None)
+        return True
+    finally:
+        if identity is not None:
+            active_path.discard(identity)
 
 
 def _remove_signature_widgets(
@@ -264,8 +297,10 @@ def _build_signature_removal_update(
                     removed_refs=removed_refs,
                     signature_value_refs=signature_value_refs,
                     visited_collect=visited_collect,
+                    active_path=set(),
                     counter=counter,
                     stats=stats,
+                    depth=0,
                 ):
                     kept_fields.append(field)
             if kept_fields != fields:
