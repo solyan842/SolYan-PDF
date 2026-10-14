@@ -135,6 +135,7 @@ def _structural_summary(data: dict[str, Any]) -> dict[str, Any]:
     dictionary_count = 0
     stream_count = 0
     type_counts: Counter[str] = Counter()
+    subtype_counts: Counter[str] = Counter()
     annotation_counts: Counter[str] = Counter()
     action_counts: Counter[str] = Counter()
     form_fields = 0
@@ -178,10 +179,10 @@ def _structural_summary(data: dict[str, Any]) -> dict[str, Any]:
 
         if isinstance(object_type, str):
             type_counts[object_type] += 1
-        if isinstance(subtype, str) and (
-            subtype.startswith("/") and ("/Rect" in value or subtype == "/Widget")
-        ):
-            annotation_counts[subtype] += 1
+        if isinstance(subtype, str):
+            subtype_counts[subtype] += 1
+            if "/Rect" in value or subtype == "/Widget":
+                annotation_counts[subtype] += 1
         if isinstance(action_type, str) and action_type in ACTION_TYPES:
             action_counts[action_type] += 1
             if action_type == "/JavaScript":
@@ -208,8 +209,8 @@ def _structural_summary(data: dict[str, Any]) -> dict[str, Any]:
         "streams": stream_count,
         "pages": type_counts.get("/Page", 0),
         "fonts": type_counts.get("/Font", 0),
-        "images": annotation_counts.get("/Image", 0) + type_counts.get("/Image", 0),
-        "formXObjects": annotation_counts.get("/Form", 0),
+        "images": subtype_counts.get("/Image", 0),
+        "formXObjects": subtype_counts.get("/Form", 0),
         "formFields": form_fields,
         "signatureFields": signature_fields,
         "embeddedFiles": embedded_files,
@@ -222,6 +223,7 @@ def _structural_summary(data: dict[str, Any]) -> dict[str, Any]:
         "annotationTypes": dict(sorted(annotation_counts.items())),
         "actionTypes": dict(sorted(action_counts.items())),
         "objectTypes": dict(sorted(type_counts.items())),
+        "subtypes": dict(sorted(subtype_counts.items())),
     }
 
 
