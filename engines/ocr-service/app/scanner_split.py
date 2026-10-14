@@ -48,42 +48,36 @@ def _edge_samples(image: Any, max_samples_per_edge: int = 256) -> Any:
     height, width = image.shape[:2]
     if height < 1 or width < 1:
         raise ValueError("Image has invalid dimensions")
-
     step_x = max(1, width // max_samples_per_edge)
     step_y = max(1, height // max_samples_per_edge)
-    samples = [
-        image[0, ::step_x, :3],
-        image[height - 1, ::step_x, :3],
-        image[::step_y, 0, :3],
-        image[::step_y, width - 1, :3],
-    ]
-    return np.concatenate(samples, axis=0)
+    return np.concatenate(
+        [
+            image[0, ::step_x, :3],
+            image[height - 1, ::step_x, :3],
+            image[::step_y, 0, :3],
+            image[::step_y, width - 1, :3],
+        ],
+        axis=0,
+    )
 
 
 def estimate_background_color(image: Any) -> Any:
-    """Estimate scanner-bed/background color from image edges only."""
-
     import numpy as np
 
-    samples = _edge_samples(image).astype(np.float32)
-    return np.median(samples, axis=0)
+    return np.median(_edge_samples(image).astype(np.float32), axis=0)
 
 
 def foreground_mask(image: Any, background_color: Any, tolerance: int) -> Any:
     import cv2
     import numpy as np
 
-    # Work in signed space. uint8 +/- tolerance can wrap at 0/255 and classify
-    # scanner backgrounds incorrectly.
     pixels = image[:, :, :3].astype(np.int16)
     background = np.asarray(background_color, dtype=np.int16).reshape((1, 1, 3))
     delta = np.max(np.abs(pixels - background), axis=2)
     mask = np.where(delta > tolerance, 255, 0).astype(np.uint8)
-
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    mask = cv2.dilate(mask, kernel, iterations=1)
-    return mask
+    return cv2.dilate(mask, kernel, iterations=1)
 
 
 def detect_photo_regions(
@@ -98,19 +92,14 @@ def detect_photo_regions(
     background = estimate_background_color(image)
     mask = foreground_mask(image, background, tolerance)
     contours, _hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
     regions: list[tuple[int, int, int, int]] = []
     for contour in contours:
         x, y, width, height = cv2.boundingRect(contour)
         if width <= 0 or height <= 0:
             continue
-        if width * height < min_area:
-            continue
-        if float(cv2.contourArea(contour)) < min_contour_area:
+        if width * height < min_area or float(cv2.contourArea(contour)) < min_contour_area:
             continue
         regions.append((int(x), int(y), int(width), int(height)))
-
-    # OpenCV contour enumeration is not a stable product ordering.
     regions.sort(key=lambda rect: (rect[1], rect[0], rect[3], rect[2]))
     return regions, mask, background
 
@@ -133,8 +122,7 @@ def _expand_bounds(
 def _normalized_rect_angle(contour: Any) -> float:
     import cv2
 
-    rect = cv2.minAreaRect(contour)
-    box = cv2.boxPoints(rect)
+    box = cv2.boxPoints(cv2.minAreaRect(contour))
     longest_angle = 0.0
     longest_length = -1.0
     for index in range(4):
@@ -146,7 +134,6 @@ def _normalized_rect_angle(contour: Any) -> float:
         if length > longest_length:
             longest_length = length
             longest_angle = math.degrees(math.atan2(dy, dx))
-
     while longest_angle <= -45.0:
         longest_angle += 90.0
     while longest_angle > 45.0:
@@ -193,12 +180,12 @@ def _deskew_crop(
     contour = max(contours, key=cv2.contourArea)
     if len(contour) < 3:
         return crop, 0.0
-
     angle = _normalized_rect_angle(contour)
     if abs(angle) < angle_threshold:
         return crop, 0.0
-    correction = -angle
-    return _rotate_bound(crop, correction, background_color), correction
+    # OpenCV image coordinates and getRotationMatrix2D use opposite visual sign
+    # from the long-edge slope, so applying the normalized angle itself deskews.
+    return _rotate_bound(crop, angle, background_color), angle
 
 
 def _encode_png(image: Any) -> bytes:
@@ -270,15 +257,13 @@ def _render_pdf_images(input_path: Path) -> Iterator[tuple[int, Any]]:
             raise ValueError("PDF contains no pages")
         if page_count > MAX_SCANNER_PAGES:
             raise ValueError(f"PDF exceeds the {MAX_SCANNER_PAGES}-page scanner split limit")
-
         for index in range(page_count):
             page = pdf[index]
             width_pt = float(page.get_width())
             height_pt = float(page.get_height())
             if width_pt <= 0 or height_pt <= 0:
                 raise ValueError(f"Page {index + 1} has invalid geometry")
-            scale = SCAN_RENDER_DPI / 72.0
-            scale = min(scale, MAX_RENDER_LONG_EDGE / max(width_pt, height_pt))
+            scale = min(SCAN_RENDER_DPI / 72.0, MAX_RENDER_LONG_EDGE / max(width_pt, height_pt))
             bitmap = page.render(scale=scale)
             try:
                 rgb = np.asarray(bitmap.to_pil().convert("RGB"))
@@ -287,9 +272,7 @@ def _render_pdf_images(input_path: Path) -> Iterator[tuple[int, Any]]:
                 closer = getattr(bitmap, "close", None)
                 if callable(closer):
                     closer()
-
-            pixels = int(bgr.shape[0]) * int(bgr.shape[1])
-            total_pixels += pixels
+            total_pixels += int(bgr.shape[0]) * int(bgr.shape[1])
             if total_pixels > MAX_TOTAL_RENDER_PIXELS:
                 raise ValueError("Scanner split exceeds the aggregate raster pixel limit")
             yield index + 1, bgr
@@ -325,9 +308,9 @@ def split_scanned_photos_file(
         min_contour_area=min_contour_area,
         border_size=border_size,
     )
-
+    images: Iterator[tuple[int, Any]]
     if suffix.lower() == ".pdf":
-        images: Iterator[tuple[int, Any]] = _render_pdf_images(input_path)
+        images = _render_pdf_images(input_path)
     else:
         images = iter([(1, _load_image(input_path))])
 
