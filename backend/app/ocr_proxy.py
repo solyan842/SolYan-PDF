@@ -222,20 +222,6 @@ def ocr_qr_dividers(file: UploadFile = File(...)) -> dict[str, Any]:
     return _qr_analysis(data, filename, content_type)
 
 
-@router.get("/auto-split-divider")
-def ocr_auto_split_divider() -> Response:
-    try:
-        response = httpx.get(f"{OCR_SERVICE_URL}/ocr/qr-divider.png", timeout=15.0)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=503, detail="OCR service is unavailable") from exc
-    return Response(
-        content=response.content,
-        media_type="image/png",
-        headers={"Content-Disposition": 'inline; filename="solyan-auto-split-divider.png"'},
-    )
-
-
 @router.post("/auto-split")
 def ocr_auto_split(
     file: UploadFile = File(...),
