@@ -1,0 +1,156 @@
+name: Stamp CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/lib/stamp.ts'
+      - 'frontend/app/watermark/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/stamp-ci.yml'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/ROADMAP.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/lib/stamp.ts'
+      - 'frontend/app/watermark/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/stamp-ci.yml'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/ROADMAP.md'
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Compile Stamp helper for direct regression
+        run: |
+          rm -rf /tmp/solyan-stamp-ts
+          npx tsc lib/stamp.ts \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --esModuleInterop \
+            --skipLibCheck \
+            --outDir /tmp/solyan-stamp-ts
+
+      - name: Gate text/image stamping, page selection and variables
+        run: |
+          set -euo pipefail
+          node <<'NODE' 2>&1 | tee /tmp/stamp-ci.log
+          const assert = require('node:assert/strict');
+          const { PDFDocument, StandardFonts } = require('pdf-lib');
+          const { applyStamp, expandStampText, stampPosition } = require('/tmp/solyan-stamp-ts/stamp.js');
+
+          (async () => {
+            assert.equal(
+              expandStampText('P @page/@pages · @filename · @date · @@', 2, 5, 'demo.pdf', new Date('2026-10-14T00:00:00Z')),
+              'P 2/5 · demo · 2026-10-14 · @',
+            );
+            assert.deepEqual(stampPosition(600, 800, 100, 40, 'top-left'), { x: 24, y: 736 });
+            assert.deepEqual(stampPosition(600, 800, 100, 40, 'custom', 123, 456), { x: 123, y: 456 });
+
+            const source = await PDFDocument.create();
+            const font = await source.embedFont(StandardFonts.Helvetica);
+            for (let i = 0; i < 2; i += 1) {
+              const page = source.addPage([600, 800]);
+              page.drawText(`Source page ${i + 1}`, { x: 50, y: 740, size: 12, font });
+            }
+            const sourceBytes = await source.save();
+
+            const textStamped = await applyStamp(sourceBytes, {
+              kind: 'text',
+              pageIndexes: [1],
+              text: 'CONFIDENTIAL @page/@pages @filename',
+              fontSize: 28,
+              color: '#cc0000',
+              opacity: 0.55,
+              rotation: 0,
+              position: 'bottom-left',
+              filename: 'source.pdf',
+            });
+
+            const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+            const textTask = pdfjs.getDocument({ data: new Uint8Array(textStamped), disableWorker: true });
+            const textPdf = await textTask.promise;
+            const page1Text = (await (await textPdf.getPage(1)).getTextContent()).items.map((item) => 'str' in item ? item.str : '').join(' ');
+            const page2Text = (await (await textPdf.getPage(2)).getTextContent()).items.map((item) => 'str' in item ? item.str : '').join(' ');
+            console.log('page1:', page1Text);
+            console.log('page2:', page2Text);
+            assert.ok(!page1Text.includes('CONFIDENTIAL'));
+            assert.ok(page2Text.includes('CONFIDENTIAL 2/2 source'));
+            await textTask.destroy();
+
+            const png = Uint8Array.from(Buffer.from(
+              'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGP4z8DAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==',
+              'base64',
+            ));
+            const imageStamped = await applyStamp(sourceBytes, {
+              kind: 'image',
+              pageIndexes: [0],
+              imageBytes: png,
+              imageType: 'png',
+              widthPercent: 20,
+              opacity: 0.8,
+              rotation: 15,
+              position: 'top-right',
+            });
+            const imageTask = pdfjs.getDocument({ data: new Uint8Array(imageStamped), disableWorker: true });
+            const imagePdf = await imageTask.promise;
+            assert.equal(imagePdf.numPages, 2);
+            const operators = await (await imagePdf.getPage(1)).getOperatorList();
+            const hasImage = operators.fnArray.some((fn) =>
+              fn === pdfjs.OPS.paintImageXObject || fn === pdfjs.OPS.paintInlineImageXObject || fn === pdfjs.OPS.paintImageMaskXObject,
+            );
+            console.log('image operator found:', hasImage);
+            assert.equal(hasImage, true);
+            await imageTask.destroy();
+
+            console.log('Stamp text/image gate: PASS');
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Gate UI capability wiring
+        run: |
+          set -euo pipefail
+          grep -q "kind: 'text'" app/watermark/page.tsx
+          grep -q "kind: 'image'" app/watermark/page.tsx
+          grep -q "@page" app/watermark/page.tsx
+          grep -q "Watermark / Stamp" app/page.tsx
+          echo 'Stamp UI wiring: PASS' | tee -a /tmp/stamp-ci.log
+
+      - name: Build frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+
+      - name: Upload Stamp evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stamp-ci-evidence
+          path: /tmp/stamp-ci.log
+          if-no-files-found: warn
+          retention-days: 14
