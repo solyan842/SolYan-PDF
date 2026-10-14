@@ -4,6 +4,28 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+### V1.2 self-contained parity expansion
+- Added browser-local PDF overlay, one-long-page composition, Poster PDF tiling, split-sections, advanced split-by-count/target-size, bookmark/outline editing and split-by-bookmark/chapter export.
+- Added bounded qpdf attachment management, AES-256 permission controls, structural sanitization, form-safe comment/annotation removal, active-content inspection, reachable Image XObject removal and structural decompression.
+- Added OCR-guided Auto Rotate using Tesseract OSD + PDFium analysis with conservative confidence gating and qpdf relative page rotation.
+- Added QR-divider Auto Split for scanned batches using the existing PDFium/OpenCV OCR-service stack with qpdf page selection and optional duplex reverse-side skipping.
+- Added browser-local Auto Rename from PDF.js title geometry and upgraded Watermark into a page-range text/image Stamp with deterministic page/file/date variables.
+- Added explicit rasterized Color Transform modes for invert, grayscale, high-contrast and custom two-color output.
+- Hardened Editor redaction from visual-only masking to security-first selected-page raster replacement so the original redacted-page content stream is not copied into the output.
+
+### Verification and architecture
+- Added permanent real-PDF gates for the new V1.2 surfaces, including Auto Rotate, Auto Split QR, Decompress, Auto Rename, Stamp, Color Transform and Secure Redaction.
+- Secure Redaction regression requires qpdf validity, retained text on an untouched page, and absence of the redacted secret from both `pdftotext` and expanded QDF output.
+- Recorded the maintained-OSS parity audit and engine decisions in `docs/V1.2-PARITY-AUDIT.md` to prevent repeated research or duplicate tools.
+- Reused existing qpdf, Poppler, pdf-lib, PDF.js, Tesseract, PDFium/pypdfium2 and OpenCV engines; no Java/PDFBox application runtime was added for the parity pass.
+
+### Important boundaries
+- Color Transform intentionally rasterizes every output page; original selectable text, vector content, forms and annotations are not preserved as interactive source content.
+- Security-first manual redaction rasterizes the selected page at 150 DPI and rebuilds the PDF without that page's original content stream. The redacted page loses interactive/vector text, and document-level catalog structures such as bookmarks, attachments, AcroForm and metadata are not guaranteed in this security-first path.
+- Auto Rename is deterministic text-layer geometry, not AI; scanned PDFs without a text layer retain the original filename until OCR is run explicitly.
+- Auto Split/Auto Rotate use temporary analysis rasters only; their PDF output paths use qpdf page selection/rotation rather than raster reconstruction.
+- Cloud connectors, multi-party remote signing, AI summarization and PDF translation remain separate provider/product decisions.
+
 ## [0.1.4] - 2026-10-13
 
 Patch release completing the current **V1.1 self-hosted utility parity and hardening** roadmap with new qpdf/Poppler utilities and browser-local printing/page-geometry tools.
@@ -36,7 +58,7 @@ Patch release promoting the evidence-backed multi-engine PDF -> Office path to t
 
 ### PDF -> Office V1 release gate
 - Added evidence-based `auto` routing: PDF -> DOCX/PPTX uses LibreOffice PDF import first with pinned Bloom as best-effort fallback; PDF -> XLSX keeps Bloom primary with PP-StructureV3 fallback only when Bloom reports no logical tables.
-- Added native OOXML editability diagnostics so DOCX/PPTX routing is judged on editable text as well as rendered round-trip similarity.
+- Added native OOXML editability diagnostics so DOCX/PPTX routing is judged on editable text as well as rendered visual similarity.
 - A/B tested Bloom vs LibreOffice on the same pinned 6-case / 41-page public DOCX/PPTX corpus: LibreOffice averaged 96.44% visual similarity vs Bloom 84.56%, with editable native text in all 6 cases.
 - Re-ran the controlled 18-case synthetic corpus through final `auto` routing: 97.78% overall, DOCX 96.40%, PPTX 98.76%, XLSX 98.17%, with zero page-count, unmatched-page and geometry mismatches and editable DOCX/PPTX text in 12/12 cases.
 - Added permanent versioned `pdf-to-office-release-v1` policy combining 18 synthetic cases with 9 pinned public real-world cases: 27 cases / 68 source pages total.

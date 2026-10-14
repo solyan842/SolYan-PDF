@@ -7,15 +7,22 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 ### Core PDF
 - Merge, split, extract, reorder/remove and rotate pages
 - OCR-guided Auto Rotate for scanned PDFs: Tesseract OSD analyzes temporary PDFium rasters, then qpdf applies only confident relative page rotations without rasterizing source content
+- QR-divider Auto Split for scanned batches using bounded PDFium/OpenCV analysis, qpdf page selection and optional duplex reverse-side skipping
+- Advanced split by exact pages per part or best-effort target size, returned as ZIP
 - Drag-and-drop page organizer
-- Watermark, page numbers and metadata editing
+- Watermark / Stamp with browser-local text or PNG/JPG, page ranges, standard/custom positioning, opacity, rotation and deterministic page/file/date variables
+- Page numbers and metadata editing
+- Browser-local Auto Rename from PDF.js text geometry without rewriting source PDF bytes
 - AES-256 protect/unlock, repair and structural compression through qpdf
+- qpdf structural Decompress for inspectable uncompressed streams and disabled object streams
 - qpdf web optimization (linearization), annotation/form flattening, and optional image recompression
+- qpdf attachment management: list, add, extract and remove embedded files
 - qpdf JSON sanitization for regression-tested JavaScript/actions, link annotations, document/XMP metadata and embedded-file structures
 - qpdf JSON active-content inspection for reachable JavaScript/actions/triggers, active annotations and attachment references without executing document JavaScript
 - Embedded raster-image extraction to ZIP through Poppler `pdfimages`, preserving native encoded formats where supported
 - qpdf JSON Image XObject removal from reachable page/Form resources while preserving text, vector content and page content streams
 - Conservative blank-page detection/removal: text pages are always kept; text-free pages use bounded Poppler grayscale analysis before qpdf page selection
+- Browser-local overlay and PDF → one long page composition
 - Browser-local N-up / multi-page-per-sheet layout with A4 portrait/landscape, custom grids, margins, borders and LTR/RTL ordering
 - Browser-local saddle-stitch booklet imposition with automatic blank padding, left/right spine, gutter and duplex/manual-pass controls
 - Browser-local Poster PDF tiling: split each source page into an X×Y grid of A3/A4/A5/Letter/Legal/Tabloid print sheets with LTR/RTL ordering
@@ -24,7 +31,8 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Browser-local resize/scale to A0-A6, Letter, Legal or custom page sizes with rotation-aware fitting
 - Browser-local bookmark/outline editor with Unicode titles, nested hierarchy, sibling reordering and page destinations
 - Browser-local split by bookmark/chapter with selectable outline depth, duplicate-page handling and ZIP export
-- Browser-side PDF viewer and basic editor
+- Explicit rasterized Color Transform: invert, grayscale, high-contrast and custom two-color output
+- Browser-side PDF viewer and editor with add text/image, highlight, rectangle and security-first manual redaction
 - AcroForm discovery/filling
 
 ### OCR & document intelligence
@@ -64,14 +72,14 @@ Browser / Next.js PWA
       |
       v
 FastAPI orchestration backend (qpdf + Poppler utilities + network utilities)
-      |---------------- OCR service (PaddleOCR + Tesseract fallback/OSD)
+      |---------------- OCR service (PaddleOCR + Tesseract fallback/OSD + PDFium/OpenCV analysis)
       |---------------- Office service (LibreOffice + PDF import routing)
       |---------------- Signature service (pyHanko)
       |---------------- Archive service (OCRmyPDF internal PDF/A)
       `---------------- Bloom adapter (optional / external)
 ```
 
-Browser-side features use `pdf-lib`, `PDF.js` and JSZip where appropriate. Server engines are intentionally isolated so they can be upgraded or replaced independently.
+Browser-side features use `pdf-lib`, `PDF.js` and JSZip where appropriate. Server engines are intentionally isolated so they can be upgraded or replaced independently. The current V1.2 maintained-OSS parity decisions are recorded in `docs/V1.2-PARITY-AUDIT.md`.
 
 ## Quick start with Docker Compose
 
@@ -109,6 +117,12 @@ GitHub Actions currently verifies:
 - FastAPI/qpdf backend and hardened network routes
 - Real qpdf smoke coverage for linearization, annotation/form flattening and image optimization routes
 - Real Tesseract OSD Auto Rotate coverage for 0/90/180/270 page orientation, low-confidence/no-op policy, optional unanimous inference, qpdf relative-rotation composition, qpdf validity and exact byte preservation when no page is changed
+- Real QR Auto Split coverage for divider decode, PDFium/OpenCV detection, duplex planning, qpdf validity, no-empty-part behavior and byte-identical no-divider fallback
+- Real qpdf structural Decompress coverage for route wiring, retained text, qpdf validity and inspectable uncompressed content
+- Real browser-local Auto Rename coverage for PDF.js title geometry, filename sanitation, bounded analysis and unchanged source bytes
+- Real browser-local Stamp coverage for selected-page text/image stamping and deterministic variables
+- Exact rasterized Color Transform pixel semantics, alpha preservation, bounded pipeline and explicit loss-of-interactivity boundary
+- Secure Redaction coverage requiring qpdf validity, retained text on untouched pages and absence of the redacted secret from both `pdftotext` and expanded QDF output
 - Real qpdf JSON active-content sanitization across catalog/page additional actions, OpenAction, JavaScript name trees/actions, URI links, XMP/Info metadata, EmbeddedFiles/AF/FileAttachment structures, plus selective-mode preservation of unselected categories
 - Real qpdf JSON active-content inspection covering reachable direct/stream JavaScript, URI/Launch actions, OpenAction/AA/A/XFA triggers, Screen/FileAttachment annotations, embedded-file references, encrypted input and dead-object exclusion
 - Real Poppler `pdfimages` extraction on a PDF containing an embedded Image XObject, including ZIP validation and no-image/error cases
@@ -149,6 +163,11 @@ See `docs/BENCHMARKING.md` for:
 - Passing the PDF-to-Office V1 release gate establishes a reproducible supported baseline for the pinned representative corpus; it is not a claim that every arbitrary PDF will convert with the same fidelity.
 - PDF -> XLSX still depends on the optional external Bloom service for its primary route; PP-StructureV3 is a bounded fallback for scanned/no-logical-table cases rather than a universal spreadsheet reconstruction engine.
 - Auto Rotate is bounded to 50 MB / 300 PDF pages for OCR analysis. The default OSD confidence threshold is 14.0; unresolved, blank or lower-confidence pages remain unchanged unless optional inference is enabled and every confident page agrees on one correction. Only temporary analysis rasters are created; the output PDF is changed through relative qpdf page rotation. If no page needs rotation, the original PDF bytes are returned unchanged. Any actual rotation rewrite can invalidate existing digital signatures.
+- Auto Split QR is bounded to the documented scan/page pixel limits and recognizes the exact SolYan divider marker. Divider pages are removed; duplex mode may also skip the reverse side. Detection uses temporary PDFium rasters while output parts use qpdf page selection.
+- Structural Decompress is for inspection/debugging, not smaller files. It rewrites stream/object representation and can invalidate existing digital signatures.
+- Auto Rename is a deterministic PDF.js text-layer heuristic, not AI. Scanned/image-only PDFs without usable text retain the original filename until OCR is explicitly performed; the PDF bytes themselves are not rewritten by Auto Rename.
+- Color Transform intentionally rasterizes the full output. Selectable text, vector content, forms and annotations from the source are not retained as interactive source structures.
+- Security-first Editor redaction rasterizes only the selected page at 150 DPI after burning the redaction box, then rebuilds the PDF without copying that page's original content stream. The redacted page loses selectable text/vector/form/annotation interactivity and its displayed rotation is normalized. Document-level catalog structures such as bookmarks, attachments, AcroForm and metadata are not guaranteed to be preserved in this security-first path.
 - qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
 - PDF sanitization is a bounded removal of regression-tested standard PDF active-content structures, **not antivirus or universal exploit detection**. It does not claim to detect every malicious PDF technique. Rewriting/removing content changes the document and therefore invalidates existing digital signatures.
 - Active-content inspection is structural-only and bounded to 100 MB input, 500 findings, 64 KiB per displayed script and 256 KiB aggregate displayed script text. It walks only the object graph reachable from the trailer/root, never executes document JavaScript, and **does not claim antivirus coverage or prove that a PDF is safe**.
