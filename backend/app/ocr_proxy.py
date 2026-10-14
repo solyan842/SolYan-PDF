@@ -12,11 +12,13 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from .auto_rotate import qpdf_rotation_args
+from .auto_split import build_split_groups, split_pdf_to_zip
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 OCR_SERVICE_URL = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8010").rstrip("/")
 OCR_PROXY_MAX_FILE_SIZE = int(os.getenv("OCR_PROXY_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+AUTO_SPLIT_MARKER = "SOLYAN:PDF:AUTO-SPLIT:v1"
 
 
 def _read_upload(upload: UploadFile) -> tuple[bytes, str, str]:
@@ -129,6 +131,18 @@ def _apply_qpdf_rotations(data: bytes, args: list[str]) -> bytes:
         return output_path.read_bytes()
 
 
+def _qr_analysis(data: bytes, filename: str, content_type: str) -> dict[str, Any]:
+    return _json_response(
+        _post_bytes(
+            "/ocr/qr-dividers",
+            data,
+            filename,
+            content_type,
+            {"marker": AUTO_SPLIT_MARKER},
+        )
+    )
+
+
 @router.get("/health")
 def ocr_health() -> dict:
     try:
@@ -196,5 +210,62 @@ def ocr_auto_rotate(
             "X-SolYan-Auto-Rotated-Pages": str(len(rotation_args)),
             "X-SolYan-Auto-Rotate-Low-Confidence": str(summary.get("lowConfidence", 0)),
             "X-SolYan-Auto-Rotate-Inferred": str(summary.get("inferred", 0)),
+        },
+    )
+
+
+@router.post("/qr-dividers")
+def ocr_qr_dividers(file: UploadFile = File(...)) -> dict[str, Any]:
+    data, filename, content_type = _read_upload(file)
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="QR divider analysis accepts PDF input only")
+    return _qr_analysis(data, filename, content_type)
+
+
+@router.get("/auto-split-divider")
+def ocr_auto_split_divider() -> Response:
+    try:
+        response = httpx.get(f"{OCR_SERVICE_URL}/ocr/qr-divider.png", timeout=15.0)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="OCR service is unavailable") from exc
+    return Response(
+        content=response.content,
+        media_type="image/png",
+        headers={"Content-Disposition": 'inline; filename="solyan-auto-split-divider.png"'},
+    )
+
+
+@router.post("/auto-split")
+def ocr_auto_split(
+    file: UploadFile = File(...),
+    duplex: bool = Form(default=False),
+) -> Response:
+    data, filename, content_type = _read_upload(file)
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Auto Split accepts PDF input only")
+
+    analysis = _qr_analysis(data, filename, content_type)
+    dividers = analysis.get("dividers")
+    summary = analysis.get("summary")
+    if not isinstance(dividers, list) or not isinstance(summary, dict):
+        raise HTTPException(status_code=502, detail="OCR QR response is missing divider results")
+    try:
+        page_count = int(summary.get("pages", 0) or 0)
+        groups = build_split_groups(page_count, dividers, duplex=duplex)
+        archive = split_pdf_to_zip(data, groups, page_count)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return Response(
+        content=archive,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="solyan-auto-split.zip"',
+            "X-SolYan-Auto-Split-Dividers": str(len(dividers)),
+            "X-SolYan-Auto-Split-Parts": str(len(groups)),
+            "X-SolYan-Auto-Split-Duplex": "true" if duplex else "false",
         },
     )
