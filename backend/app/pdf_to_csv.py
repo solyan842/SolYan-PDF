@@ -16,6 +16,7 @@ from .ocr_proxy import OCR_PROXY_MAX_FILE_SIZE, OCR_SERVICE_URL
 router = APIRouter()
 
 MAX_XLSX_SIZE = 250 * 1024 * 1024
+MAX_XLSX_EXPANDED_SIZE = 500 * 1024 * 1024
 MAX_CSV_OUTPUT_SIZE = 250 * 1024 * 1024
 MAX_SHEETS = 1000
 MAX_CELLS_PER_SHEET = 2_000_000
@@ -60,6 +61,14 @@ def _column_index(reference: str) -> int:
     return result
 
 
+def _validate_xlsx_archive(archive: zipfile.ZipFile) -> None:
+    total = 0
+    for info in archive.infolist():
+        total += info.file_size
+        if total > MAX_XLSX_EXPANDED_SIZE:
+            raise HTTPException(status_code=502, detail="OCR workbook expands beyond 500 MB safety limit")
+
+
 def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
     try:
         raw = archive.read("xl/sharedStrings.xml")
@@ -70,6 +79,27 @@ def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
     for item in root.findall(f"{{{MAIN_NS}}}si"):
         values.append("".join(node.text or "" for node in item.iter(f"{{{MAIN_NS}}}t")))
     return values
+
+
+def _normalize_sheet_target(target: str) -> str:
+    if target.startswith("/"):
+        parts = PurePosixPath(target.lstrip("/")).parts
+    else:
+        parts = (PurePosixPath("xl") / target).parts
+    normalized: list[str] = []
+    for part in parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not normalized:
+                raise HTTPException(status_code=502, detail="OCR workbook contains an invalid worksheet path")
+            normalized.pop()
+            continue
+        normalized.append(part)
+    path = "/".join(normalized)
+    if not path.startswith("xl/"):
+        raise HTTPException(status_code=502, detail="OCR workbook worksheet path escapes xl directory")
+    return path
 
 
 def _sheet_targets(archive: zipfile.ZipFile) -> list[tuple[str, str]]:
@@ -86,36 +116,32 @@ def _sheet_targets(archive: zipfile.ZipFile) -> list[tuple[str, str]]:
         target = targets.get(rel_id)
         if not target:
             continue
-        if target.startswith("/"):
-            path = target.lstrip("/")
-        else:
-            path = str(PurePosixPath("xl") / target)
-        path = str(PurePosixPath(path))
-        sheets.append((name, path))
+        sheets.append((name, _normalize_sheet_target(target)))
     if len(sheets) > MAX_SHEETS:
         raise HTTPException(status_code=422, detail="OCR workbook contains too many worksheets")
     return sheets
 
 
-def _cell_text(cell: ET.Element, shared: list[str]) -> str:
+def _cell_text(cell: ET.Element, shared: list[str]) -> tuple[str, bool]:
     cell_type = cell.attrib.get("t")
     if cell_type == "inlineStr":
-        return "".join(node.text or "" for node in cell.iter(f"{{{MAIN_NS}}}t"))
+        return "".join(node.text or "" for node in cell.iter(f"{{{MAIN_NS}}}t")), True
     value_node = cell.find(f"{{{MAIN_NS}}}v")
     value = value_node.text if value_node is not None and value_node.text is not None else ""
     if cell_type == "s":
         try:
-            return shared[int(value)]
+            return shared[int(value)], True
         except (ValueError, IndexError):
-            return ""
+            return "", True
+    if cell_type == "str":
+        return value, True
     if cell_type == "b":
-        return "TRUE" if value == "1" else "FALSE"
-    return value
+        return ("TRUE" if value == "1" else "FALSE"), False
+    return value, False
 
 
-def _csv_safe(value: str) -> str:
-    stripped = value.lstrip()
-    if stripped.startswith(("=", "+", "-", "@")):
+def _csv_safe(value: str, *, textual: bool) -> str:
+    if textual and value.lstrip().startswith(("=", "+", "-", "@")):
         return "'" + value
     return value
 
@@ -135,8 +161,8 @@ def _sheet_rows(archive: zipfile.ZipFile, path: str, shared: list[str]) -> list[
             if cell_count > MAX_CELLS_PER_SHEET:
                 raise HTTPException(status_code=422, detail="OCR worksheet exceeds CSV cell limit")
             col = _column_index(cell.attrib.get("r", "A1"))
-            text = _csv_safe(_cell_text(cell, shared))
-            values[col] = text
+            text, textual = _cell_text(cell, shared)
+            values[col] = _csv_safe(text, textual=textual)
             max_col = max(max_col, col)
         if max_col:
             rendered = [values.get(index, "") for index in range(1, max_col + 1)]
@@ -160,6 +186,7 @@ def _rows_to_csv(rows: list[list[str]]) -> bytes:
 def _xlsx_to_csv_outputs(workbook: bytes, base_name: str) -> list[tuple[str, bytes]]:
     try:
         with zipfile.ZipFile(io.BytesIO(workbook)) as archive:
+            _validate_xlsx_archive(archive)
             shared = _shared_strings(archive)
             outputs: list[tuple[str, bytes]] = []
             used: set[str] = set()
