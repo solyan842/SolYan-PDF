@@ -28,11 +28,12 @@ jobs:
         with:
           python-version: '3.13.16'
 
-      - name: Install LibreOffice
+      - name: Install LibreOffice and Poppler
         run: |
           sudo apt-get update
-          sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress fonts-dejavu-core fonts-liberation
+          sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress poppler-utils fonts-dejavu-core fonts-liberation
           libreoffice --version
+          pdftotext -v
 
       - name: Install hash-verified service dependencies
         run: |
@@ -52,7 +53,11 @@ jobs:
         run: |
           python - <<'PY'
           import io
+          import subprocess
+          import tempfile
           import zipfile
+          from pathlib import Path
+
           from docx import Document
           from fastapi.testclient import TestClient
           from app.main import app
@@ -93,4 +98,37 @@ jobs:
                   if target == 'pptx':
                       assert any(name.startswith('ppt/slides/slide') and name.endswith('.xml') for name in names), names
               print('pdf import ok', target, len(response.content))
+
+          vietnamese = '\ufeffXin chào Việt Nam\nHà Nội cùng SolYan PDF\nDòng thứ ba: 123\n'.encode('utf-8')
+          text_pdf = client.post(
+              '/convert/to-pdf',
+              files={'file': ('tieng-viet.txt', vietnamese, 'text/plain; charset=utf-8')},
+          )
+          assert text_pdf.status_code == 200, text_pdf.text
+          assert text_pdf.content.startswith(b'%PDF-')
+          assert text_pdf.headers['content-disposition'] == 'attachment; filename="tieng-viet.pdf"'
+
+          with tempfile.TemporaryDirectory(prefix='solyan-txt-pdf-ci-') as temp_dir:
+              pdf_path = Path(temp_dir) / 'text.pdf'
+              txt_path = Path(temp_dir) / 'recovered.txt'
+              pdf_path.write_bytes(text_pdf.content)
+              result = subprocess.run(
+                  ['pdftotext', '-enc', 'UTF-8', str(pdf_path), str(txt_path)],
+                  capture_output=True,
+                  text=True,
+                  timeout=30,
+              )
+              assert result.returncode == 0, result.stderr
+              recovered = txt_path.read_text(encoding='utf-8')
+              assert 'Xin chào Việt Nam' in recovered, recovered
+              assert 'Hà Nội cùng SolYan PDF' in recovered, recovered
+          print('utf-8 txt -> pdf round-trip text: PASS')
+
+          invalid = client.post(
+              '/convert/to-pdf',
+              files={'file': ('legacy.txt', b'\xff\xfeS\x00o\x00l\x00Y\x00a\x00n\x00', 'text/plain')},
+          )
+          assert invalid.status_code == 422, invalid.text
+          assert 'valid UTF-8' in invalid.json()['detail']
+          print('non-utf8 txt rejection: PASS')
           PY
