@@ -244,6 +244,8 @@ V1.2 self-contained parity expansion is feature-complete. Remaining unchecked pr
 - [x] Remove completed `v0.1.4` one-shot publisher after successful publication
 - [x] Publish V1.2 self-contained parity/hardening patch release `v0.1.5`
 - [x] Remove completed `v0.1.5` one-shot publisher after successful publication
+- [x] Publish V1.3 OSS-first self-contained parity/converter patch release `v0.1.6`
+- [x] Remove completed `v0.1.6` one-shot publisher after successful publication
 
 ## Release decisions / external inputs still required
 
