@@ -23,6 +23,7 @@ from .pdf_to_cbz import router as pdf_to_cbz_router
 from .pdf_to_csv import router as pdf_to_csv_router
 from .pdf_to_html import router as pdf_to_html_router
 from .pdf_to_markdown import router as pdf_to_markdown_router
+from .pdf_to_postscript import router as pdf_to_postscript_router
 from .pdf_to_rtf import router as pdf_to_rtf_router
 from .pdf_to_text import router as pdf_to_text_router
 from .pdf_to_xml import router as pdf_to_xml_router
@@ -86,6 +87,8 @@ app.add_middleware(
         "X-SolYan-RTF-Engine",
         "X-SolYan-CSV-Engine",
         "X-SolYan-CSV-Files",
+        "X-SolYan-PostScript-Format",
+        "X-SolYan-PostScript-Level",
     ],
 )
 app.include_router(network_router)
@@ -107,6 +110,7 @@ app.include_router(pdf_to_cbz_router)
 app.include_router(pdf_to_csv_router)
 app.include_router(pdf_to_html_router)
 app.include_router(pdf_to_markdown_router)
+app.include_router(pdf_to_postscript_router)
 app.include_router(pdf_to_rtf_router)
 app.include_router(pdf_to_text_router)
 app.include_router(pdf_to_xml_router)
