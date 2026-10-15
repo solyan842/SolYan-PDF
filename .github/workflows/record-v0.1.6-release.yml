@@ -1,0 +1,49 @@
+name: Record v0.1.6 release
+
+on:
+  push:
+    branches:
+      - chore/v0.1.6-publisher-cleanup
+    paths:
+      - '.github/workflows/record-v0.1.6-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cleanup branch
+        uses: actions/checkout@v4
+        with:
+          ref: chore/v0.1.6-publisher-cleanup
+
+      - name: Record release and remove one-shot workflow
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/ROADMAP.md')
+          text = path.read_text()
+          anchor = '- [x] Remove completed `v0.1.5` one-shot publisher after successful publication\n'
+          addition = (
+              '- [x] Publish V1.3 OSS-first self-contained parity/converter patch release `v0.1.6`\n'
+              '- [x] Remove completed `v0.1.6` one-shot publisher after successful publication\n'
+          )
+          assert anchor in text
+          assert 'Publish V1.3 OSS-first self-contained parity/converter patch release `v0.1.6`' not in text
+          path.write_text(text.replace(anchor, anchor + addition, 1))
+          PY
+          rm .github/workflows/record-v0.1.6-release.yml
+
+      - name: Commit final cleanup state
+        run: |
+          set -euo pipefail
+          git config user.name "SolYan"
+          git config user.email "yansign842@gmail.com"
+          git add docs/ROADMAP.md .github/workflows/record-v0.1.6-release.yml
+          git diff --cached --check
+          git commit -m "docs: record v0.1.6 release cleanup"
+          git push origin HEAD:chore/v0.1.6-publisher-cleanup
