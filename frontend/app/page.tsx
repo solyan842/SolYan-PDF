@@ -37,6 +37,7 @@ const tools = [
   { href: '/ocr', title: 'OCR tài liệu', description: 'PP-OCRv6 và PP-StructureV3 cho ảnh/PDF scan.', local: false, badge: 'PaddleOCR' },
   { href: '/viewer', title: 'PDF Viewer', description: 'Xem PDF bằng PDF.js với điều hướng trang và zoom.', local: true },
   { href: '/editor', title: 'Chỉnh sửa PDF', description: 'Thêm text/ảnh, highlight, che nội dung và khung chú thích.', local: true },
+  { href: '/auto-redact', title: 'Auto Redact Text', description: 'Tìm từ/cụm từ trong text layer và secure-redact hàng loạt bằng raster replacement chỉ trên các trang có match.', local: true },
   { href: '/forms', title: 'Form PDF', description: 'Đọc và điền AcroForm trực tiếp trong trình duyệt.', local: true },
   { href: '/unlock-forms', title: 'Mở khóa Form PDF', description: 'Gỡ ReadOnly/Lock khỏi AcroForm và mở thuộc tính XFA readOnly mà không flatten field.', local: false, badge: 'qpdf JSON' },
   { href: '/merge', title: 'Gộp PDF', description: 'Gộp nhiều file PDF theo đúng thứ tự.', local: true },
@@ -68,7 +69,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.2 đã phát hành · đang mở rộng V1.3</h2><p>V1.3 tiếp tục mở rộng parity OSS theo hướng self-host/browser-local, ưu tiên các khoảng trống độc lập trước khi nhận thêm dependency hoặc dịch vụ ngoài.</p></section>
+      <section className="coming-soon"><h2>V1.3 đã phát hành · bắt đầu V1.4</h2><p>V1.4 tiếp tục parity OSS theo hướng security-first và self-contained, ưu tiên reuse engine/browser pipeline hiện có trước khi nhận dependency mới.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
