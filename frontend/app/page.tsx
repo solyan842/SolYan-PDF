@@ -55,6 +55,7 @@ const tools = [
   { href: '/scanner-effect', title: 'Scanner Effect', description: 'Mô phỏng tài liệu đã scan bằng raster local với preset DPI, grayscale/color, noise, blur, viền giấy và lệch góc deterministic.', local: true },
   { href: '/watermark', title: 'Watermark / Stamp', description: 'Đóng dấu chữ hoặc PNG/JPG với vị trí, xoay, opacity, page range và biến động.', local: true },
   { href: '/page-numbers', title: 'Đánh số trang', description: 'Thêm số trang vào chân trang.', local: true },
+  { href: '/page-labels', title: 'Page Labels · Số trang logic', description: 'Đặt nhãn Roman, số Ả Rập, alphabet hoặc prefix theo từng đoạn mà không in thêm chữ lên trang.', local: false, badge: 'qpdf PageLabels' },
   { href: '/metadata', title: 'Metadata', description: 'Xem và chỉnh sửa metadata PDF.', local: true },
   { href: '/protect', title: 'Bảo vệ PDF', description: 'Mã hóa AES-256 và đặt quyền in/sửa/copy bằng qpdf.', local: false, badge: 'qpdf server' },
   { href: '/unlock', title: 'Mở khóa PDF', description: 'Giải mã PDF bằng mật khẩu hợp lệ.', local: false, badge: 'qpdf server' },
@@ -73,7 +74,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.5 đang phát triển · v0.1.7 stable</h2><p>V1.5 tiếp tục OSS-first với PDF → SVG, certified signing/DocMDP và PDF Portfolio bằng các engine đã có sẵn trong stack.</p></section>
+      <section className="coming-soon"><h2>V1.5 đang phát triển · v0.1.7 stable</h2><p>V1.5 tiếp tục OSS-first với PDF → SVG, certified signing/DocMDP, PDF Portfolio và Page Labels bằng các engine đã có sẵn trong stack.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );

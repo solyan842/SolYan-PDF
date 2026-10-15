@@ -18,6 +18,7 @@ from .extract_images import router as extract_images_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
+from .page_labels import router as page_labels_router
 from .pdf_info import router as pdf_info_router
 from .pdf_to_cbz import router as pdf_to_cbz_router
 from .pdf_to_csv import router as pdf_to_csv_router
@@ -91,6 +92,7 @@ app.add_middleware(
         "X-SolYan-PostScript-Format",
         "X-SolYan-PostScript-Level",
         "X-SolYan-Portfolio-Files",
+        "X-SolYan-Page-Labels",
     ],
 )
 app.include_router(network_router)
@@ -107,6 +109,7 @@ app.include_router(sanitize_router)
 app.include_router(remove_annotations_router)
 app.include_router(remove_signatures_router)
 app.include_router(active_content_router)
+app.include_router(page_labels_router)
 app.include_router(pdf_info_router)
 app.include_router(pdf_to_cbz_router)
 app.include_router(pdf_to_csv_router)
