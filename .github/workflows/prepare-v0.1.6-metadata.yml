@@ -1,0 +1,75 @@
+name: Prepare v0.1.6 metadata
+
+on:
+  push:
+    branches:
+      - release/v0.1.6-20261015
+    paths:
+      - '.github/workflows/prepare-v0.1.6-metadata.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/v0.1.6-20261015
+
+      - name: Synchronize release metadata
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          version = '0.1.6'
+          date = '2026-10-15'
+
+          package_path = Path('frontend/package.json')
+          package = json.loads(package_path.read_text())
+          package['version'] = version
+          package_path.write_text(json.dumps(package, indent=2, ensure_ascii=False) + '\n')
+
+          lock_path = Path('frontend/package-lock.json')
+          lock = json.loads(lock_path.read_text())
+          lock['version'] = version
+          lock['packages']['']['version'] = version
+          lock_path.write_text(json.dumps(lock, indent=2, ensure_ascii=False) + '\n')
+
+          backend_path = Path('backend/app/main.py')
+          backend = backend_path.read_text()
+          old = 'version="0.1.5"'
+          new = f'version="{version}"'
+          assert backend.count(old) == 1, backend.count(old)
+          backend_path.write_text(backend.replace(old, new, 1))
+
+          changelog_path = Path('CHANGELOG.md')
+          changelog = changelog_path.read_text()
+          marker = '## [Unreleased]\n'
+          assert marker in changelog
+          heading = f'## [{version}] - {date}'
+          if heading not in changelog:
+              section = '''\n## [0.1.6] - 2026-10-15\n\nPatch release completing the current **V1.3 OSS-first self-contained parity and converter expansion**.\n\n### V1.3 self-contained tools\n- Added structural removal of digital signatures while preserving ordinary AcroForm fields, plus a bounded PDF Inspector and read-only form-field unlock path.\n- Added scanner-bed photo splitting with the existing PDFium/OpenCV OCR-service stack.\n- Added bounded PDF conversions to HTML, plain text, CBZ, Markdown, XML, RTF and CSV by reusing Poppler, PP-StructureV3 and LibreOffice already present in the stack.\n- Added UTF-8 TXT -> PDF through the existing LibreOffice Office service with an explicit UTF-8 input filter and non-UTF-8 rejection.\n\n### Verification and architecture\n- Added permanent real regressions for each accepted V1.3 capability; the existing PDF-to-Office V1 synthetic/real-world release gates remain unchanged and passed on the TXT -> PDF feature head.\n- Recorded detailed engine choices, evidence and deferred dependency-expansion items in `docs/V1.3-PARITY-AUDIT.md` and `docs/V1.3-CLOSEOUT.md`.\n- Reused qpdf, Poppler, LibreOffice, PP-StructureV3, PDFium/OpenCV and existing service adapters; no new application runtime dependency was added by the accepted V1.3 scope.\n\n### Important boundaries\n- PDF -> EPUB/AZW3 remains a deliberate Calibre/runtime-expansion decision; PDF -> CBR remains lower priority because RAR creation adds tooling/licensing/deployment complexity while CBZ is already supported.\n- PDF conversion outputs inherit their documented format-specific fidelity/interaction boundaries and do not imply byte-perfect reconstruction.\n- Multi-party remote signing, cloud connectors, AI summarization and PDF translation remain separate product/provider/credential decisions.\n'''
+              changelog = changelog.replace(marker, marker + section, 1)
+              changelog_path.write_text(changelog)
+
+          manifest_path = Path('docs/RELEASE-MANIFEST.md')
+          manifest = manifest_path.read_text()
+          manifest = manifest.replace('# SolYan PDF v0.1.5 — Release Dependency Manifest', '# SolYan PDF v0.1.6 — Release Dependency Manifest', 1)
+          manifest = manifest.replace('Release date: 2026-10-14', f'Release date: {date}', 1)
+          manifest_path.write_text(manifest)
+          PY
+
+      - name: Commit synchronized metadata
+        run: |
+          set -euo pipefail
+          git config user.name "SolYan"
+          git config user.email "yansign842@gmail.com"
+          git add frontend/package.json frontend/package-lock.json backend/app/main.py CHANGELOG.md docs/RELEASE-MANIFEST.md
+          git diff --cached --check
+          git commit -m "release: synchronize v0.1.6 metadata"
+          git push origin HEAD:release/v0.1.6-20261015
