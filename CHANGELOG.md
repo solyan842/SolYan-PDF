@@ -4,6 +4,26 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-15
+
+Patch release completing the current **V1.3 OSS-first self-contained parity and converter expansion**.
+
+### V1.3 self-contained tools
+- Added structural removal of digital signatures while preserving ordinary AcroForm fields, plus a bounded PDF Inspector and read-only form-field unlock path.
+- Added scanner-bed photo splitting with the existing PDFium/OpenCV OCR-service stack.
+- Added bounded PDF conversions to HTML, plain text, CBZ, Markdown, XML, RTF and CSV by reusing Poppler, PP-StructureV3 and LibreOffice already present in the stack.
+- Added UTF-8 TXT -> PDF through the existing LibreOffice Office service with an explicit UTF-8 input filter and non-UTF-8 rejection.
+
+### Verification and architecture
+- Added permanent real regressions for each accepted V1.3 capability; the existing PDF-to-Office V1 synthetic/real-world release gates remain unchanged and passed on the TXT -> PDF feature head.
+- Recorded detailed engine choices, evidence and deferred dependency-expansion items in `docs/V1.3-PARITY-AUDIT.md` and `docs/V1.3-CLOSEOUT.md`.
+- Reused qpdf, Poppler, LibreOffice, PP-StructureV3, PDFium/OpenCV and existing service adapters; no new application runtime dependency was added by the accepted V1.3 scope.
+
+### Important boundaries
+- PDF -> EPUB/AZW3 remains a deliberate Calibre/runtime-expansion decision; PDF -> CBR remains lower priority because RAR creation adds tooling/licensing/deployment complexity while CBZ is already supported.
+- PDF conversion outputs inherit their documented format-specific fidelity/interaction boundaries and do not imply byte-perfect reconstruction.
+- Multi-party remote signing, cloud connectors, AI summarization and PDF translation remain separate product/provider/credential decisions.
+
 ## [0.1.5] - 2026-10-14
 
 Patch release completing the **V1.2 self-contained parity expansion and security hardening** roadmap.
