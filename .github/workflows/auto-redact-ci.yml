@@ -45,14 +45,14 @@ jobs:
 
       - name: Compile Auto Redact helpers for direct regression
         run: |
-          rm -rf /tmp/solyan-auto-redact-ts
+          rm -rf .auto-redact-ci-ts
           npx tsc lib/auto-redact.ts lib/secure-redaction.ts \
             --target ES2020 \
             --module commonjs \
             --moduleResolution node \
             --esModuleInterop \
             --skipLibCheck \
-            --outDir /tmp/solyan-auto-redact-ts
+            --outDir .auto-redact-ci-ts
 
       - name: Gate PDF.js literal matching and multi-page secure rebuild
         run: |
@@ -64,10 +64,10 @@ jobs:
           const {
             findAutoRedactMatches,
             normalizeAutoRedactTerms,
-          } = require('/tmp/solyan-auto-redact-ts/auto-redact.js');
+          } = require('./.auto-redact-ci-ts/auto-redact.js');
           const {
             rebuildPdfWithRasterizedPages,
-          } = require('/tmp/solyan-auto-redact-ts/secure-redaction.js');
+          } = require('./.auto-redact-ci-ts/secure-redaction.js');
 
           (async () => {
             assert.deepEqual(normalizeAutoRedactTerms('Secret\nsecret\n PUBLIC ', false), ['Secret', 'PUBLIC']);
@@ -144,6 +144,7 @@ jobs:
             echo 'auto-redacted source text remains in reachable serialized PDF objects' | tee -a /tmp/auto-redact-ci.log
             exit 1
           fi
+          rm -rf .auto-redact-ci-ts
           echo 'both secret pages removed + untouched page text retained: PASS' | tee -a /tmp/auto-redact-ci.log
 
       - name: Gate production Auto Redact wiring and bounds
