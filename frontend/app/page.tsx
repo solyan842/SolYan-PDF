@@ -13,6 +13,7 @@ const tools = [
   { href: '/pdf-to-office', title: 'PDF → Office', description: 'DOCX/PPTX theo LibreOffice-first; XLSX theo Bloom → PP-StructureV3 fallback.', local: false, badge: 'V1 Gate' },
   { href: '/pdf-to-html', title: 'PDF → HTML', description: 'Xuất một file HTML tự chứa bằng Poppler, nhúng ảnh bằng data URL và chặn scheme liên kết nguy hiểm.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-text', title: 'PDF → Text', description: 'Trích xuất text layer thành TXT UTF-8 bằng Poppler, hỗ trợ phạm vi trang, mật khẩu và giữ bố cục.', local: false, badge: 'Poppler' },
+  { href: '/pdf-to-markdown', title: 'PDF → Markdown', description: 'Nhận diện bố cục bằng PP-StructureV3 và xuất Markdown cho PDF scan hoặc tài liệu có cấu trúc.', local: false, badge: 'PP-StructureV3' },
   { href: '/pdf-to-cbz', title: 'PDF → CBZ', description: 'Render trang PDF thành PNG rồi đóng gói Comic Book ZIP theo đúng thứ tự, hỗ trợ DPI và phạm vi trang.', local: false, badge: 'Poppler' },
   { href: '/office-to-pdf', title: 'Office → PDF', description: 'Word, Excel, PowerPoint và OpenDocument sang PDF.', local: false, badge: 'LibreOffice' },
   { href: '/images-to-pdf', title: 'Ảnh → PDF', description: 'Ghép PNG/JPG thành PDF ngay trên thiết bị.', local: true },
