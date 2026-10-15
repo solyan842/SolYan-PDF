@@ -7,6 +7,13 @@ export type RedactionBox = {
   height: number;
 };
 
+export type RasterizedPageReplacement = {
+  pageIndex: number;
+  pngBytes: Uint8Array | ArrayBuffer;
+  pageWidth: number;
+  pageHeight: number;
+};
+
 export function normalizeRedactionBox(box: RedactionBox, pageWidth: number, pageHeight: number): RedactionBox {
   if (![box.x, box.y, box.width, box.height, pageWidth, pageHeight].every(Number.isFinite)) {
     throw new Error('Redaction coordinates must be finite numbers.');
@@ -26,36 +33,41 @@ export function normalizeRedactionBox(box: RedactionBox, pageWidth: number, page
 }
 
 /**
- * Rebuild a PDF while replacing exactly one page with a trusted raster image.
+ * Rebuild a PDF while replacing selected pages with trusted raster images.
  *
- * This deliberately creates a new page tree so the original content stream of
- * the redacted page is not carried into the output as hidden/recoverable text.
+ * This deliberately creates a new page tree so original content streams from
+ * redacted pages are not carried into the output as hidden/recoverable text.
  * Non-redacted pages are copied from the source PDF. Document-level structures
  * such as outlines, attachments and AcroForm catalogs are not promised to be
  * preserved by this security-first rebuild path.
  */
-export async function rebuildPdfWithRasterizedPage(
+export async function rebuildPdfWithRasterizedPages(
   sourceBytes: Uint8Array | ArrayBuffer,
-  pageIndex: number,
-  pngBytes: Uint8Array | ArrayBuffer,
-  pageWidth: number,
-  pageHeight: number,
+  replacements: RasterizedPageReplacement[],
 ): Promise<Uint8Array> {
-  if (!Number.isFinite(pageWidth) || !Number.isFinite(pageHeight) || pageWidth <= 0 || pageHeight <= 0) {
-    throw new Error('Invalid raster page geometry.');
-  }
-
   const source = await PDFDocument.load(sourceBytes);
-  if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= source.getPageCount()) {
-    throw new Error(`Redaction page index must be between 0 and ${Math.max(0, source.getPageCount() - 1)}.`);
+  const pageCount = source.getPageCount();
+  const byPage = new Map<number, RasterizedPageReplacement>();
+
+  for (const replacement of replacements) {
+    const { pageIndex, pageWidth, pageHeight } = replacement;
+    if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pageCount) {
+      throw new Error(`Redaction page index must be between 0 and ${Math.max(0, pageCount - 1)}.`);
+    }
+    if (!Number.isFinite(pageWidth) || !Number.isFinite(pageHeight) || pageWidth <= 0 || pageHeight <= 0) {
+      throw new Error('Invalid raster page geometry.');
+    }
+    if (byPage.has(pageIndex)) throw new Error(`Duplicate raster replacement for page index ${pageIndex}.`);
+    byPage.set(pageIndex, replacement);
   }
 
   const output = await PDFDocument.create();
-  for (let index = 0; index < source.getPageCount(); index += 1) {
-    if (index === pageIndex) {
-      const raster = await output.embedPng(pngBytes);
-      const replacement = output.addPage([pageWidth, pageHeight]);
-      replacement.drawImage(raster, { x: 0, y: 0, width: pageWidth, height: pageHeight });
+  for (let index = 0; index < pageCount; index += 1) {
+    const replacement = byPage.get(index);
+    if (replacement) {
+      const raster = await output.embedPng(replacement.pngBytes);
+      const page = output.addPage([replacement.pageWidth, replacement.pageHeight]);
+      page.drawImage(raster, { x: 0, y: 0, width: replacement.pageWidth, height: replacement.pageHeight });
       continue;
     }
 
@@ -64,4 +76,23 @@ export async function rebuildPdfWithRasterizedPage(
   }
 
   return output.save({ useObjectStreams: true });
+}
+
+/**
+ * Backwards-compatible single-page wrapper used by the manual Editor redact
+ * tool. Keep this API stable while Auto Redact uses the multi-page primitive.
+ */
+export async function rebuildPdfWithRasterizedPage(
+  sourceBytes: Uint8Array | ArrayBuffer,
+  pageIndex: number,
+  pngBytes: Uint8Array | ArrayBuffer,
+  pageWidth: number,
+  pageHeight: number,
+): Promise<Uint8Array> {
+  return rebuildPdfWithRasterizedPages(sourceBytes, [{
+    pageIndex,
+    pngBytes,
+    pageWidth,
+    pageHeight,
+  }]);
 }
