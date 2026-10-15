@@ -17,6 +17,7 @@ const tools = [
   { href: '/pdf-to-markdown', title: 'PDF → Markdown', description: 'Nhận diện bố cục bằng PP-StructureV3 và xuất Markdown cho PDF scan hoặc tài liệu có cấu trúc.', local: false, badge: 'PP-StructureV3' },
   { href: '/pdf-to-xml', title: 'PDF → XML', description: 'Xuất text, font và tọa độ trang thành một file Poppler pdf2xml UTF-8, hỗ trợ phạm vi trang.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-rtf', title: 'PDF → RTF', description: 'Nhập PDF bằng LibreOffice Writer rồi xuất Rich Text Format để tiếp tục chỉnh sửa.', local: false, badge: 'LibreOffice' },
+  { href: '/pdf-to-postscript', title: 'PDF → PostScript / EPS', description: 'Xuất PS nhiều trang hoặc EPS một trang bằng Poppler pdftops, hỗ trợ Level 2/3 và phạm vi trang.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-cbz', title: 'PDF → CBZ', description: 'Render trang PDF thành PNG rồi đóng gói Comic Book ZIP theo đúng thứ tự, hỗ trợ DPI và phạm vi trang.', local: false, badge: 'Poppler' },
   { href: '/office-to-pdf', title: 'Office → PDF', description: 'Word, Excel, PowerPoint và OpenDocument sang PDF.', local: false, badge: 'LibreOffice' },
   { href: '/images-to-pdf', title: 'Ảnh → PDF', description: 'Ghép PNG/JPG thành PDF ngay trên thiết bị.', local: true },
