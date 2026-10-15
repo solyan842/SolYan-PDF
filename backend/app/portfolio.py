@@ -77,12 +77,25 @@ def _portfolio_update(input_path: Path, output_path: Path, temp_dir: Path) -> No
         json.dumps(update_payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
-    _run_text(["qpdf", str(input_path), f"--update-from-json={update_path}", str(output_path)])
+    _run_text(
+        [
+            "qpdf",
+            "--min-version=1.7",
+            str(input_path),
+            f"--update-from-json={update_path}",
+            str(output_path),
+        ]
+    )
     if not output_path.exists():
         raise HTTPException(status_code=500, detail="qpdf did not produce a PDF portfolio")
 
 
 def _validate_portfolio(input_path: Path, *, expected_files: int, temp_dir: Path) -> None:
+    with input_path.open("rb") as handle:
+        header = handle.read(8)
+    if not header.startswith(b"%PDF-1.7"):
+        raise HTTPException(status_code=500, detail="Generated Portfolio does not declare PDF 1.7")
+
     attachments = _attachment_map(input_path)
     if len(attachments) != expected_files:
         raise HTTPException(
@@ -123,7 +136,7 @@ def create_pdf_portfolio(files: list[UploadFile] = File(...)) -> Response:
         temp_dir = Path(temp_name)
         base_path = temp_dir / "portfolio-base.pdf"
         output_path = temp_dir / "solyan-portfolio.pdf"
-        command = ["qpdf", "--empty"]
+        command = ["qpdf", "--empty", "--min-version=1.7"]
         total = 0
         seen_keys: set[str] = set()
 
