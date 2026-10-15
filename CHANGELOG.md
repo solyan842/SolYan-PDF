@@ -4,6 +4,29 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-15
+
+Patch release completing the **V1.4 OSS-first self-contained security, scan-simulation and vector-export pass**.
+
+### V1.4 self-contained tools
+- Added Auto Redact Text with literal PDF.js text-layer matching and security-first raster replacement only on pages containing matches.
+- Added deterministic Scanner Effect with bounded DPI presets, grayscale/color output, brightness/contrast, seeded noise, blur, paper yellowing, border and skew simulation.
+- Added PDF -> PostScript / EPS through the already-shipped Poppler `pdftops` engine: multi-page PS, single-page EPS, Level 2/3, page ranges and password support.
+
+### Verification and architecture
+- Added dedicated exact-head regressions for Auto Redact Text, Scanner Effect and PDF -> PostScript / EPS; all pull-request-triggered regressions on the final feature heads passed before merge.
+- Auto Redact security coverage requires the secret to disappear from both `pdftotext` output and expanded QDF reachable content while text on untouched pages remains extractable.
+- Reused PDF.js, Canvas, pdf-lib and Poppler already present in the stack; V1.4 adds no new application runtime or provider dependency.
+- Closed the accepted scope in `docs/V1.4-PARITY-AUDIT.md` and `docs/V1.4-CLOSEOUT.md` rather than extending parity merely to increase tool count.
+
+### Important boundaries
+- Auto Redact operates on the existing PDF text layer; image-only scans must be OCRed first. Affected pages are rasterized and lose original interactive/vector structures.
+- Scanner Effect is a visual simulation only, not OCR and not evidence of physical-scanner provenance; output is intentionally rasterized.
+- PostScript is an executable page-description language for an interpreter. SolYan only generates PS/EPS and does not accept/execute uploaded PostScript in this feature.
+- PDF -> EPUB/AZW3, PCL/XPS, CBR/RAR tooling and inline content-stream image removal remain deliberate dependency/parser expansion decisions.
+- Multi-party remote signing, cloud connectors, AI summarization and PDF translation remain separate provider/product/credential decisions.
+
+
 ## [0.1.6] - 2026-10-15
 
 Patch release completing the current **V1.3 OSS-first self-contained parity and converter expansion**.

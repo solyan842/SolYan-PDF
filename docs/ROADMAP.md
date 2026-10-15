@@ -139,6 +139,27 @@ V1.1 self-hosted utility parity is complete and released as v0.1.4.
 
 V1.2 self-contained parity expansion is feature-complete. Remaining unchecked product items require provider/credential/product decisions rather than more core PDF-engine work.
 
+## V1.3 — OSS-first self-contained converter expansion
+
+- [x] Remove digital signatures while preserving ordinary AcroForm fields
+- [x] Add bounded PDF Inspector / Get ALL Info and unlock read-only form fields
+- [x] Split scanner-bed photographs with the existing PDFium/OpenCV stack
+- [x] Add PDF → HTML, Text, CBZ, Markdown, XML, RTF and CSV using existing engines
+- [x] Add UTF-8 TXT → PDF through the existing LibreOffice Office service
+- [x] Close and release the self-contained V1.3 scope as v0.1.6
+
+V1.3 is complete. Detailed engine decisions and boundaries are in `docs/V1.3-PARITY-AUDIT.md` and `docs/V1.3-CLOSEOUT.md`.
+
+## V1.4 — Security, scan simulation and vector export
+
+- [x] Add Auto Redact Text with security-first affected-page raster replacement and non-disclosure regression coverage
+- [x] Add deterministic browser-local Scanner Effect with bounded scan-simulation presets
+- [x] Add PDF → PostScript / EPS through existing Poppler `pdftops`, without adding Ghostscript
+- [x] Re-audit maintained OSS and Vietnamese utilities; do not add low-value/dependency-heavy tools merely for parity count
+- [x] Close the self-contained V1.4 scope for v0.1.7 release packaging
+
+V1.4 is complete. Detailed architecture, boundaries, regression evidence and deferred dependency/product decisions are in `docs/V1.4-PARITY-AUDIT.md` and `docs/V1.4-CLOSEOUT.md`.
+
 ## Tiện ích Việt Nam — V1
 
 ### Văn bản

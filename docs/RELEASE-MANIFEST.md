@@ -1,4 +1,4 @@
-# SolYan PDF v0.1.6 — Release Dependency Manifest
+# SolYan PDF v0.1.7 — Release Dependency Manifest
 
 Release date: 2026-10-15
 
@@ -63,7 +63,7 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | httpx | 0.28.1 | BSD-3-Clause | Python runtime dependency |
 | qpdf | snapshot-resolved distro package | Apache-2.0 | CLI for protect/unlock/repair/compression, linearization, flattening and page selection |
-| Poppler utilities | snapshot-resolved distro package | GPL-2.0-or-later family; verify exact Debian package metadata at release build | separate CLI tools (`pdfimages`, `pdftotext`, `pdftoppm`) for image extraction and bounded blank-page analysis |
+| Poppler utilities | snapshot-resolved distro package | GPL-2.0-or-later family; verify exact Debian package metadata at release build | separate CLI tools (`pdfimages`, `pdftotext`, `pdftoppm`, `pdftops`) for image extraction, text/blank-page analysis and PS/EPS vector export |
 | iputils-ping | snapshot-resolved distro package | BSD/GPL-family package licensing; verify image package metadata at release build | CLI for network utility |
 
 ## OCR service
