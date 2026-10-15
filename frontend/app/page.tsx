@@ -27,6 +27,7 @@ const tools = [
   { href: '/scanner-photo-split', title: 'Tách ảnh từ bản scan', description: 'Nhận diện nhiều ảnh trên cùng mặt scan, crop/deskew từng ảnh và xuất PNG theo thứ tự ổn định.', local: false, badge: 'OpenCV + PDFium' },
   { href: '/remove-images', title: 'Xóa ảnh nhúng', description: 'Loại Image XObject khỏi page/Form resources trong khi giữ text, vector và content stream.', local: false, badge: 'qpdf JSON' },
   { href: '/attachments', title: 'File đính kèm PDF', description: 'Xem, thêm, tải ra hoặc xóa embedded files bằng qpdf.', local: false, badge: 'qpdf server' },
+  { href: '/portfolio', title: 'PDF Portfolio', description: 'Đóng gói nhiều file thành PDF Collection, giữ riêng từng file thay vì gộp hoặc chuyển đổi nội dung.', local: false, badge: 'qpdf Collection' },
   { href: '/remove-blank-pages', title: 'Xóa trang trắng', description: 'Giữ chắc trang có text; đo raster với ngưỡng tùy chỉnh cho trang không text.', local: false, badge: 'Poppler + qpdf' },
   { href: '/n-up', title: 'N-up · Nhiều trang/tờ', description: 'Xếp nhiều trang lên mỗi tờ A4 với grid, margin, thứ tự và hướng đọc tùy chỉnh.', local: true },
   { href: '/booklet', title: 'Booklet · Đóng ghim giữa', description: 'Dàn saddle-stitch 2-up với thứ tự trang, gutter, gáy trái/phải và duplex.', local: true },
@@ -72,7 +73,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.5 đang phát triển · v0.1.7 stable</h2><p>V1.5 tiếp tục OSS-first bằng các gap tự-contained có giá trị rõ ràng; PDF → SVG là lane đầu tiên, tận dụng Poppler sẵn có thay vì kéo thêm runtime.</p></section>
+      <section className="coming-soon"><h2>V1.5 đang phát triển · v0.1.7 stable</h2><p>V1.5 tiếp tục OSS-first với PDF → SVG, certified signing/DocMDP và PDF Portfolio bằng các engine đã có sẵn trong stack.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
