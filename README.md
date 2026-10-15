@@ -32,6 +32,8 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Browser-local bookmark/outline editor with Unicode titles, nested hierarchy, sibling reordering and page destinations
 - Browser-local split by bookmark/chapter with selectable outline depth, duplicate-page handling and ZIP export
 - Explicit rasterized Color Transform: invert, grayscale, high-contrast and custom two-color output
+- Auto Redact Text: literal PDF.js text-layer matching with security-first raster replacement only on affected pages
+- Deterministic Scanner Effect with bounded DPI/noise/blur/yellowing/border/skew presets
 - Browser-side PDF viewer and editor with add text/image, highlight, rectangle and security-first manual redaction
 - AcroForm discovery/filling
 
@@ -50,6 +52,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Word/Excel/PowerPoint/OpenDocument/RTF -> PDF through LibreOffice headless
 - Images -> PDF in the browser
 - PDF -> PNG/JPEG ZIP in the browser
+- PDF -> PostScript / EPS through Poppler `pdftops`, with multi-page PS, single-page EPS and Level 2/3 support
 - PDF -> DOCX/PPTX auto routing through LibreOffice PDF import, with pinned Bloom as a best-effort fallback
 - PDF -> XLSX through pinned Bloom, with PP-StructureV3 fallback only when Bloom reports no logical tables
 - Round-trip visual-fidelity plus native-OOXML editability benchmark harness for PDF -> Office
@@ -79,7 +82,7 @@ FastAPI orchestration backend (qpdf + Poppler utilities + network utilities)
       `---------------- Bloom adapter (optional / external)
 ```
 
-Browser-side features use `pdf-lib`, `PDF.js` and JSZip where appropriate. Server engines are intentionally isolated so they can be upgraded or replaced independently. The current V1.2 maintained-OSS parity decisions are recorded in `docs/V1.2-PARITY-AUDIT.md`.
+Browser-side features use `pdf-lib`, `PDF.js` and JSZip where appropriate. Server engines are intentionally isolated so they can be upgraded or replaced independently. The maintained-OSS parity decisions through the closed V1.4 self-contained scope are recorded in `docs/V1.2-PARITY-AUDIT.md`, `docs/V1.3-PARITY-AUDIT.md` and `docs/V1.4-PARITY-AUDIT.md`.
 
 ## Quick start with Docker Compose
 

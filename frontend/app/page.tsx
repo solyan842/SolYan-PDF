@@ -71,7 +71,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.3 đã phát hành · bắt đầu V1.4</h2><p>V1.4 tiếp tục parity OSS theo hướng security-first và self-contained, ưu tiên reuse engine/browser pipeline hiện có trước khi nhận dependency mới.</p></section>
+      <section className="coming-soon"><h2>V1.4 hoàn tất · SolYan PDF v0.1.7</h2><p>V1.4 khóa phạm vi self-contained với Auto Redact Text, Scanner Effect và PDF → PostScript / EPS; các dependency/provider lớn được giữ ngoài core cho tới khi có quyết định sản phẩm rõ ràng.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
