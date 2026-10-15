@@ -49,6 +49,7 @@ const tools = [
   { href: '/rotate', title: 'Xoay PDF', description: 'Xoay toàn bộ hoặc một số trang.', local: true },
   { href: '/auto-rotate', title: 'Tự động xoay PDF', description: 'Nhận diện hướng trang bằng Tesseract OSD rồi xoay tương đối bằng qpdf, không rasterize nội dung.', local: false, badge: 'OSD + qpdf' },
   { href: '/color-transform', title: 'Đảo màu / High Contrast', description: 'Biến đổi màu hiển thị bằng raster local; hỗ trợ invert, grayscale, high contrast và hai màu tùy chỉnh.', local: true },
+  { href: '/scanner-effect', title: 'Scanner Effect', description: 'Mô phỏng tài liệu đã scan bằng raster local với preset DPI, grayscale/color, noise, blur, viền giấy và lệch góc deterministic.', local: true },
   { href: '/watermark', title: 'Watermark / Stamp', description: 'Đóng dấu chữ hoặc PNG/JPG với vị trí, xoay, opacity, page range và biến động.', local: true },
   { href: '/page-numbers', title: 'Đánh số trang', description: 'Thêm số trang vào chân trang.', local: true },
   { href: '/metadata', title: 'Metadata', description: 'Xem và chỉnh sửa metadata PDF.', local: true },
