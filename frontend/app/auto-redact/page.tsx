@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useState } from 'react';
 import {
-  AutoRedactMatch,
+  type AutoRedactMatch,
   SAFE_AUTO_REDACT_PRESETS,
   compileSafeAutoRedactPatterns,
   findAutoRedactMatches,
