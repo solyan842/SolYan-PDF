@@ -98,7 +98,6 @@ def _convert_pdf_to_html(
 
         base_command = [
             "pdftohtml",
-            "-q",
             "-s",
             "-noframes",
             "-dataurls",
