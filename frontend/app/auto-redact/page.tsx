@@ -62,13 +62,13 @@ export default function AutoRedactPage() {
     setBusy(true);
     setError('');
     setProgress('Đang đọc text layer bằng PDF.js…');
-    let task: { promise: Promise<any>; destroy: () => Promise<void> } | null = null;
+    let destroyTask: (() => Promise<void>) | null = null;
     try {
       const sourceBytes = new Uint8Array(await file.arrayBuffer());
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
-      task = pdfjs.getDocument({ data: sourceBytes.slice() }) as unknown as typeof task;
-      if (!task) throw new Error('Không thể mở PDF bằng PDF.js.');
+      const task = pdfjs.getDocument({ data: sourceBytes.slice() });
+      destroyTask = () => task.destroy();
       const pdf = await task.promise;
       if (pdf.numPages > MAX_PAGE_COUNT) throw new Error(`PDF vượt giới hạn ${MAX_PAGE_COUNT} trang cho Auto Redact local.`);
 
@@ -155,7 +155,7 @@ export default function AutoRedactPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể Auto Redact PDF.');
     } finally {
-      if (task) await task.destroy().catch(() => undefined);
+      if (destroyTask) await destroyTask().catch(() => undefined);
       setBusy(false);
     }
   }
