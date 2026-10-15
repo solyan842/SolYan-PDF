@@ -83,6 +83,9 @@ function validateCustomSafeRegex(source: string): void {
       if (!inClass && (char === 'k' || char === 'g')) {
         throw new Error('Safe Regex không hỗ trợ named/subroutine backreference.');
       }
+      if (!inClass && (char === 'b' || char === 'B')) {
+        throw new Error('Safe Regex không hỗ trợ zero-width word boundary \\b/\\B.');
+      }
       escaped = false;
       continue;
     }
@@ -157,7 +160,11 @@ export function compileSafeAutoRedactPatterns(
     const source = preset ?? pattern;
     if (!preset) validateCustomSafeRegex(source);
     try {
-      return { label: pattern, regex: new RegExp(source, flags) };
+      const regex = new RegExp(source, flags);
+      if (regex.test('')) {
+        throw new Error('pattern có thể match chuỗi rỗng và có nguy cơ redact mọi text-run');
+      }
+      return { label: pattern, regex };
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : 'pattern không hợp lệ';
       throw new Error(`Safe Regex "${pattern}" không hợp lệ: ${detail}`);
