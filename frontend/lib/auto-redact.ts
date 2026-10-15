@@ -280,14 +280,15 @@ export function findSafeRegexAutoRedactMatches(
 
   for (const item of normalizedItems(textContent)) {
     if (typeof item.str !== 'string' || !item.str.trim()) continue;
-    if (item.str.length > MAX_REGEX_TEXT_RUN_LENGTH) {
+    const text = item.str;
+    if (text.length > MAX_REGEX_TEXT_RUN_LENGTH) {
       throw new Error(`Safe Regex gặp text-run dài hơn ${MAX_REGEX_TEXT_RUN_LENGTH} ký tự. Hãy dùng chế độ Literal hoặc chia tài liệu.`);
     }
-    const matchedTerms = patterns.filter((pattern) => pattern.regex.test(item.str)).map((pattern) => pattern.label);
+    const matchedTerms = patterns.filter((pattern) => pattern.regex.test(text)).map((pattern) => pattern.label);
     if (matchedTerms.length === 0) continue;
     const rect = itemRect(item, viewport, padding);
     if (!rect) continue;
-    matches.push({ text: item.str, terms: matchedTerms, rect });
+    matches.push({ text, terms: matchedTerms, rect });
   }
 
   return matches;
