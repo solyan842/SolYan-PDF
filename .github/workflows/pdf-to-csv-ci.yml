@@ -34,8 +34,8 @@ jobs:
       - name: Install backend dependencies
         run: |
           set -euo pipefail
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
           python -m pip install --no-deps -r backend/requirements.txt
-          python -m pip install httpx==0.28.1
           python -m pip check
 
       - name: Compile backend CSV adapter
