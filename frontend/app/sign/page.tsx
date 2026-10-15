@@ -4,6 +4,8 @@ import { ChangeEvent, useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+type DocMdpPermission = 'no_changes' | 'fill_forms' | 'annotate';
+
 export default function SignPage() {
   const [file, setFile] = useState<File | null>(null);
   const [certificate, setCertificate] = useState<File | null>(null);
@@ -11,6 +13,8 @@ export default function SignPage() {
   const [fieldName, setFieldName] = useState('Signature1');
   const [reason, setReason] = useState('');
   const [location, setLocation] = useState('');
+  const [certify, setCertify] = useState(false);
+  const [docMdpPermission, setDocMdpPermission] = useState<DocMdpPermission>('fill_forms');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,6 +29,8 @@ export default function SignPage() {
       body.append('field_name', fieldName || 'Signature1');
       body.append('reason', reason);
       body.append('location', location);
+      body.append('certify', certify ? 'true' : 'false');
+      body.append('docmdp_permission', docMdpPermission);
       const response = await fetch(`${API_BASE}/sign/pkcs12`, { method: 'POST', body });
       if (!response.ok) {
         let detail = `HTTP ${response.status}`;
@@ -34,7 +40,7 @@ export default function SignPage() {
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'solyan-signed.pdf';
+      a.href = url; a.download = certify ? 'solyan-certified.pdf' : 'solyan-signed.pdf';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể ký PDF.');
@@ -47,7 +53,7 @@ export default function SignPage() {
 
   return <main className="shell">
     <header className="topbar"><a className="brand" href="/">SolYan PDF</a><div className="privacy-pill server-pill">pyHanko · PKCS#12</div></header>
-    <section className="hero compact-hero"><p className="eyebrow">DIGITAL SIGN · PHASE 5</p><h1>Ký số PDF</h1><p className="subtitle">Ký mật mã thật bằng private key và chứng thư trong file PKCS#12 (.p12/.pfx). File chứng thư chỉ được dùng trong request ký.</p></section>
+    <section className="hero compact-hero"><p className="eyebrow">DIGITAL SIGN · PHASE 5</p><h1>Ký số PDF</h1><p className="subtitle">Ký mật mã thật bằng private key và chứng thư trong file PKCS#12 (.p12/.pfx). Có thể dùng chữ ký phê duyệt thông thường hoặc chứng nhận tài liệu với chính sách DocMDP.</p></section>
     <section className="workspace form-workspace">
       <label className="field"><span>PDF cần ký</span><input type="file" accept="application/pdf,.pdf" onChange={(e)=>pick(setFile,e)}/></label>
       <label className="field"><span>Chứng thư PKCS#12</span><input type="file" accept=".p12,.pfx,application/x-pkcs12" onChange={(e)=>pick(setCertificate,e)}/></label>
@@ -55,9 +61,11 @@ export default function SignPage() {
       <label className="field"><span>Tên trường chữ ký</span><input value={fieldName} onChange={(e)=>setFieldName(e.target.value)}/></label>
       <label className="field"><span>Lý do ký</span><input value={reason} onChange={(e)=>setReason(e.target.value)}/></label>
       <label className="field"><span>Địa điểm</span><input value={location} onChange={(e)=>setLocation(e.target.value)}/></label>
-      <p className="hint">Nếu PDF chưa có field tên tương ứng, pyHanko tạo field chữ ký vô hình. Đây là chữ ký số cryptographic, khác với việc chèn ảnh chữ ký.</p>
+      <label className="field"><span>Chế độ chữ ký</span><span><input type="checkbox" checked={certify} onChange={(e)=>setCertify(e.target.checked)}/> Chứng nhận tài liệu (certification signature)</span></label>
+      {certify && <label className="field"><span>Thay đổi được phép sau khi chứng nhận</span><select value={docMdpPermission} onChange={(e)=>setDocMdpPermission(e.target.value as DocMdpPermission)}><option value="no_changes">Không cho phép thay đổi</option><option value="fill_forms">Cho điền biểu mẫu và ký tiếp</option><option value="annotate">Cho điền biểu mẫu, ký tiếp và bình luận</option></select></label>}
+      <p className="hint">Certification signature dành cho tác giả/chủ tài liệu và thiết lập chính sách sửa đổi cho toàn PDF. PDF đã có certification signature có thể không chứng nhận lại được. Nếu PDF chưa có field tên tương ứng, pyHanko tạo field chữ ký vô hình.</p>
       {error && <div className="error">{error}</div>}
-      <button className="merge-button" type="button" onClick={sign} disabled={!file || !certificate || busy}>{busy ? 'Đang ký…' : 'Ký số PDF'}</button>
+      <button className="merge-button" type="button" onClick={sign} disabled={!file || !certificate || busy}>{busy ? (certify ? 'Đang chứng nhận…' : 'Đang ký…') : (certify ? 'Chứng nhận PDF' : 'Ký số PDF')}</button>
     </section>
   </main>;
 }
