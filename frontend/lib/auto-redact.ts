@@ -11,6 +11,11 @@ export type AutoRedactMatch = {
   rect: AutoRedactRect;
 };
 
+export type SafeAutoRedactPattern = {
+  label: string;
+  regex: RegExp;
+};
+
 type PdfJsTextItemLike = {
   str?: unknown;
   transform?: unknown;
@@ -30,6 +35,18 @@ type PdfJsViewportLike = {
 };
 
 const DEFAULT_PADDING = 1.5;
+const MAX_SAFE_REGEX_LENGTH = 200;
+const MAX_SAFE_REGEX_COMPLEXITY = 4096;
+const MAX_SAFE_REGEX_ALTERNATIVES = 16;
+const MAX_REGEX_TEXT_RUN_LENGTH = 4096;
+
+export const SAFE_AUTO_REDACT_PRESETS = {
+  '<EMAIL>': '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,63}',
+  '<CARD>': '\\d{4}[ -]?\\d{4}[ -]?\\d{4}[ -]?\\d{4}',
+  '<SSN>': '\\d{3}-\\d{2}-\\d{4}',
+  '<VN_PHONE>': '[+]84[ .-]?\\d{9,10}|0\\d{9,10}',
+  '<IBAN>': '[A-Z]{2}\\d{2}[A-Z0-9]{11,30}',
+} as const;
 
 export function normalizeAutoRedactTerms(raw: string, caseSensitive = false): string[] {
   const seen = new Set<string>();
@@ -43,6 +60,109 @@ export function normalizeAutoRedactTerms(raw: string, caseSensitive = false): st
     terms.push(term);
   }
   return terms;
+}
+
+function validateCustomSafeRegex(source: string): void {
+  if (!source) throw new Error('Safe Regex không được để trống.');
+  if (source.length > MAX_SAFE_REGEX_LENGTH) {
+    throw new Error(`Safe Regex tối đa ${MAX_SAFE_REGEX_LENGTH} ký tự.`);
+  }
+
+  let inClass = false;
+  let escaped = false;
+  let complexity = 1;
+  let alternatives = 1;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (escaped) {
+      if (!inClass && /[1-9]/.test(char)) {
+        throw new Error('Safe Regex không hỗ trợ backreference (\\1…\\9).');
+      }
+      if (!inClass && (char === 'k' || char === 'g')) {
+        throw new Error('Safe Regex không hỗ trợ named/subroutine backreference.');
+      }
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '[' && !inClass) {
+      inClass = true;
+      continue;
+    }
+    if (char === ']' && inClass) {
+      inClass = false;
+      continue;
+    }
+    if (inClass) continue;
+
+    if (char === '(' || char === ')') {
+      throw new Error('Safe Regex không hỗ trợ group/lookaround. Hãy dùng alternation | hoặc preset có sẵn.');
+    }
+    if (char === '*' || char === '+') {
+      throw new Error('Safe Regex tùy chỉnh không cho phép * hoặc +. Hãy dùng {m,n} có giới hạn hoặc preset có sẵn.');
+    }
+    if (char === '|') {
+      alternatives += 1;
+      if (alternatives > MAX_SAFE_REGEX_ALTERNATIVES) {
+        throw new Error(`Safe Regex tối đa ${MAX_SAFE_REGEX_ALTERNATIVES} nhánh alternation.`);
+      }
+      continue;
+    }
+    if (char === '?') {
+      complexity *= 2;
+      if (complexity > MAX_SAFE_REGEX_COMPLEXITY) {
+        throw new Error('Safe Regex có quá nhiều nhánh tùy chọn. Hãy đơn giản hóa pattern.');
+      }
+      continue;
+    }
+    if (char !== '{') continue;
+
+    const close = source.indexOf('}', index + 1);
+    if (close < 0) throw new Error('Safe Regex có quantifier {…} chưa đóng.');
+    const body = source.slice(index + 1, close);
+    const match = /^(\d{1,3})(?:,(\d{1,3}))?$/.exec(body);
+    if (!match) {
+      throw new Error('Safe Regex chỉ cho phép quantifier hữu hạn {m} hoặc {m,n}; không cho phép {m,}.');
+    }
+    const min = Number(match[1]);
+    const max = match[2] === undefined ? min : Number(match[2]);
+    if (min > max || max > 64) {
+      throw new Error('Safe Regex yêu cầu 0 ≤ m ≤ n ≤ 64 trong quantifier {m,n}.');
+    }
+    complexity *= max - min + 1;
+    if (complexity > MAX_SAFE_REGEX_COMPLEXITY) {
+      throw new Error('Safe Regex có độ phân nhánh quá lớn. Hãy giảm các khoảng {m,n}.');
+    }
+    index = close;
+  }
+
+  if (escaped) throw new Error('Safe Regex kết thúc bằng dấu \\ chưa hoàn chỉnh.');
+  if (inClass) throw new Error('Safe Regex có character class […] chưa đóng.');
+}
+
+export function compileSafeAutoRedactPatterns(
+  patterns: string[],
+  caseSensitive = false,
+): SafeAutoRedactPattern[] {
+  const flags = caseSensitive ? 'u' : 'iu';
+  return patterns.map((pattern) => {
+    const preset = SAFE_AUTO_REDACT_PRESETS[pattern as keyof typeof SAFE_AUTO_REDACT_PRESETS];
+    const source = preset ?? pattern;
+    if (!preset) validateCustomSafeRegex(source);
+    try {
+      return { label: pattern, regex: new RegExp(source, flags) };
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : 'pattern không hợp lệ';
+      throw new Error(`Safe Regex "${pattern}" không hợp lệ: ${detail}`);
+    }
+  });
 }
 
 function multiplyTransform(a: number[], b: number[]): number[] {
@@ -110,6 +230,11 @@ function itemRect(item: PdfJsTextItemLike, viewport: PdfJsViewportLike, padding:
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
+function normalizedItems(textContent: PdfJsTextContentLike): PdfJsTextItemLike[] {
+  const items = Array.isArray(textContent.items) ? textContent.items : [];
+  return items.filter((item): item is PdfJsTextItemLike => Boolean(item) && typeof item === 'object');
+}
+
 export function findAutoRedactMatches(
   textContent: PdfJsTextContentLike,
   viewport: PdfJsViewportLike,
@@ -121,15 +246,37 @@ export function findAutoRedactMatches(
   const normalizedTerms = terms.map((term) => term.trim()).filter(Boolean);
   if (normalizedTerms.length === 0) return [];
   const searchableTerms = normalizedTerms.map((term) => caseSensitive ? term : term.toLocaleLowerCase('vi'));
-  const items = Array.isArray(textContent.items) ? textContent.items : [];
   const matches: AutoRedactMatch[] = [];
 
-  for (const rawItem of items) {
-    if (!rawItem || typeof rawItem !== 'object') continue;
-    const item = rawItem as PdfJsTextItemLike;
+  for (const item of normalizedItems(textContent)) {
     if (typeof item.str !== 'string' || !item.str.trim()) continue;
     const haystack = caseSensitive ? item.str : item.str.toLocaleLowerCase('vi');
     const matchedTerms = normalizedTerms.filter((_, index) => haystack.includes(searchableTerms[index]));
+    if (matchedTerms.length === 0) continue;
+    const rect = itemRect(item, viewport, padding);
+    if (!rect) continue;
+    matches.push({ text: item.str, terms: matchedTerms, rect });
+  }
+
+  return matches;
+}
+
+export function findSafeRegexAutoRedactMatches(
+  textContent: PdfJsTextContentLike,
+  viewport: PdfJsViewportLike,
+  patterns: SafeAutoRedactPattern[],
+  padding = DEFAULT_PADDING,
+): AutoRedactMatch[] {
+  if (!Number.isFinite(padding) || padding < 0 || padding > 20) throw new Error('Auto-redact padding must be between 0 and 20 points.');
+  if (patterns.length === 0) return [];
+  const matches: AutoRedactMatch[] = [];
+
+  for (const item of normalizedItems(textContent)) {
+    if (typeof item.str !== 'string' || !item.str.trim()) continue;
+    if (item.str.length > MAX_REGEX_TEXT_RUN_LENGTH) {
+      throw new Error(`Safe Regex gặp text-run dài hơn ${MAX_REGEX_TEXT_RUN_LENGTH} ký tự. Hãy dùng chế độ Literal hoặc chia tài liệu.`);
+    }
+    const matchedTerms = patterns.filter((pattern) => pattern.regex.test(item.str)).map((pattern) => pattern.label);
     if (matchedTerms.length === 0) continue;
     const rect = itemRect(item, viewport, padding);
     if (!rect) continue;
