@@ -11,6 +11,7 @@ const tools = [
   { href: '/pdfa', title: 'PDF/A', description: 'Tạo PDF/A bằng internal validator, không fallback Ghostscript.', local: false, badge: 'OCRmyPDF' },
   { href: '/workflow', title: 'Workflow PDF', description: 'Chạy nhiều thao tác local trong một lần xử lý.', local: true },
   { href: '/pdf-to-office', title: 'PDF → Office', description: 'DOCX/PPTX theo LibreOffice-first; XLSX theo Bloom → PP-StructureV3 fallback.', local: false, badge: 'V1 Gate' },
+  { href: '/pdf-to-csv', title: 'PDF → CSV', description: 'Nhận diện bảng bằng PP-StructureV3, xuất CSV UTF-8 theo trang và đóng ZIP khi có nhiều trang dữ liệu.', local: false, badge: 'PP-StructureV3' },
   { href: '/pdf-to-html', title: 'PDF → HTML', description: 'Xuất một file HTML tự chứa bằng Poppler, nhúng ảnh bằng data URL và chặn scheme liên kết nguy hiểm.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-text', title: 'PDF → Text', description: 'Trích xuất text layer thành TXT UTF-8 bằng Poppler, hỗ trợ phạm vi trang, mật khẩu và giữ bố cục.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-markdown', title: 'PDF → Markdown', description: 'Nhận diện bố cục bằng PP-StructureV3 và xuất Markdown cho PDF scan hoặc tài liệu có cấu trúc.', local: false, badge: 'PP-StructureV3' },

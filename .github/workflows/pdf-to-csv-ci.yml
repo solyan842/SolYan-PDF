@@ -1,0 +1,77 @@
+name: PDF to CSV CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/pdf_to_csv.py'
+      - 'backend/app/main.py'
+      - 'backend/tests/pdf_to_csv_gate.py'
+      - 'frontend/app/pdf-to-csv/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-to-csv-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/pdf_to_csv.py'
+      - 'backend/app/main.py'
+      - 'backend/tests/pdf_to_csv_gate.py'
+      - 'frontend/app/pdf-to-csv/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-to-csv-ci.yml'
+
+jobs:
+  pdf-to-csv:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install hash-verified backend dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip check
+
+      - name: Compile backend CSV adapter and gate
+        run: python -m compileall backend/app backend/tests/pdf_to_csv_gate.py
+
+      - name: Gate XLSX parsing and public PDF to CSV behavior
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-pdf-to-csv
+          python tests/pdf_to_csv_gate.py 2>&1 | tee /tmp/solyan-pdf-to-csv/gate.log
+
+      - name: Gate product wiring and documented boundaries
+        run: |
+          set -euo pipefail
+          grep -q 'from .pdf_to_csv import router as pdf_to_csv_router' backend/app/main.py
+          grep -q 'app.include_router(pdf_to_csv_router)' backend/app/main.py
+          grep -q 'X-SolYan-CSV-Engine' backend/app/main.py
+          grep -q '/pdf/to-csv' frontend/app/pdf-to-csv/page.tsx
+          grep -q "href: '/pdf-to-csv'" frontend/app/page.tsx
+          grep -q 'cùng một trang được xếp nối tiếp' frontend/app/pdf-to-csv/page.tsx
+          grep -q 'formula injection' frontend/app/pdf-to-csv/page.tsx
+          echo 'CSV route/UI/safety boundary wiring: PASS' | tee -a /tmp/solyan-pdf-to-csv/gate.log
+
+      - name: Upload PDF to CSV evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-csv-evidence
+          path: |
+            /tmp/solyan-pdf-to-csv/gate.log
+            /tmp/solyan-pdf-to-csv/fixture.xlsx
+            /tmp/solyan-pdf-to-csv/single.xlsx
+          if-no-files-found: warn
+          retention-days: 14

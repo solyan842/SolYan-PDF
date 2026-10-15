@@ -20,6 +20,7 @@ from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
 from .pdf_info import router as pdf_info_router
 from .pdf_to_cbz import router as pdf_to_cbz_router
+from .pdf_to_csv import router as pdf_to_csv_router
 from .pdf_to_html import router as pdf_to_html_router
 from .pdf_to_markdown import router as pdf_to_markdown_router
 from .pdf_to_rtf import router as pdf_to_rtf_router
@@ -83,6 +84,8 @@ app.add_middleware(
         "X-SolYan-Markdown-Pages",
         "X-SolYan-XML-Pages",
         "X-SolYan-RTF-Engine",
+        "X-SolYan-CSV-Engine",
+        "X-SolYan-CSV-Files",
     ],
 )
 app.include_router(network_router)
@@ -101,6 +104,7 @@ app.include_router(remove_signatures_router)
 app.include_router(active_content_router)
 app.include_router(pdf_info_router)
 app.include_router(pdf_to_cbz_router)
+app.include_router(pdf_to_csv_router)
 app.include_router(pdf_to_html_router)
 app.include_router(pdf_to_markdown_router)
 app.include_router(pdf_to_rtf_router)
