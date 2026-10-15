@@ -12,7 +12,7 @@ from fastapi.responses import Response
 
 MAX_FILE_SIZE = int(os.getenv("OFFICE_MAX_FILE_SIZE", str(100 * 1024 * 1024)))
 SUPPORTED_SUFFIXES = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf"}
-PDF_IMPORT_TARGETS = {"docx", "pptx"}
+PDF_IMPORT_TARGETS = {"docx", "pptx", "rtf"}
 OOXML_MEDIA_TYPES = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -95,8 +95,8 @@ def _pdf_to_office_with_libreoffice(data: bytes, target: str) -> bytes:
     fallback, not a replacement for editable-first engines such as Bloom.
     """
 
-    if target not in PDF_IMPORT_TARGETS:
-        raise HTTPException(status_code=400, detail="LibreOffice PDF import supports docx or pptx")
+    if target not in {"docx", "pptx"}:
+        raise HTTPException(status_code=400, detail="LibreOffice OOXML PDF import supports docx or pptx")
 
     binary = _libreoffice_binary()
     config = {
@@ -154,6 +154,37 @@ def _pdf_to_office_with_libreoffice(data: bytes, target: str) -> bytes:
         return content
 
 
+def _pdf_to_rtf_with_libreoffice(data: bytes) -> bytes:
+    """Import PDF into Writer and export Rich Text Format with the shipped LibreOffice engine."""
+
+    binary = _libreoffice_binary()
+    with tempfile.TemporaryDirectory(prefix="solyan-pdf-rtf-") as temp_dir:
+        root = Path(temp_dir)
+        input_path = root / "input.pdf"
+        output_dir = root / "output"
+        profile_dir = root / "profile"
+        output_dir.mkdir()
+        profile_dir.mkdir()
+        input_path.write_bytes(data)
+
+        result = _run_libreoffice_conversion(
+            binary,
+            input_path,
+            output_dir,
+            profile_dir,
+            "rtf:Rich Text Format",
+            infilter="writer_pdf_import",
+        )
+        output_path = output_dir / "input.rtf"
+        if result.returncode != 0 or not output_path.exists() or output_path.stat().st_size == 0:
+            raise _conversion_error(result, "LibreOffice RTF PDF import/export failed")
+
+        content = output_path.read_bytes()
+        if not content.lstrip().startswith(b"{\\rtf"):
+            raise HTTPException(status_code=422, detail="LibreOffice produced invalid RTF output")
+        return content
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     binary = _libreoffice_binary()
@@ -202,7 +233,7 @@ def convert_pdf_to_office(
     target: str = Form(default="docx"),
 ) -> Response:
     if target not in PDF_IMPORT_TARGETS:
-        raise HTTPException(status_code=400, detail="Target must be docx or pptx")
+        raise HTTPException(status_code=400, detail="Target must be docx, pptx or rtf")
 
     data = file.file.read(MAX_FILE_SIZE + 1)
     if len(data) > MAX_FILE_SIZE:
@@ -210,11 +241,17 @@ def convert_pdf_to_office(
     if not data.startswith(b"%PDF-"):
         raise HTTPException(status_code=400, detail="Uploaded file is not a PDF")
 
-    content = _pdf_to_office_with_libreoffice(data, target)
+    if target == "rtf":
+        content = _pdf_to_rtf_with_libreoffice(data)
+        media_type = "application/rtf"
+    else:
+        content = _pdf_to_office_with_libreoffice(data, target)
+        media_type = OOXML_MEDIA_TYPES[target]
+
     stem = Path(file.filename or "document.pdf").stem or "document"
     return Response(
         content=content,
-        media_type=OOXML_MEDIA_TYPES[target],
+        media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{stem}.{target}"',
             "X-SolYan-Conversion-Engine": "LibreOffice-PDF-import",
