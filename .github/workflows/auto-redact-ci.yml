@@ -1,0 +1,175 @@
+name: Auto Redact Text CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/lib/auto-redact.ts'
+      - 'frontend/lib/secure-redaction.ts'
+      - 'frontend/app/auto-redact/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-redact-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/lib/auto-redact.ts'
+      - 'frontend/lib/secure-redaction.ts'
+      - 'frontend/app/auto-redact/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/auto-redact-ci.yml'
+
+jobs:
+  auto-redact:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Install qpdf and Poppler verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf poppler-utils
+
+      - name: Compile Auto Redact helpers for direct regression
+        run: |
+          rm -rf /tmp/solyan-auto-redact-ts
+          npx tsc lib/auto-redact.ts lib/secure-redaction.ts \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --esModuleInterop \
+            --skipLibCheck \
+            --outDir /tmp/solyan-auto-redact-ts
+
+      - name: Gate PDF.js literal matching and multi-page secure rebuild
+        run: |
+          set -euo pipefail
+          node <<'NODE' 2>&1 | tee /tmp/auto-redact-ci.log
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { PDFDocument, StandardFonts } = require('pdf-lib');
+          const {
+            findAutoRedactMatches,
+            normalizeAutoRedactTerms,
+          } = require('/tmp/solyan-auto-redact-ts/auto-redact.js');
+          const {
+            rebuildPdfWithRasterizedPages,
+          } = require('/tmp/solyan-auto-redact-ts/secure-redaction.js');
+
+          (async () => {
+            assert.deepEqual(normalizeAutoRedactTerms('Secret\nsecret\n PUBLIC ', false), ['Secret', 'PUBLIC']);
+            assert.deepEqual(normalizeAutoRedactTerms('Secret\nsecret', true), ['Secret', 'secret']);
+
+            const source = await PDFDocument.create();
+            const font = await source.embedFont(StandardFonts.Helvetica);
+            const first = source.addPage([612, 792]);
+            first.drawText('SECRET_REMOVE_ME_842', { x: 72, y: 700, size: 24, font });
+            const second = source.addPage([612, 792]);
+            second.drawText('PUBLIC_KEEP_ME_842', { x: 72, y: 700, size: 24, font });
+            const third = source.addPage([612, 792]);
+            third.drawText('SECRET_REMOVE_ME_842 SECOND', { x: 72, y: 700, size: 24, font });
+            const sourceBytes = await source.save({ useObjectStreams: true });
+            fs.writeFileSync('/tmp/auto-redact-source.pdf', Buffer.from(sourceBytes));
+
+            const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+            const task = pdfjs.getDocument({ data: new Uint8Array(sourceBytes), disableWorker: true });
+            const pdf = await task.promise;
+            const page1 = await pdf.getPage(1);
+            const content1 = await page1.getTextContent();
+            const viewport1 = page1.getViewport({ scale: 1 });
+            const matches1 = findAutoRedactMatches(content1, viewport1, ['secret_remove_me_842'], false);
+            assert.equal(matches1.length, 1);
+            assert.ok(matches1[0].rect.width > 0);
+            assert.ok(matches1[0].rect.height > 0);
+            assert.ok(matches1[0].rect.x >= 0 && matches1[0].rect.y >= 0);
+            assert.equal(findAutoRedactMatches(content1, viewport1, ['secret_remove_me_842'], true).length, 0);
+
+            const page2 = await pdf.getPage(2);
+            const content2 = await page2.getTextContent();
+            assert.equal(findAutoRedactMatches(content2, page2.getViewport({ scale: 1 }), ['SECRET_REMOVE_ME_842'], true).length, 0);
+            const page3 = await pdf.getPage(3);
+            const matches3 = findAutoRedactMatches(await page3.getTextContent(), page3.getViewport({ scale: 1 }), ['SECRET_REMOVE_ME_842'], true);
+            assert.equal(matches3.length, 1);
+            await task.destroy();
+
+            const blackPng = Buffer.from(
+              'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAC0lEQVR4nGNgQAYAAA4AAamRc7EAAAAASUVORK5CYII=',
+              'base64',
+            );
+            const redactedBytes = await rebuildPdfWithRasterizedPages(sourceBytes, [
+              { pageIndex: 0, pngBytes: blackPng, pageWidth: 612, pageHeight: 792 },
+              { pageIndex: 2, pngBytes: blackPng, pageWidth: 612, pageHeight: 792 },
+            ]);
+            fs.writeFileSync('/tmp/auto-redact-output.pdf', Buffer.from(redactedBytes));
+            const reloaded = await PDFDocument.load(redactedBytes);
+            assert.equal(reloaded.getPageCount(), 3);
+            await assert.rejects(
+              () => rebuildPdfWithRasterizedPages(sourceBytes, [
+                { pageIndex: 0, pngBytes: blackPng, pageWidth: 612, pageHeight: 792 },
+                { pageIndex: 0, pngBytes: blackPng, pageWidth: 612, pageHeight: 792 },
+              ]),
+              /Duplicate raster replacement/,
+            );
+            console.log('PDF.js matcher + multi-page rebuild semantics: PASS');
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+          qpdf --check /tmp/auto-redact-output.pdf 2>&1 | tee -a /tmp/auto-redact-ci.log
+          test "$(qpdf --show-npages /tmp/auto-redact-output.pdf)" = "3"
+          pdftotext /tmp/auto-redact-output.pdf /tmp/auto-redact.txt
+          cat /tmp/auto-redact.txt | tee -a /tmp/auto-redact-ci.log
+          grep -q 'PUBLIC_KEEP_ME_842' /tmp/auto-redact.txt
+          if grep -q 'SECRET_REMOVE_ME_842' /tmp/auto-redact.txt; then
+            echo 'auto-redacted source text remains extractable' | tee -a /tmp/auto-redact-ci.log
+            exit 1
+          fi
+          qpdf --qdf --object-streams=disable /tmp/auto-redact-output.pdf /tmp/auto-redact-expanded.pdf
+          if grep -a -q 'SECRET_REMOVE_ME_842' /tmp/auto-redact-expanded.pdf; then
+            echo 'auto-redacted source text remains in reachable serialized PDF objects' | tee -a /tmp/auto-redact-ci.log
+            exit 1
+          fi
+          echo 'both secret pages removed + untouched page text retained: PASS' | tee -a /tmp/auto-redact-ci.log
+
+      - name: Gate production Auto Redact wiring and bounds
+        run: |
+          set -euo pipefail
+          grep -q "href: '/auto-redact'" app/page.tsx
+          grep -q "findAutoRedactMatches" app/auto-redact/page.tsx
+          grep -q "rebuildPdfWithRasterizedPages" app/auto-redact/page.tsx
+          grep -q "SECURE_REDACTION_DPI = 150" app/auto-redact/page.tsx
+          grep -q "MAX_MATCHES = 500" app/auto-redact/page.tsx
+          grep -q "MAX_REDACTED_PAGES = 40" app/auto-redact/page.tsx
+          grep -q "MAX_TOTAL_REDACTION_PIXELS = 80_000_000" app/auto-redact/page.tsx
+          grep -q "context.fillStyle = '#000000'" app/auto-redact/page.tsx
+          grep -q "PDF scan không có text layer cần OCR trước" app/auto-redact/page.tsx
+          echo 'production Auto Redact security wiring + explicit bounds: PASS' | tee -a /tmp/auto-redact-ci.log
+
+      - name: Build frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+
+      - name: Upload Auto Redact evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-redact-ci-evidence
+          path: /tmp/auto-redact-ci.log
+          if-no-files-found: warn
+          retention-days: 14
