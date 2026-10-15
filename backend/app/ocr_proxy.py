@@ -80,8 +80,13 @@ def _forward(path: str, upload: UploadFile) -> dict:
     return _json_response(_post(path, upload))
 
 
-def _forward_binary(path: str, upload: UploadFile, default_media_type: str) -> Response:
-    response = _post(path, upload)
+def _forward_binary(
+    path: str,
+    upload: UploadFile,
+    default_media_type: str,
+    form: dict[str, str] | None = None,
+) -> Response:
+    response = _post(path, upload, form)
     media_type = response.headers.get("content-type", default_media_type).split(";", 1)[0].strip()
     headers: dict[str, str] = {}
     for name in (
@@ -89,6 +94,9 @@ def _forward_binary(path: str, upload: UploadFile, default_media_type: str) -> R
         "x-solyan-ocr-engine",
         "x-solyan-ocr-pages",
         "x-solyan-ocr-table-workbooks",
+        "x-solyan-scanner-photos",
+        "x-solyan-scanner-pages",
+        "x-solyan-scanner-deskewed",
     ):
         value = response.headers.get(name)
         if value:
@@ -102,6 +110,32 @@ def _orientation_form(confidence_threshold: float, infer_undetected: bool) -> di
     return {
         "confidence_threshold": f"{confidence_threshold:g}",
         "infer_undetected": "true" if infer_undetected else "false",
+    }
+
+
+def _scanner_split_form(
+    angle_threshold: float,
+    tolerance: int,
+    min_area: int,
+    min_contour_area: float,
+    border_size: int,
+) -> dict[str, str]:
+    if not 0.0 <= angle_threshold <= 45.0:
+        raise HTTPException(status_code=422, detail="angle_threshold must be between 0 and 45 degrees")
+    if not 0 <= tolerance <= 255:
+        raise HTTPException(status_code=422, detail="tolerance must be between 0 and 255")
+    if not 100 <= min_area <= 100_000_000:
+        raise HTTPException(status_code=422, detail="min_area must be between 100 and 100000000 pixels")
+    if not 0.0 <= min_contour_area <= 100_000_000.0:
+        raise HTTPException(status_code=422, detail="min_contour_area must be between 0 and 100000000 pixels")
+    if not 0 <= border_size <= 500:
+        raise HTTPException(status_code=422, detail="border_size must be between 0 and 500 pixels")
+    return {
+        "angle_threshold": f"{angle_threshold:g}",
+        "tolerance": str(tolerance),
+        "min_area": str(min_area),
+        "min_contour_area": f"{min_contour_area:g}",
+        "border_size": str(border_size),
     }
 
 
@@ -166,6 +200,25 @@ def ocr_structured(file: UploadFile = File(...)) -> dict:
 @router.post("/xlsx")
 def ocr_xlsx(file: UploadFile = File(...)) -> Response:
     return _forward_binary("/ocr/xlsx", file, XLSX_MEDIA_TYPE)
+
+
+@router.post("/scanner-photo-split")
+def ocr_scanner_photo_split(
+    file: UploadFile = File(...),
+    angle_threshold: float = Form(default=10.0),
+    tolerance: int = Form(default=30),
+    min_area: int = Form(default=10_000),
+    min_contour_area: float = Form(default=500.0),
+    border_size: int = Form(default=1),
+) -> Response:
+    form = _scanner_split_form(
+        angle_threshold,
+        tolerance,
+        min_area,
+        min_contour_area,
+        border_size,
+    )
+    return _forward_binary("/ocr/scanner-photo-split", file, "application/zip", form)
 
 
 @router.post("/orientation")

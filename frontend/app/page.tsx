@@ -15,6 +15,7 @@ const tools = [
   { href: '/images-to-pdf', title: 'Ảnh → PDF', description: 'Ghép PNG/JPG thành PDF ngay trên thiết bị.', local: true },
   { href: '/pdf-to-images', title: 'PDF → Ảnh', description: 'Render các trang thành PNG/JPEG và tải ZIP.', local: true },
   { href: '/extract-images', title: 'Trích xuất ảnh nhúng', description: 'Lấy ảnh raster nhúng nguyên bản khi có thể và tải thành ZIP.', local: false, badge: 'Poppler' },
+  { href: '/scanner-photo-split', title: 'Tách ảnh từ bản scan', description: 'Nhận diện nhiều ảnh trên cùng mặt scan, crop/deskew từng ảnh và xuất PNG theo thứ tự ổn định.', local: false, badge: 'OpenCV + PDFium' },
   { href: '/remove-images', title: 'Xóa ảnh nhúng', description: 'Loại Image XObject khỏi page/Form resources trong khi giữ text, vector và content stream.', local: false, badge: 'qpdf JSON' },
   { href: '/attachments', title: 'File đính kèm PDF', description: 'Xem, thêm, tải ra hoặc xóa embedded files bằng qpdf.', local: false, badge: 'qpdf server' },
   { href: '/remove-blank-pages', title: 'Xóa trang trắng', description: 'Giữ chắc trang có text; đo raster với ngưỡng tùy chỉnh cho trang không text.', local: false, badge: 'Poppler + qpdf' },
