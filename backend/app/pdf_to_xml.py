@@ -96,9 +96,11 @@ def _convert_pdf_to_xml(
         if not output.strip():
             raise HTTPException(status_code=422, detail="Poppler produced empty XML output")
 
+        # Poppler emits its standard pdf2xml DOCTYPE. Keep that trusted converter
+        # declaration, but reject entity declarations before parsing/returning XML.
         upper_prefix = output[:4096].upper()
-        if b"<!DOCTYPE" in upper_prefix or b"<!ENTITY" in upper_prefix:
-            raise HTTPException(status_code=500, detail="Generated XML contains an unexpected DTD declaration")
+        if b"<!ENTITY" in upper_prefix:
+            raise HTTPException(status_code=500, detail="Generated XML contains an unexpected entity declaration")
         try:
             root = ET.fromstring(output)
         except ET.ParseError as exc:
