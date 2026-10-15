@@ -18,6 +18,7 @@ const tools = [
   { href: '/pdf-to-xml', title: 'PDF → XML', description: 'Xuất text, font và tọa độ trang thành một file Poppler pdf2xml UTF-8, hỗ trợ phạm vi trang.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-rtf', title: 'PDF → RTF', description: 'Nhập PDF bằng LibreOffice Writer rồi xuất Rich Text Format để tiếp tục chỉnh sửa.', local: false, badge: 'LibreOffice' },
   { href: '/pdf-to-postscript', title: 'PDF → PostScript / EPS', description: 'Xuất PS nhiều trang hoặc EPS một trang bằng Poppler pdftops, hỗ trợ Level 2/3 và phạm vi trang.', local: false, badge: 'Poppler' },
+  { href: '/pdf-to-svg', title: 'PDF → SVG', description: 'Xuất từng trang thành SVG vector-first bằng Poppler pdftocairo; một trang tải SVG, nhiều trang đóng ZIP.', local: false, badge: 'Poppler' },
   { href: '/pdf-to-cbz', title: 'PDF → CBZ', description: 'Render trang PDF thành PNG rồi đóng gói Comic Book ZIP theo đúng thứ tự, hỗ trợ DPI và phạm vi trang.', local: false, badge: 'Poppler' },
   { href: '/office-to-pdf', title: 'Office → PDF', description: 'Word, Excel, PowerPoint và OpenDocument sang PDF.', local: false, badge: 'LibreOffice' },
   { href: '/images-to-pdf', title: 'Ảnh → PDF', description: 'Ghép PNG/JPG thành PDF ngay trên thiết bị.', local: true },
@@ -71,7 +72,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.4 hoàn tất · SolYan PDF v0.1.7</h2><p>V1.4 khóa phạm vi self-contained với Auto Redact Text, Scanner Effect và PDF → PostScript / EPS; các dependency/provider lớn được giữ ngoài core cho tới khi có quyết định sản phẩm rõ ràng.</p></section>
+      <section className="coming-soon"><h2>V1.5 đang phát triển · v0.1.7 stable</h2><p>V1.5 tiếp tục OSS-first bằng các gap tự-contained có giá trị rõ ràng; PDF → SVG là lane đầu tiên, tận dụng Poppler sẵn có thay vì kéo thêm runtime.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
