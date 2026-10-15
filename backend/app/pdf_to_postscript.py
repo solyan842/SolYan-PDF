@@ -8,9 +8,11 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
+from .pdf_to_svg import router as pdf_to_svg_router
 from .sanitize import _read_pdf
 
 router = APIRouter()
+router.include_router(pdf_to_svg_router)
 
 COMMAND_TIMEOUT_SECONDS = 180
 MAX_OUTPUT_BYTES = 250 * 1024 * 1024
