@@ -20,6 +20,7 @@ from .ocr_proxy import router as ocr_router
 from .office_proxy import router as office_router
 from .pdf_info import router as pdf_info_router
 from .pdf_to_html import router as pdf_to_html_router
+from .pdf_to_text import router as pdf_to_text_router
 from .remove_annotations import router as remove_annotations_router
 from .remove_blank_pages import router as remove_blank_pages_router
 from .remove_images import router as remove_images_router
@@ -90,6 +91,7 @@ app.include_router(remove_signatures_router)
 app.include_router(active_content_router)
 app.include_router(pdf_info_router)
 app.include_router(pdf_to_html_router)
+app.include_router(pdf_to_text_router)
 app.include_router(unlock_forms_router)
 
 

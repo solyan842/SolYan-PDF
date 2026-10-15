@@ -1,0 +1,201 @@
+name: PDF to Text CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/pdf_to_text.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/pdf-to-text/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-to-text-ci.yml'
+      - 'docs/V1.3-PARITY-AUDIT.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/pdf_to_text.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/pdf-to-text/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-to-text-ci.yml'
+      - 'docs/V1.3-PARITY-AUDIT.md'
+
+jobs:
+  pdf-to-text:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install Poppler and backend test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils qpdf
+          pdftotext -v 2>&1 | tee /tmp/pdftotext-version.log
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip install httpx==0.28.1 pypdf==6.1.1
+          python -m pip check
+
+      - name: Compile backend PDF to text path
+        run: python -m compileall backend/app
+
+      - name: Gate text extraction, page range, layout and page breaks
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-pdf-to-text
+          python <<'PY' 2>&1 | tee /tmp/solyan-pdf-to-text/gate.log
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from pypdf import PdfWriter
+          from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+          from app.main import app
+
+          root = Path('/tmp/solyan-pdf-to-text')
+          fixture = root / 'fixture.pdf'
+          writer = PdfWriter()
+
+          def add_page(label: str, second: str, second_x: int) -> None:
+              page = writer.add_blank_page(width=300, height=300)
+              font = DictionaryObject({
+                  NameObject('/Type'): NameObject('/Font'),
+                  NameObject('/Subtype'): NameObject('/Type1'),
+                  NameObject('/BaseFont'): NameObject('/Helvetica'),
+              })
+              font_ref = writer._add_object(font)
+              page[NameObject('/Resources')] = DictionaryObject({
+                  NameObject('/Font'): DictionaryObject({NameObject('/F1'): font_ref}),
+              })
+              stream = DecodedStreamObject()
+              stream.set_data(
+                  f'BT /F1 18 Tf 40 240 Td ({label}) Tj ET '
+                  f'BT /F1 12 Tf {second_x} 200 Td ({second}) Tj ET'.encode('ascii')
+              )
+              page[NameObject('/Contents')] = writer._add_object(stream)
+
+          add_page('PAGE-ONE', 'ALPHA', 40)
+          add_page('PAGE-TWO', 'BETA', 180)
+          with fixture.open('wb') as handle:
+              writer.write(handle)
+
+          client = TestClient(app)
+          source = fixture.read_bytes()
+
+          default = client.post('/pdf/to-text', files={'file': ('fixture.pdf', source, 'application/pdf')})
+          assert default.status_code == 200, default.text
+          assert default.headers['content-type'].startswith('text/plain'), default.headers
+          assert 'attachment; filename="solyan-pdf.txt"' in default.headers['content-disposition']
+          text = default.content.decode('utf-8')
+          assert 'PAGE-ONE' in text and 'PAGE-TWO' in text
+          assert 'ALPHA' in text and 'BETA' in text
+          assert '\x0c' in text, repr(text)
+          root.joinpath('default.txt').write_bytes(default.content)
+
+          ranged = client.post(
+              '/pdf/to-text',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'first_page': '2', 'last_page': '2'},
+          )
+          assert ranged.status_code == 200, ranged.text
+          ranged_text = ranged.content.decode('utf-8')
+          assert 'PAGE-TWO' in ranged_text and 'PAGE-ONE' not in ranged_text
+          root.joinpath('page-two.txt').write_bytes(ranged.content)
+
+          no_breaks = client.post(
+              '/pdf/to-text',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'preserve_page_breaks': 'false'},
+          )
+          assert no_breaks.status_code == 200, no_breaks.text
+          assert '\x0c' not in no_breaks.content.decode('utf-8')
+
+          layout = client.post(
+              '/pdf/to-text',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'layout': 'true'},
+          )
+          assert layout.status_code == 200, layout.text
+          layout_text = layout.content.decode('utf-8')
+          assert 'PAGE-ONE' in layout_text and 'PAGE-TWO' in layout_text
+          assert 'ALPHA' in layout_text and 'BETA' in layout_text
+          root.joinpath('layout.txt').write_bytes(layout.content)
+
+          invalid = client.post(
+              '/pdf/to-text',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'first_page': '2', 'last_page': '1'},
+          )
+          assert invalid.status_code == 422, invalid.text
+          print('text/page-range/layout/page-break gate: PASS')
+          PY
+
+      - name: Gate encrypted PDF password handling
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          qpdf --encrypt text-pass owner-pass 256 -- /tmp/solyan-pdf-to-text/fixture.pdf /tmp/solyan-pdf-to-text/encrypted.pdf
+          python <<'PY' 2>&1 | tee -a /tmp/solyan-pdf-to-text/gate.log
+          from pathlib import Path
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          root = Path('/tmp/solyan-pdf-to-text')
+          encrypted = root.joinpath('encrypted.pdf').read_bytes()
+          client = TestClient(app)
+
+          ok = client.post(
+              '/pdf/to-text',
+              files={'file': ('encrypted.pdf', encrypted, 'application/pdf')},
+              data={'password': 'text-pass'},
+          )
+          assert ok.status_code == 200, ok.text
+          assert 'PAGE-ONE' in ok.content.decode('utf-8')
+
+          bad = client.post(
+              '/pdf/to-text',
+              files={'file': ('encrypted.pdf', encrypted, 'application/pdf')},
+              data={'password': 'wrong-pass'},
+          )
+          assert bad.status_code == 401, (bad.status_code, bad.text)
+          print('encrypted password handling: PASS')
+          PY
+
+      - name: Gate product wiring
+        run: |
+          set -euo pipefail
+          grep -q 'from .pdf_to_text import router as pdf_to_text_router' backend/app/main.py
+          grep -q 'app.include_router(pdf_to_text_router)' backend/app/main.py
+          grep -q '/pdf/to-text' frontend/app/pdf-to-text/page.tsx
+          grep -q "href: '/pdf-to-text'" frontend/app/page.tsx
+          grep -q 'poppler-utils' backend/Dockerfile
+          echo 'route/UI/existing Poppler dependency wiring: PASS' | tee -a /tmp/solyan-pdf-to-text/gate.log
+
+      - name: Upload PDF to text evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-text-evidence
+          path: |
+            /tmp/solyan-pdf-to-text/gate.log
+            /tmp/solyan-pdf-to-text/fixture.pdf
+            /tmp/solyan-pdf-to-text/encrypted.pdf
+            /tmp/solyan-pdf-to-text/default.txt
+            /tmp/solyan-pdf-to-text/page-two.txt
+            /tmp/solyan-pdf-to-text/layout.txt
+            /tmp/pdftotext-version.log
+          if-no-files-found: warn
+          retention-days: 14
