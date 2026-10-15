@@ -7,11 +7,17 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
+from pyhanko.sign.fields import MDPPerm
 
 from .validation import router as validation_router
 
 MAX_PDF_SIZE = int(os.getenv("SIGN_MAX_PDF_SIZE", str(100 * 1024 * 1024)))
 MAX_P12_SIZE = int(os.getenv("SIGN_MAX_P12_SIZE", str(10 * 1024 * 1024)))
+DOCMDP_PERMISSIONS = {
+    "no_changes": MDPPerm.NO_CHANGES,
+    "fill_forms": MDPPerm.FILL_FORMS,
+    "annotate": MDPPerm.ANNOTATE,
+}
 
 app = FastAPI(title="SolYan PDF Signature Service", version="0.1.0")
 app.include_router(validation_router)
@@ -24,6 +30,17 @@ def _read_limited(upload: UploadFile, limit: int, label: str) -> bytes:
     if not data:
         raise HTTPException(status_code=400, detail=f"Empty {label}")
     return data
+
+
+def _docmdp_permission(value: str) -> MDPPerm:
+    try:
+        return DOCMDP_PERMISSIONS[value]
+    except KeyError as exc:
+        allowed = ", ".join(DOCMDP_PERMISSIONS)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid DocMDP permission. Expected one of: {allowed}",
+        ) from exc
 
 
 @app.get("/health")
@@ -41,11 +58,15 @@ def sign_pkcs12(
     field_name: str = Form(default="Signature1", min_length=1, max_length=128),
     reason: str = Form(default="", max_length=500),
     location: str = Form(default="", max_length=500),
+    certify: bool = Form(default=False),
+    docmdp_permission: str = Form(default="fill_forms", max_length=32),
 ) -> Response:
     pdf_data = _read_limited(file, MAX_PDF_SIZE, "PDF")
     p12_data = _read_limited(certificate, MAX_P12_SIZE, "PKCS#12")
     if not pdf_data.startswith(b"%PDF-"):
         raise HTTPException(status_code=400, detail="Uploaded document is not a PDF")
+
+    permission = _docmdp_permission(docmdp_permission)
 
     try:
         signer = signers.SimpleSigner.load_pkcs12_data(
@@ -64,14 +85,18 @@ def sign_pkcs12(
             field_name=field_name,
             reason=reason or None,
             location=location or None,
+            certify=certify,
+            docmdp_permissions=permission,
         )
         output = signers.sign_pdf(writer, metadata, signer=signer)
         signed = output.getvalue()
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Ký PDF thất bại: {exc}") from exc
+        mode = "Chứng nhận" if certify else "Ký"
+        raise HTTPException(status_code=422, detail=f"{mode} PDF thất bại: {exc}") from exc
 
+    filename = "solyan-certified.pdf" if certify else "solyan-signed.pdf"
     return Response(
         content=signed,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="solyan-signed.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
