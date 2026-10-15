@@ -1,0 +1,156 @@
+name: Scanner Effect CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/lib/scanner-effect.ts'
+      - 'frontend/app/scanner-effect/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/scanner-effect-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/lib/scanner-effect.ts'
+      - 'frontend/app/scanner-effect/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/scanner-effect-ci.yml'
+
+jobs:
+  scanner-effect:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Compile Scanner Effect primitives for regression
+        run: |
+          rm -rf .scanner-effect-ci-ts
+          npx tsc lib/scanner-effect.ts \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --skipLibCheck \
+            --outDir .scanner-effect-ci-ts
+
+      - name: Gate preset, deterministic rotation and RGBA effects
+        run: |
+          set -euo pipefail
+          node <<'NODE' 2>&1 | tee /tmp/scanner-effect-ci.log
+          const assert = require('node:assert/strict');
+          const {
+            SCANNER_QUALITY_PRESETS,
+            SCANNER_ROTATION_VARIANCE,
+            applyScannerPixelEffects,
+            deterministicScannerRotation,
+            scannerPageSeed,
+          } = require('./.scanner-effect-ci-ts/scanner-effect.js');
+
+          assert.deepEqual(SCANNER_QUALITY_PRESETS.high, {
+            dpi: 150, blur: 0.1, noise: 1, brightness: 1.03, contrast: 1.06,
+          });
+          assert.deepEqual(SCANNER_QUALITY_PRESETS.medium, {
+            dpi: 100, blur: 0.1, noise: 1, brightness: 1.06, contrast: 1.12,
+          });
+          assert.deepEqual(SCANNER_QUALITY_PRESETS.low, {
+            dpi: 75, blur: 0.9, noise: 2.5, brightness: 1.08, contrast: 1.15,
+          });
+          assert.deepEqual(SCANNER_ROTATION_VARIANCE, { none: 0, slight: 2, moderate: 5, severe: 8 });
+
+          assert.equal(deterministicScannerRotation(0, 'none'), 0);
+          const slightA = deterministicScannerRotation(0, 'slight');
+          const slightB = deterministicScannerRotation(0, 'slight');
+          assert.equal(slightA, slightB);
+          assert.ok(slightA >= -2 && slightA <= 2);
+          assert.ok(Math.abs(deterministicScannerRotation(4, 'severe')) <= 8);
+          assert.notEqual(scannerPageSeed(0), scannerPageSeed(1));
+          assert.throws(() => scannerPageSeed(-1), /non-negative integer/);
+
+          const pixel = new Uint8ClampedArray([100, 150, 200, 77]);
+          assert.deepEqual(
+            Array.from(applyScannerPixelEffects(pixel, 1, 1, {
+              colorspace: 'grayscale', brightness: 1, contrast: 1, noise: 0, yellowish: false, seed: 1,
+            })),
+            [150, 150, 150, 77],
+          );
+          assert.deepEqual(
+            Array.from(applyScannerPixelEffects(pixel, 1, 1, {
+              colorspace: 'color', brightness: 1.1, contrast: 1.2, noise: 0, yellowish: false, seed: 1,
+            })),
+            [104, 170, 236, 77],
+          );
+
+          const yellow = applyScannerPixelEffects(pixel, 1, 1, {
+            colorspace: 'color', brightness: 1, contrast: 1, noise: 0, yellowish: true, seed: 1,
+          });
+          assert.equal(yellow[3], 77);
+          assert.ok(yellow[0] >= pixel[0]);
+          assert.ok(yellow[1] >= pixel[1]);
+          assert.ok(yellow[2] < pixel[2]);
+
+          const noisyInput = new Uint8ClampedArray(100 * 100 * 4);
+          for (let i = 0; i < noisyInput.length; i += 4) {
+            noisyInput[i] = 128;
+            noisyInput[i + 1] = 128;
+            noisyInput[i + 2] = 128;
+            noisyInput[i + 3] = 201;
+          }
+          const noisyA = applyScannerPixelEffects(noisyInput, 100, 100, {
+            colorspace: 'color', brightness: 1, contrast: 1, noise: 25, yellowish: false, seed: 842,
+          });
+          const noisyB = applyScannerPixelEffects(noisyInput, 100, 100, {
+            colorspace: 'color', brightness: 1, contrast: 1, noise: 25, yellowish: false, seed: 842,
+          });
+          const noisyC = applyScannerPixelEffects(noisyInput, 100, 100, {
+            colorspace: 'color', brightness: 1, contrast: 1, noise: 25, yellowish: false, seed: 843,
+          });
+          assert.deepEqual(Array.from(noisyA), Array.from(noisyB));
+          assert.notDeepEqual(Array.from(noisyA), Array.from(noisyC));
+          assert.equal(noisyA[3], 201);
+
+          console.log('preset + deterministic angle/noise + RGBA semantics: PASS');
+          NODE
+          rm -rf .scanner-effect-ci-ts
+
+      - name: Gate bounded browser raster pipeline and product boundary
+        run: |
+          set -euo pipefail
+          grep -q 'V1.4 · RASTER EFFECT' app/scanner-effect/page.tsx
+          grep -q 'không giữ text/vector/form/annotation tương tác' app/scanner-effect/page.tsx
+          grep -q 'không nên dùng để giả mạo nguồn gốc tài liệu' app/scanner-effect/page.tsx
+          grep -q 'MAX_PAGE_COUNT = 100' app/scanner-effect/page.tsx
+          grep -q 'MAX_SINGLE_PAGE_PIXELS = 25_000_000' app/scanner-effect/page.tsx
+          grep -q 'MAX_EFFECT_CANVAS_PIXELS = 32_000_000' app/scanner-effect/page.tsx
+          grep -q 'MAX_TOTAL_PIXELS = 150_000_000' app/scanner-effect/page.tsx
+          grep -q 'applyScannerPixelEffects' app/scanner-effect/page.tsx
+          grep -q 'deterministicScannerRotation' app/scanner-effect/page.tsx
+          grep -q "output.embedPng" app/scanner-effect/page.tsx
+          grep -q "href: '/scanner-effect'" app/page.tsx
+          echo 'bounded deterministic raster pipeline + explicit product boundary: PASS' | tee -a /tmp/scanner-effect-ci.log
+
+      - name: Build frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+
+      - name: Upload Scanner Effect evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-effect-ci-evidence
+          path: /tmp/scanner-effect-ci.log
+          if-no-files-found: warn
+          retention-days: 14
