@@ -1,0 +1,199 @@
+name: PDF to XML CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/pdf_to_xml.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/pdf-to-xml/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-to-xml-ci.yml'
+      - 'docs/V1.3-PARITY-AUDIT.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/pdf_to_xml.py'
+      - 'backend/app/main.py'
+      - 'frontend/app/pdf-to-xml/**'
+      - 'frontend/app/page.tsx'
+      - '.github/workflows/pdf-to-xml-ci.yml'
+      - 'docs/V1.3-PARITY-AUDIT.md'
+
+jobs:
+  pdf-to-xml:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install Poppler and backend test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils qpdf
+          pdftohtml -v 2>&1 | tee /tmp/pdftohtml-version.log
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip install httpx==0.28.1 pypdf==6.1.1
+          python -m pip check
+
+      - name: Compile backend PDF to XML path
+        run: python -m compileall backend/app
+
+      - name: Gate XML schema, text, page range and coordinates
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-pdf-to-xml
+          python <<'PY' 2>&1 | tee /tmp/solyan-pdf-to-xml/gate.log
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          from fastapi.testclient import TestClient
+          from pypdf import PdfWriter
+          from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+          from app.main import app
+
+          root = Path('/tmp/solyan-pdf-to-xml')
+          fixture = root / 'fixture.pdf'
+          writer = PdfWriter()
+
+          def add_page(label: str, x: int) -> None:
+              page = writer.add_blank_page(width=300, height=300)
+              font = DictionaryObject({
+                  NameObject('/Type'): NameObject('/Font'),
+                  NameObject('/Subtype'): NameObject('/Type1'),
+                  NameObject('/BaseFont'): NameObject('/Helvetica'),
+              })
+              font_ref = writer._add_object(font)
+              page[NameObject('/Resources')] = DictionaryObject({
+                  NameObject('/Font'): DictionaryObject({NameObject('/F1'): font_ref}),
+              })
+              stream = DecodedStreamObject()
+              stream.set_data(f'BT /F1 18 Tf {x} 220 Td ({label}) Tj ET'.encode('ascii'))
+              page[NameObject('/Contents')] = writer._add_object(stream)
+
+          add_page('PAGE-ONE', 40)
+          add_page('PAGE-TWO', 120)
+          with fixture.open('wb') as handle:
+              writer.write(handle)
+
+          client = TestClient(app)
+          source = fixture.read_bytes()
+
+          response = client.post('/pdf/to-xml', files={'file': ('fixture.pdf', source, 'application/pdf')})
+          assert response.status_code == 200, response.text
+          assert response.headers['content-type'].startswith('application/xml'), response.headers
+          assert 'attachment; filename="solyan-pdf.xml"' in response.headers['content-disposition']
+          assert int(response.headers['X-SolYan-XML-Pages']) == 2, response.headers
+          xml_root = ET.fromstring(response.content)
+          assert xml_root.tag == 'pdf2xml', xml_root.tag
+          pages = xml_root.findall('page')
+          assert len(pages) == 2, len(pages)
+          text = ''.join(xml_root.itertext())
+          assert 'PAGE-ONE' in text and 'PAGE-TWO' in text, text
+          assert b'<!DOCTYPE' not in response.content.upper()
+          assert b'<!ENTITY' not in response.content.upper()
+          root.joinpath('all-pages.xml').write_bytes(response.content)
+
+          ranged = client.post(
+              '/pdf/to-xml',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'first_page': '2', 'last_page': '2'},
+          )
+          assert ranged.status_code == 200, ranged.text
+          assert int(ranged.headers['X-SolYan-XML-Pages']) == 1
+          ranged_root = ET.fromstring(ranged.content)
+          ranged_text = ''.join(ranged_root.itertext())
+          assert 'PAGE-TWO' in ranged_text and 'PAGE-ONE' not in ranged_text, ranged_text
+          root.joinpath('page-two.xml').write_bytes(ranged.content)
+
+          precise = client.post(
+              '/pdf/to-xml',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'precise_coordinates': 'true'},
+          )
+          assert precise.status_code == 200, precise.text
+          ET.fromstring(precise.content)
+          root.joinpath('precise.xml').write_bytes(precise.content)
+
+          invalid = client.post(
+              '/pdf/to-xml',
+              files={'file': ('fixture.pdf', source, 'application/pdf')},
+              data={'first_page': '2', 'last_page': '1'},
+          )
+          assert invalid.status_code == 422, invalid.text
+          print('xml/schema/page-range/coordinate gate: PASS')
+          PY
+
+      - name: Gate encrypted PDF password handling
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          qpdf --encrypt xml-pass owner-pass 256 -- /tmp/solyan-pdf-to-xml/fixture.pdf /tmp/solyan-pdf-to-xml/encrypted.pdf
+          python <<'PY' 2>&1 | tee -a /tmp/solyan-pdf-to-xml/gate.log
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          root = Path('/tmp/solyan-pdf-to-xml')
+          encrypted = root.joinpath('encrypted.pdf').read_bytes()
+          client = TestClient(app)
+
+          ok = client.post(
+              '/pdf/to-xml',
+              files={'file': ('encrypted.pdf', encrypted, 'application/pdf')},
+              data={'password': 'xml-pass'},
+          )
+          assert ok.status_code == 200, ok.text
+          parsed = ET.fromstring(ok.content)
+          assert 'PAGE-ONE' in ''.join(parsed.itertext())
+
+          bad = client.post(
+              '/pdf/to-xml',
+              files={'file': ('encrypted.pdf', encrypted, 'application/pdf')},
+              data={'password': 'wrong-pass'},
+          )
+          assert bad.status_code == 401, (bad.status_code, bad.text)
+          print('encrypted password handling: PASS')
+          PY
+
+      - name: Gate product wiring
+        run: |
+          set -euo pipefail
+          grep -q 'from .pdf_to_xml import router as pdf_to_xml_router' backend/app/main.py
+          grep -q 'app.include_router(pdf_to_xml_router)' backend/app/main.py
+          grep -q 'X-SolYan-XML-Pages' backend/app/main.py
+          grep -q '/pdf/to-xml' frontend/app/pdf-to-xml/page.tsx
+          grep -q "href: '/pdf-to-xml'" frontend/app/page.tsx
+          grep -q 'poppler-utils' backend/Dockerfile
+          echo 'route/UI/existing Poppler dependency wiring: PASS' | tee -a /tmp/solyan-pdf-to-xml/gate.log
+
+      - name: Upload PDF to XML evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-xml-evidence
+          path: |
+            /tmp/solyan-pdf-to-xml/gate.log
+            /tmp/solyan-pdf-to-xml/fixture.pdf
+            /tmp/solyan-pdf-to-xml/encrypted.pdf
+            /tmp/solyan-pdf-to-xml/all-pages.xml
+            /tmp/solyan-pdf-to-xml/page-two.xml
+            /tmp/solyan-pdf-to-xml/precise.xml
+            /tmp/pdftohtml-version.log
+          if-no-files-found: warn
+          retention-days: 14
