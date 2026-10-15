@@ -27,6 +27,7 @@ from .pdf_to_postscript import router as pdf_to_postscript_router
 from .pdf_to_rtf import router as pdf_to_rtf_router
 from .pdf_to_text import router as pdf_to_text_router
 from .pdf_to_xml import router as pdf_to_xml_router
+from .portfolio import router as portfolio_router
 from .remove_annotations import router as remove_annotations_router
 from .remove_blank_pages import router as remove_blank_pages_router
 from .remove_images import router as remove_images_router
@@ -89,6 +90,7 @@ app.add_middleware(
         "X-SolYan-CSV-Files",
         "X-SolYan-PostScript-Format",
         "X-SolYan-PostScript-Level",
+        "X-SolYan-Portfolio-Files",
     ],
 )
 app.include_router(network_router)
@@ -114,6 +116,7 @@ app.include_router(pdf_to_postscript_router)
 app.include_router(pdf_to_rtf_router)
 app.include_router(pdf_to_text_router)
 app.include_router(pdf_to_xml_router)
+app.include_router(portfolio_router)
 app.include_router(unlock_forms_router)
 
 
