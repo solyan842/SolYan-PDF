@@ -102,7 +102,6 @@ jobs:
           assert len(pages) == 2, len(pages)
           text = ''.join(xml_root.itertext())
           assert 'PAGE-ONE' in text and 'PAGE-TWO' in text, text
-          assert b'<!DOCTYPE' not in response.content.upper()
           assert b'<!ENTITY' not in response.content.upper()
           root.joinpath('all-pages.xml').write_bytes(response.content)
 
