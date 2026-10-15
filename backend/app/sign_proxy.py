@@ -47,6 +47,8 @@ def sign_pkcs12(
     field_name: str = Form(default="Signature1", max_length=128),
     reason: str = Form(default="", max_length=500),
     location: str = Form(default="", max_length=500),
+    certify: bool = Form(default=False),
+    docmdp_permission: str = Form(default="fill_forms", max_length=32),
 ) -> Response:
     pdf_data = _read_limited(file, MAX_PDF_SIZE, "PDF")
     cert_data = _read_limited(certificate, MAX_CERT_SIZE, "PKCS#12")
@@ -65,6 +67,8 @@ def sign_pkcs12(
                     "field_name": field_name,
                     "reason": reason,
                     "location": location,
+                    "certify": "true" if certify else "false",
+                    "docmdp_permission": docmdp_permission,
                 },
             )
     except httpx.HTTPError as exc:
@@ -73,10 +77,11 @@ def sign_pkcs12(
     if response.status_code >= 400:
         raise _upstream_error(response)
 
+    filename = "solyan-certified.pdf" if certify else "solyan-signed.pdf"
     return Response(
         content=response.content,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="solyan-signed.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
