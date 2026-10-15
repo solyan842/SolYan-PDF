@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from .sanitize import _read_pdf
 
@@ -19,8 +20,10 @@ COMMAND_TIMEOUT_SECONDS = 240
 MAX_DPI = 300
 MIN_DPI = 72
 MAX_PAGES = 1_000
+MAX_PAGE_NUMBER = 10_000
 MAX_CBZ_BYTES = 500 * 1024 * 1024
 PAGE_COUNT_RE = re.compile(r"^Pages:\s*(\d+)\s*$", re.MULTILINE)
+RENDERED_PAGE_RE = re.compile(r"-(\d+)\.png$")
 
 
 def _command_env() -> dict[str, str]:
@@ -77,7 +80,6 @@ def _password_attempts(base: list[str], password: str | None, input_path: Path) 
 
 def _run_password_aware(base: list[str], password: str | None, input_path: Path) -> subprocess.CompletedProcess[bytes]:
     attempts = _password_attempts(base, password, input_path)
-    result: subprocess.CompletedProcess[bytes] | None = None
     for index, command in enumerate(attempts):
         result = _run(command)
         if result.returncode == 0:
@@ -104,6 +106,13 @@ def _page_count(input_path: Path, password: str | None) -> int:
     if count < 1:
         raise HTTPException(status_code=422, detail="PDF contains no pages")
     return count
+
+
+def _rendered_page_number(path: Path) -> int:
+    match = RENDERED_PAGE_RE.search(path.name)
+    if not match:
+        raise HTTPException(status_code=500, detail=f"Unexpected rendered page filename: {path.name}")
+    return int(match.group(1))
 
 
 def _convert_pdf_to_cbz(
@@ -138,14 +147,14 @@ def _convert_pdf_to_cbz(
 
     prefix = render_dir / "page"
     base = ["pdftoppm", "-png", "-r", str(dpi), "-f", str(start), "-l", str(end)]
-    attempts: list[list[str]] = []
     if password:
-        attempts.append([*base, "-upw", password, str(input_path), str(prefix)])
-        attempts.append([*base, "-opw", password, str(input_path), str(prefix)])
+        attempts = [
+            [*base, "-upw", password, str(input_path), str(prefix)],
+            [*base, "-opw", password, str(input_path), str(prefix)],
+        ]
     else:
-        attempts.append([*base, str(input_path), str(prefix)])
+        attempts = [[*base, str(input_path), str(prefix)]]
 
-    result: subprocess.CompletedProcess[bytes] | None = None
     for index, command in enumerate(attempts):
         result = _run(command)
         if result.returncode == 0:
@@ -160,7 +169,7 @@ def _convert_pdf_to_cbz(
             raise HTTPException(status_code=401, detail="PDF password is required or invalid")
         raise HTTPException(status_code=422, detail=detail)
 
-    images = sorted(render_dir.glob("page-*.png"))
+    images = sorted(render_dir.glob("page-*.png"), key=_rendered_page_number)
     if len(images) != selected_pages:
         raise HTTPException(
             status_code=500,
@@ -185,8 +194,8 @@ def pdf_to_cbz(
     file: UploadFile = File(...),
     password: str | None = Form(default=None, max_length=128),
     dpi: int = Form(default=150, ge=MIN_DPI, le=MAX_DPI),
-    first_page: int | None = Form(default=None, ge=1, le=MAX_PAGES),
-    last_page: int | None = Form(default=None, ge=1, le=MAX_PAGES),
+    first_page: int | None = Form(default=None, ge=1, le=MAX_PAGE_NUMBER),
+    last_page: int | None = Form(default=None, ge=1, le=MAX_PAGE_NUMBER),
 ) -> FileResponse:
     data = _read_pdf(file)
     work_dir = Path(tempfile.mkdtemp(prefix="solyan-pdf-cbz-"))
@@ -203,8 +212,6 @@ def pdf_to_cbz(
     except Exception:
         shutil.rmtree(work_dir, ignore_errors=True)
         raise
-
-    from starlette.background import BackgroundTask
 
     return FileResponse(
         path=output_path,
