@@ -48,16 +48,20 @@ export default function PdfToCbzPage() {
       setError('DPI phải là số nguyên từ 72 đến 300.');
       return;
     }
-    if (first !== null && (!Number.isInteger(first) || first < 1 || first > 1000)) {
-      setError('Trang đầu phải là số nguyên từ 1 đến 1000.');
+    if (first !== null && (!Number.isInteger(first) || first < 1 || first > 10000)) {
+      setError('Trang đầu phải là số nguyên từ 1 đến 10000.');
       return;
     }
-    if (last !== null && (!Number.isInteger(last) || last < 1 || last > 1000)) {
-      setError('Trang cuối phải là số nguyên từ 1 đến 1000.');
+    if (last !== null && (!Number.isInteger(last) || last < 1 || last > 10000)) {
+      setError('Trang cuối phải là số nguyên từ 1 đến 10000.');
       return;
     }
     if (first !== null && last !== null && first > last) {
       setError('Trang đầu không được lớn hơn trang cuối.');
+      return;
+    }
+    if (first !== null && last !== null && last - first + 1 > 1000) {
+      setError('Mỗi lần chỉ được chuyển tối đa 1.000 trang.');
       return;
     }
 
@@ -103,11 +107,11 @@ export default function PdfToCbzPage() {
       <label className="field"><span>Mật khẩu PDF (nếu có)</span><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} maxLength={128} placeholder="Để trống nếu PDF không mã hóa" /></label>
       <label className="field"><span>Độ phân giải</span><select value={dpi} onChange={(e)=>setDpi(e.target.value)}><option value="96">96 DPI · nhẹ</option><option value="150">150 DPI · cân bằng</option><option value="200">200 DPI · rõ</option><option value="300">300 DPI · cao</option></select></label>
       <div className="form-grid two-col">
-        <label className="field"><span>Trang đầu</span><input type="number" min="1" max="1000" value={firstPage} onChange={(e)=>setFirstPage(e.target.value)} placeholder="1" /></label>
-        <label className="field"><span>Trang cuối</span><input type="number" min="1" max="1000" value={lastPage} onChange={(e)=>setLastPage(e.target.value)} placeholder="Tới hết" /></label>
+        <label className="field"><span>Trang đầu</span><input type="number" min="1" max="10000" value={firstPage} onChange={(e)=>setFirstPage(e.target.value)} placeholder="1" /></label>
+        <label className="field"><span>Trang cuối</span><input type="number" min="1" max="10000" value={lastPage} onChange={(e)=>setLastPage(e.target.value)} placeholder="Tới hết" /></label>
       </div>
       <p className="hint">CBZ là ZIP chứa ảnh trang theo thứ tự; phù hợp comic/manga hoặc tài liệu cần đọc như chuỗi ảnh. Chuyển đổi này rasterize trang PDF nên text/vector/form không còn tương tác.</p>
-      <p className="hint"><strong>Giới hạn:</strong> 100 MB PDF đầu vào, tối đa 1.000 trang mỗi request, 72–300 DPI và tối đa 500 MB CBZ đầu ra.</p>
+      <p className="hint"><strong>Giới hạn:</strong> 100 MB PDF đầu vào, tối đa 1.000 trang mỗi request, page number tới 10.000, 72–300 DPI và tối đa 500 MB CBZ đầu ra.</p>
       {result && <div className="result-box">{result}</div>}
       {error && <div className="error">{error}</div>}
       <button className="merge-button" type="button" onClick={run} disabled={!file || busy}>{busy ? 'Đang render…' : 'Tạo CBZ và tải xuống'}</button>
