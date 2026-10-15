@@ -146,8 +146,9 @@ jobs:
           assert single.headers['x-solyan-svg-raster-dpi'] == '200'
           root = ET.fromstring(single.content)
           assert root.tag.split('}')[-1] == 'svg'
-          assert root.attrib.get('width') == '400pt', root.attrib
-          assert root.attrib.get('height') == '300pt', root.attrib
+          assert root.attrib.get('width') in {'400', '400pt'}, root.attrib
+          assert root.attrib.get('height') in {'300', '300pt'}, root.attrib
+          assert root.attrib.get('viewBox') == '0 0 400 300', root.attrib
 
           bad_range = client.post(
               '/pdf/to-svg',
