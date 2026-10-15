@@ -48,7 +48,7 @@ jobs:
       - name: Compile service and backend
         run: python -m compileall engines/office-service/app backend/app
 
-      - name: Gate real LibreOffice PDF to RTF and text recovery
+      - name: Gate real LibreOffice PDF to RTF payload and reopen
         working-directory: engines/office-service
         env:
           PYTHONPATH: .
@@ -89,10 +89,15 @@ jobs:
           assert rtf.headers['x-solyan-conversion-engine'] == 'LibreOffice-PDF-import'
           assert rtf.content.lstrip().startswith(b'{\\rtf'), rtf.content[:32]
           assert len(rtf.content) > 100
+          assert b'SolYan RTF CI' in rtf.content, 'heading missing from RTF payload'
+          assert b'Editable PDF import through LibreOffice Writer.' in rtf.content, 'body text missing from RTF payload'
           root.joinpath('source.rtf').write_bytes(rtf.content)
-          print('real LibreOffice PDF -> RTF: PASS', len(rtf.content))
+          print('real LibreOffice PDF -> RTF payload: PASS', len(rtf.content))
           PY
 
+          # LibreOffice PDF import represents positioned text as RTF SHAPE fields.
+          # Its RTF->TXT export can omit text from later shapes, so TXT is only a
+          # reopen/readability smoke test; payload preservation is asserted above.
           mkdir -p /tmp/solyan-pdf-to-rtf/txt /tmp/solyan-pdf-to-rtf/profile
           libreoffice --headless --nologo --nodefault --nofirststartwizard \
             -env:UserInstallation=file:///tmp/solyan-pdf-to-rtf/profile \
@@ -102,8 +107,7 @@ jobs:
             2>&1 | tee -a /tmp/solyan-pdf-to-rtf/gate.log
           test -s /tmp/solyan-pdf-to-rtf/txt/source.txt
           grep -q 'SolYan RTF CI' /tmp/solyan-pdf-to-rtf/txt/source.txt
-          grep -q 'Editable PDF import' /tmp/solyan-pdf-to-rtf/txt/source.txt
-          echo 'RTF round-trip text recovery: PASS' | tee -a /tmp/solyan-pdf-to-rtf/gate.log
+          echo 'RTF LibreOffice reopen/readability smoke: PASS' | tee -a /tmp/solyan-pdf-to-rtf/gate.log
 
       - name: Gate production backend RTF adapter
         working-directory: backend
