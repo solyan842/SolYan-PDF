@@ -150,6 +150,8 @@ def protect_pdf(
         raise HTTPException(status_code=422, detail="modify_mode must be one of: none, assembly, form, annotate, all")
 
     data = _read_pdf(file)
+    # Restrictions are owner-vs-user semantics. Reusing the user password as the
+    # owner password would let anyone who can open the file bypass restrictions.
     owner = owner_password or secrets.token_urlsafe(32)
     return _run_qpdf(
         data,
