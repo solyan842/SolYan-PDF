@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 MAX_FILE_SIZE = int(os.getenv("OFFICE_MAX_FILE_SIZE", str(100 * 1024 * 1024)))
-SUPPORTED_SUFFIXES = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf"}
+SUPPORTED_SUFFIXES = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf", ".txt"}
 PDF_IMPORT_TARGETS = {"docx", "pptx", "rtf"}
 OOXML_MEDIA_TYPES = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -204,6 +204,15 @@ def convert_to_pdf(file: UploadFile = File(...)) -> Response:
     if not data:
         raise HTTPException(status_code=400, detail="Empty upload")
 
+    infilter: str | None = None
+    if suffix == ".txt":
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=422, detail="TXT input must be valid UTF-8") from exc
+        data = text.encode("utf-8")
+        infilter = "Text (encoded):UTF8"
+
     binary = _libreoffice_binary()
     with tempfile.TemporaryDirectory(prefix="solyan-office-") as temp_dir:
         root = Path(temp_dir)
@@ -214,14 +223,25 @@ def convert_to_pdf(file: UploadFile = File(...)) -> Response:
         profile_dir.mkdir()
         input_path.write_bytes(data)
 
-        result = _run_libreoffice_conversion(binary, input_path, output_dir, profile_dir, "pdf")
+        result = _run_libreoffice_conversion(
+            binary,
+            input_path,
+            output_dir,
+            profile_dir,
+            "pdf",
+            infilter=infilter,
+        )
         output_path = output_dir / "input.pdf"
-        if result.returncode != 0 or not output_path.exists():
+        if result.returncode != 0 or not output_path.exists() or output_path.stat().st_size == 0:
             raise _conversion_error(result, "LibreOffice conversion failed")
+
+        content = output_path.read_bytes()
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=422, detail="LibreOffice produced invalid PDF output")
 
         stem = Path(file.filename or "document").stem or "document"
         return Response(
-            content=output_path.read_bytes(),
+            content=content,
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{stem}.pdf"'},
         )
