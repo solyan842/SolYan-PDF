@@ -4,6 +4,26 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-16
+
+Patch release completing the **V1.5 OSS-first self-contained parity pass**.
+
+### V1.5 self-contained tools
+- Added PDF -> SVG export, certified PDF signing with DocMDP permissions, PDF Portfolio/Collection creation and advanced PDF Page Labels.
+- Expanded Auto Redact with a bounded safe-regex mode, practical presets and Unicode-aware whole-word matching suitable for Vietnamese text.
+- Added full-page flattening, advanced page numbering/Bates labels, advanced document metadata editing, advanced PDF -> Images export and advanced Images -> PDF creation.
+
+### Verification and architecture
+- Reused the existing qpdf, Poppler, pyHanko, PDF.js, Canvas, pdf-lib and JSZip stack instead of introducing a new application runtime or provider dependency.
+- Preserved the PDF -> Office V1 release gate at 27 cases / 68 source pages and did not weaken its routing, page-count, geometry or editability requirements.
+- Recorded the maintained-OSS parity decisions and accepted scope in `docs/V1.5-PARITY-AUDIT.md`, `docs/V1.5-PARITY-STATUS.md` and `docs/V1.5-CLOSEOUT.md`.
+
+### Important boundaries
+- Security-first auto-redaction rebuilds affected pages from raster output so the matched source content is not retained; affected pages therefore lose their original interactive/vector structures.
+- Certification signing follows DocMDP permission semantics and remains local PKCS#12 signing; remote/multi-party signing and key custody are separate product decisions.
+- PDF Portfolio support uses standard embedded-file/collection structures and does not imply viewer-specific UI parity across every PDF reader.
+- Cloud connectors, remote/multi-party signing, AI summarization and translation remain separate provider/product/credential decisions and are not silently included in V1.5.
+
 ## [0.1.7] - 2026-10-15
 
 Patch release completing the **V1.4 OSS-first self-contained security, scan-simulation and vector-export pass**.
