@@ -31,6 +31,12 @@ services:
       OFFICE_SERVICE_URL: ${OFFICE_SERVICE_URL:-http://office-service:8020}
       SIGN_SERVICE_URL: ${SIGN_SERVICE_URL:-http://sign-service:8030}
       ARCHIVE_SERVICE_URL: ${ARCHIVE_SERVICE_URL:-http://archive-service:8040}
+      TRANSLATION_SERVICE_URL: ${TRANSLATION_SERVICE_URL:-http://translation-service:11008}
+      TRANSLATION_DEFAULT_SERVICE: ${TRANSLATION_DEFAULT_SERVICE:-argos}
+      TRANSLATION_ALLOWED_SERVICES: ${TRANSLATION_ALLOWED_SERVICES:-argos,ollama,openai,deepl,google,bing}
+      TRANSLATION_LOCAL_SERVICES: ${TRANSLATION_LOCAL_SERVICES:-argos,ollama}
+      TRANSLATION_TIMEOUT_SECONDS: ${TRANSLATION_TIMEOUT_SECONDS:-900}
+      TRANSLATION_POLL_INTERVAL_SECONDS: ${TRANSLATION_POLL_INTERVAL_SECONDS:-1.0}
       BLOOM_SERVICE_URL: ${BLOOM_SERVICE_URL:-http://bloom-service:8787}
       BLOOM_API_KEY: ${BLOOM_API_KEY:-}
       GOOGLE_CSE_API_KEY: ${GOOGLE_CSE_API_KEY:-}
@@ -124,3 +130,5 @@ services:
 
 # Experimental Bloom PDF -> Office is intentionally not bundled here.
 # Deploy the pinned upstream Bloom service separately and set BLOOM_SERVICE_URL.
+# PDF Translation V1.6 follows the same isolation rule for AGPL engines:
+# run PDFMathTranslate/BabelDOC separately and set TRANSLATION_SERVICE_URL.

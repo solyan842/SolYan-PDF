@@ -35,6 +35,7 @@ from .remove_images import router as remove_images_router
 from .remove_signatures import router as remove_signatures_router
 from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
+from .translation_proxy import router as translation_router
 from .unlock_forms import router as unlock_forms_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -93,6 +94,10 @@ app.add_middleware(
         "X-SolYan-PostScript-Level",
         "X-SolYan-Portfolio-Files",
         "X-SolYan-Page-Labels",
+        "X-SolYan-Translation-Engine",
+        "X-SolYan-Translation-Service",
+        "X-SolYan-Translation-Mode",
+        "X-SolYan-Translation-Local",
     ],
 )
 app.include_router(network_router)
@@ -120,6 +125,7 @@ app.include_router(pdf_to_rtf_router)
 app.include_router(pdf_to_text_router)
 app.include_router(pdf_to_xml_router)
 app.include_router(portfolio_router)
+app.include_router(translation_router)
 app.include_router(unlock_forms_router)
 
 
@@ -180,8 +186,6 @@ def protect_pdf(
         raise HTTPException(status_code=422, detail="modify_mode must be one of: none, assembly, form, annotate, all")
 
     data = _read_pdf(file)
-    # Restrictions are owner-vs-user semantics. Reusing the user password as the
-    # owner password would let anyone who can open the file bypass restrictions.
     owner = owner_password or secrets.token_urlsafe(32)
     return _run_qpdf(
         data,
