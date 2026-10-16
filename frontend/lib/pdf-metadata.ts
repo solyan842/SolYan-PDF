@@ -11,6 +11,7 @@ export type CustomPdfMetadata = {
   value: string;
 };
 
+const MAX_CUSTOM_METADATA_FIELDS = 50;
 const STANDARD_INFO_KEYS = new Set([
   'title',
   'author',
@@ -58,6 +59,9 @@ export function readCustomPdfMetadata(pdf: PDFDocument): CustomPdfMetadata[] {
     const name = key.decodeText();
     if (STANDARD_INFO_KEYS.has(name.toLowerCase())) continue;
     rows.push({ key: name, value: decodeInfoValue(pdf, key) });
+    if (rows.length > MAX_CUSTOM_METADATA_FIELDS) {
+      throw new Error(`PDF có hơn ${MAX_CUSTOM_METADATA_FIELDS} custom metadata fields; hãy dùng PDF Inspector để kiểm tra trước.`);
+    }
   }
   return rows.sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -87,6 +91,9 @@ export function removeInfoKey(pdf: PDFDocument, key: string): void {
 }
 
 export function replaceCustomPdfMetadata(pdf: PDFDocument, rows: CustomPdfMetadata[]): void {
+  if (rows.length > MAX_CUSTOM_METADATA_FIELDS) {
+    throw new Error(`Tối đa ${MAX_CUSTOM_METADATA_FIELDS} custom metadata fields.`);
+  }
   const dict = infoDict(pdf, true)!;
   for (const key of [...dict.keys()]) {
     if (!STANDARD_INFO_KEYS.has(key.decodeText().toLowerCase())) dict.delete(key);
