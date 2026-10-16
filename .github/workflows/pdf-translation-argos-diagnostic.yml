@@ -6,6 +6,7 @@ on:
       - test/v1.6-argos-live-diagnostic-20261016
     paths:
       - 'scripts/generate_translation_fixture.py'
+      - 'scripts/argos_compat/sitecustomize.py'
       - '.github/workflows/pdf-translation-argos-diagnostic.yml'
   workflow_dispatch:
 
@@ -56,9 +57,12 @@ jobs:
           git clone --filter=blob:none --no-checkout "$PDF2ZH_REPO" "$WORK/PDFMathTranslate"
           git -C "$WORK/PDFMathTranslate" checkout --detach "$PDF2ZH_SHA"
           test "$(git -C "$WORK/PDFMathTranslate" rev-parse HEAD)" = "$PDF2ZH_SHA"
+          grep -Fq 'import argotranslate.translate' "$WORK/PDFMathTranslate/pdf2zh/translator.py"
           {
             echo "PDFMathTranslate repository: $PDF2ZH_REPO"
             echo "PDFMathTranslate commit: $(git -C "$WORK/PDFMathTranslate" rev-parse HEAD)"
+            echo 'Observed upstream Argos import defect: import argotranslate.translate'
+            echo 'Mitigation: runtime sys.modules alias loaded through external-process sitecustomize; upstream source remains unmodified.'
           } | tee "$WORK/evidence/upstream.txt"
 
       - name: Install pinned upstream with Argos and ultrafast extras
@@ -101,7 +105,25 @@ jobs:
               raise SystemExit('Argos EN->VI smoke lacks any non-ASCII Vietnamese signal')
           PY
 
+      - name: Validate runtime-only compatibility alias
+        env:
+          PYTHONPATH: ${{ github.workspace }}/scripts/argos_compat
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee "$WORK/evidence/compat-alias.txt"
+          import importlib
+          import argostranslate.translate as expected
+
+          aliased = importlib.import_module('argotranslate.translate')
+          if aliased is not expected:
+              raise SystemExit('runtime alias does not resolve to argostranslate.translate')
+          print('argotranslate.translate -> argostranslate.translate: PASS')
+          print('upstream source modified: NO')
+          PY
+
       - name: Translate real PDF through pinned PDFMathTranslate plus Argos
+        env:
+          PYTHONPATH: ${{ github.workspace }}/scripts/argos_compat
         run: |
           set -euo pipefail
           timeout 900s pdf2zh \
@@ -136,23 +158,29 @@ jobs:
 
           python - <<'PY' | tee "$WORK/evidence/result-summary.txt"
           import os
+          import unicodedata
           from pathlib import Path
 
           root = Path(os.environ['WORK'])
-          source = (root / 'evidence/source.txt').read_text(encoding='utf-8', errors='replace').strip()
-          mono = (root / 'evidence/mono.txt').read_text(encoding='utf-8', errors='replace').strip()
-          dual = (root / 'evidence/dual.txt').read_text(encoding='utf-8', errors='replace').strip()
+          source = unicodedata.normalize('NFC', (root / 'evidence/source.txt').read_text(encoding='utf-8', errors='replace')).strip()
+          mono = unicodedata.normalize('NFC', (root / 'evidence/mono.txt').read_text(encoding='utf-8', errors='replace')).strip()
+          dual = unicodedata.normalize('NFC', (root / 'evidence/dual.txt').read_text(encoding='utf-8', errors='replace')).strip()
+
+          source_sentence = 'This document is a simple translation test.'
+          markers = ('tài liệu', 'dịch', 'tiếng việt', 'quyền riêng tư', 'xử lý', 'trang', 'bố cục')
+          hits = sorted({item for item in markers if item in mono.casefold()})
 
           print('source chars:', len(source))
           print('mono extracted chars:', len(mono))
           print('dual extracted chars:', len(dual))
-          print('mono differs from source:', mono != source)
-          print('mono non-ASCII signal:', any(ord(ch) > 127 for ch in mono))
+          print('Vietnamese markers:', ', '.join(hits))
 
-          if mono and mono == source:
-              raise SystemExit('Translated mono PDF text is identical to source')
-          if mono and not any(ord(ch) > 127 for ch in mono):
-              raise SystemExit('Translated mono PDF has extractable text but no Vietnamese non-ASCII signal')
+          if len(hits) < 2:
+              raise SystemExit(f'Translated mono PDF has insufficient Vietnamese signal: {hits!r}')
+          if source_sentence.casefold() in mono.casefold():
+              raise SystemExit('Translated mono PDF still contains the exact English source sentence')
+          if source_sentence.casefold() not in dual.casefold():
+              raise SystemExit('Bilingual PDF does not retain the original English source sentence')
           PY
 
           cp "${mono[0]}" "$WORK/evidence/argos-en-vi-mono.pdf"
