@@ -25,6 +25,8 @@ const POSITION_OPTIONS: Array<{ value: PageNumberPosition; label: string }> = [
   { value: 9, label: 'Dưới · phải' },
 ];
 
+const TWO_COLUMN_STYLE = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 } as const;
+
 type FontChoice = 'helvetica' | 'times' | 'courier';
 
 export default function PageNumbersPage() {
@@ -127,19 +129,19 @@ export default function PageNumbersPage() {
     <section className="workspace form-workspace">
       <label className="field"><span>Trang áp dụng</span><input value={pages} onChange={(e)=>setPages(e.target.value)} placeholder="Để trống = tất cả; ví dụ 1,3-8" /></label>
 
-      <div className="grid-2">
+      <div style={TWO_COLUMN_STYLE}>
         <label className="field"><span>Bắt đầu từ số</span><input type="number" value={start} onChange={(e)=>setStart(Number(e.target.value))}/></label>
         <label className="field"><span>Zero padding / Bates</span><input type="number" min="0" max="12" value={zeroPad} onChange={(e)=>setZeroPad(Number(e.target.value))}/><small>0 = tắt; 6 → 000001.</small></label>
       </div>
 
       <label className="field"><span>Mẫu hiển thị</span><input value={template} maxLength={200} onChange={(e)=>setTemplate(e.target.value)} placeholder="Page {n} of {total}"/><small>Biến: <code>{'{n}'}</code> · <code>{'{total}'}</code> · <code>{'{filename}'}</code></small></label>
 
-      <div className="grid-2">
+      <div style={TWO_COLUMN_STYLE}>
         <label className="field"><span>Vị trí</span><select value={position} onChange={(e)=>setPosition(Number(e.target.value) as PageNumberPosition)}>{POSITION_OPTIONS.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         <label className="field"><span>Lề</span><select value={margin} onChange={(e)=>setMargin(e.target.value as PageNumberMargin)}><option value="small">Nhỏ · 2%</option><option value="medium">Vừa · 3.5%</option><option value="large">Lớn · 5%</option><option value="x-large">Rất lớn · 7.5%</option></select></label>
       </div>
 
-      <div className="grid-2">
+      <div style={TWO_COLUMN_STYLE}>
         <label className="field"><span>Font</span><select value={fontChoice} onChange={(e)=>setFontChoice(e.target.value as FontChoice)}><option value="helvetica">Helvetica</option><option value="times">Times Roman</option><option value="courier">Courier</option></select></label>
         <label className="field"><span>Cỡ chữ</span><input type="number" min="6" max="72" step="1" value={fontSize} onChange={(e)=>setFontSize(Number(e.target.value))}/></label>
       </div>
