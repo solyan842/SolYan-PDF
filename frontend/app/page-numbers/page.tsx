@@ -29,6 +29,7 @@ type FontChoice = 'helvetica' | 'times' | 'courier';
 
 export default function PageNumbersPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [sourcePageCount, setSourcePageCount] = useState(0);
   const [pages, setPages] = useState('');
   const [start, setStart] = useState(1);
   const [position, setPosition] = useState<PageNumberPosition>(8);
@@ -41,8 +42,9 @@ export default function PageNumbersPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  function onFile(event: ChangeEvent<HTMLInputElement>) {
+  async function onFile(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] ?? null;
+    setSourcePageCount(0);
     if (selected && selected.size > MAX_FILE_SIZE) {
       setFile(null);
       setError('PDF vượt giới hạn 100 MB.');
@@ -51,6 +53,15 @@ export default function PageNumbersPage() {
     }
     setFile(selected);
     setError('');
+    if (!selected) return;
+    try {
+      const pdf = await PDFDocument.load(await selected.arrayBuffer());
+      setSourcePageCount(pdf.getPageCount());
+    } catch (cause) {
+      setFile(null);
+      setError(cause instanceof Error ? cause.message : 'Không đọc được PDF.');
+      event.target.value = '';
+    }
   }
 
   async function apply() {
@@ -100,6 +111,11 @@ export default function PageNumbersPage() {
     }
   }
 
+  const previewStart = Number.isInteger(start) ? start : 1;
+  const previewPad = Number.isInteger(zeroPad) && zeroPad >= 0 && zeroPad <= 12 ? zeroPad : 0;
+  const previewTotal = sourcePageCount > 0 ? sourcePageCount : 12;
+  const preview = pageNumberTemplate(template, previewStart, previewTotal, file?.name ?? 'document.pdf', previewPad);
+
   return <main className="shell">
     <header className="topbar"><a className="brand" href="/">SolYan PDF</a><div className="privacy-pill">Local · pdf-lib · Bates</div></header>
     <section className="hero compact-hero">
@@ -130,8 +146,8 @@ export default function PageNumbersPage() {
 
       <label className="field"><span>Màu chữ</span><input type="color" value={fontColor} onChange={(e)=>setFontColor(e.target.value)}/><small>{fontColor}</small></label>
 
-      <div className="result-box"><strong>Xem trước mẫu:</strong> {pageNumberTemplate(template, start, Math.max(1, file ? 1 : 1), file?.name ?? 'document.pdf', Math.max(0, Math.min(12, Number.isInteger(zeroPad) ? zeroPad : 0)))}</div>
-      {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong></p>}
+      <div className="result-box"><strong>Xem trước mẫu:</strong> {preview}</div>
+      {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong> · {sourcePageCount} trang</p>}
       <p className="hint">Mặc định vẫn là dưới · giữa như bản cũ. Số tăng theo thứ tự trang đã chọn. <code>{'{total}'}</code> là tổng số trang vật lý của PDF, không phải số trang được chọn.</p>
       {error && <div className="error">{error}</div>}
       <button className="merge-button" type="button" onClick={apply} disabled={!file || busy}>{busy ? 'Đang xử lý…' : 'Đánh số trang / Bates'}</button>
