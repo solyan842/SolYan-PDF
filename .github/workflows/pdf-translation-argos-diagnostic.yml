@@ -21,6 +21,7 @@ jobs:
       PDF2ZH_REPO: https://github.com/PDFMathTranslate/PDFMathTranslate.git
       PDF2ZH_SHA: d16604dabb5c3f4c6d4daf37197b218b0dbd4df2
       ARGOS_MODEL_URL: https://argos-net.com/v1/translate-en_vi-1_9.argosmodel
+      ARGOS_MODEL_SHA256: 86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16
       WORK: /tmp/solyan-argos-live
 
     steps:
@@ -60,16 +61,17 @@ jobs:
             echo "PDFMathTranslate commit: $(git -C "$WORK/PDFMathTranslate" rev-parse HEAD)"
           } | tee "$WORK/evidence/upstream.txt"
 
-      - name: Install pinned upstream with Argos extra
+      - name: Install pinned upstream with Argos and ultrafast extras
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install "$WORK/PDFMathTranslate[argostranslate]" 2>&1 | tee "$WORK/evidence/install.log"
+          python -m pip install "$WORK/PDFMathTranslate[argostranslate,ultrafast]" 2>&1 | tee "$WORK/evidence/install.log"
           python -m pip check 2>&1 | tee "$WORK/evidence/pip-check.txt"
           pdf2zh --version | tee "$WORK/evidence/pdf2zh-version.txt"
           python - <<'PY' | tee "$WORK/evidence/argos-version.txt"
           import importlib.metadata
           print('argostranslate', importlib.metadata.version('argostranslate'))
+          print('pdf-inspector', importlib.metadata.version('pdf-inspector'))
           PY
 
       - name: Download and install pinned Argos EN to VI model
@@ -79,6 +81,7 @@ jobs:
             "$ARGOS_MODEL_URL" \
             --output "$WORK/translate-en_vi-1_9.argosmodel"
           sha256sum "$WORK/translate-en_vi-1_9.argosmodel" | tee "$WORK/evidence/argos-model-sha256.txt"
+          echo "$ARGOS_MODEL_SHA256  $WORK/translate-en_vi-1_9.argosmodel" | sha256sum --check -
           python - <<'PY' | tee "$WORK/evidence/argos-plain-translation.txt"
           import os
           from pathlib import Path
