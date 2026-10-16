@@ -90,6 +90,11 @@ export default function PageNumbersPage() {
       indexes.forEach((index, order) => {
         const page = pdf.getPage(index);
         const label = pageNumberTemplate(template, start + order, pdf.getPageCount(), file.name, zeroPad);
+        try {
+          font.encodeText(label);
+        } catch {
+          throw new Error(`Nhãn ở trang ${index + 1} có ký tự không được font PDF chuẩn hỗ trợ. Hãy dùng nội dung WinAnsi/ASCII hoặc bỏ {filename} nếu tên file có ký tự ngoài bộ font.`);
+        }
         const textWidth = font.widthOfTextAtSize(label, fontSize);
         const crop = page.getCropBox();
         const origin = pageNumberPlacement(crop, textWidth, fontSize, position, margin);
@@ -150,7 +155,7 @@ export default function PageNumbersPage() {
 
       <div className="result-box"><strong>Xem trước mẫu:</strong> {preview}</div>
       {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong> · {sourcePageCount} trang</p>}
-      <p className="hint">Mặc định vẫn là dưới · giữa như bản cũ. Số tăng theo thứ tự trang đã chọn. <code>{'{total}'}</code> là tổng số trang vật lý của PDF, không phải số trang được chọn.</p>
+      <p className="hint">Mặc định vẫn là dưới · giữa như bản cũ. Số tăng theo thứ tự trang đã chọn. <code>{'{total}'}</code> là tổng số trang vật lý của PDF, không phải số trang được chọn. Các font chuẩn PDF trong lane này dùng WinAnsi; label có ký tự ngoài bộ font sẽ bị từ chối rõ thay vì xuất sai glyph.</p>
       {error && <div className="error">{error}</div>}
       <button className="merge-button" type="button" onClick={apply} disabled={!file || busy}>{busy ? 'Đang xử lý…' : 'Đánh số trang / Bates'}</button>
     </section>
