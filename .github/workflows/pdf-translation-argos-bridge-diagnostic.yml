@@ -1,0 +1,211 @@
+name: PDF Translation Argos Bridge Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  argos-provider-bridge-en-vi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PDF2ZH_REPO: https://github.com/PDFMathTranslate/PDFMathTranslate.git
+      PDF2ZH_SHA: d16604dabb5c3f4c6d4daf37197b218b0dbd4df2
+      ARGOS_MODEL_URL: https://data.argosopentech.com/argospm/v1/translate-en_vi-1_9.argosmodel
+      ARGOS_MODEL_SHA256: 86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16
+      WORK: /tmp/solyan-argos-bridge
+      OPENAILIKED_BASE_URL: http://127.0.0.1:18080/v1
+      OPENAILIKED_API_KEY: local-only
+      OPENAILIKED_MODEL: argos-en-vi
+      OPENAILIKED_STREAM: 'false'
+
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PDF inspection tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Build deterministic English PDF fixture
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK/input" "$WORK/output" "$WORK/evidence"
+          python scripts/generate_translation_fixture.py "$WORK/input/argos-en-vi.pdf"
+          pdfinfo "$WORK/input/argos-en-vi.pdf" | tee "$WORK/evidence/source-pdfinfo.txt"
+          pdftotext -layout "$WORK/input/argos-en-vi.pdf" "$WORK/evidence/source.txt"
+          grep -Fq 'This document is a simple translation test.' "$WORK/evidence/source.txt"
+
+      - name: Checkout pinned PDFMathTranslate upstream
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout "$PDF2ZH_REPO" "$WORK/PDFMathTranslate"
+          git -C "$WORK/PDFMathTranslate" checkout --detach "$PDF2ZH_SHA"
+          test "$(git -C "$WORK/PDFMathTranslate" rev-parse HEAD)" = "$PDF2ZH_SHA"
+          {
+            echo "PDFMathTranslate repository: $PDF2ZH_REPO"
+            echo "PDFMathTranslate commit: $(git -C "$WORK/PDFMathTranslate" rev-parse HEAD)"
+            echo 'PDFMathTranslate source modified: NO'
+            echo 'Provider route: built-in openailiked -> loopback SolYan Argos bridge'
+          } | tee "$WORK/evidence/upstream.txt"
+
+      - name: Install pinned upstream and SolYan Argos provider
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install "$WORK/PDFMathTranslate[ultrafast]" 2>&1 | tee "$WORK/evidence/install-upstream.log"
+          python -m pip install -r engines/translation-provider/requirements.txt 2>&1 | tee "$WORK/evidence/install-provider.log"
+          python -m pip check 2>&1 | tee "$WORK/evidence/pip-check.txt"
+          pdf2zh --version | tee "$WORK/evidence/pdf2zh-version.txt"
+
+      - name: Download and install pinned Argos EN to VI model
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2 \
+            "$ARGOS_MODEL_URL" \
+            --output "$WORK/translate-en_vi-1_9.argosmodel"
+          echo "$ARGOS_MODEL_SHA256  $WORK/translate-en_vi-1_9.argosmodel" | sha256sum --check -
+          sha256sum "$WORK/translate-en_vi-1_9.argosmodel" | tee "$WORK/evidence/argos-model-sha256.txt"
+          python - <<'PY' | tee "$WORK/evidence/argos-model-install.txt"
+          import os
+          from pathlib import Path
+          import argostranslate.package
+
+          model = Path(os.environ['WORK']) / 'translate-en_vi-1_9.argosmodel'
+          argostranslate.package.install_from_path(model)
+          packages = argostranslate.package.get_installed_packages()
+          if not any(p.from_code == 'en' and p.to_code == 'vi' for p in packages):
+              raise SystemExit('Argos EN->VI model is not installed')
+          print('Argos EN->VI model install: PASS')
+          PY
+
+      - name: Start loopback Argos OpenAI-compatible provider
+        run: |
+          set -euo pipefail
+          python engines/translation-provider/argos_openai_bridge.py \
+            --host 127.0.0.1 \
+            --port 18080 \
+            --source-language en \
+            --target-language vi \
+            > "$WORK/evidence/bridge.log" 2>&1 &
+          echo $! > "$WORK/bridge.pid"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/health > "$WORK/evidence/bridge-health.json"; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/health | tee "$WORK/evidence/bridge-health-final.json"
+
+      - name: Validate OpenAI-compatible bridge response
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee "$WORK/evidence/bridge-smoke.txt"
+          import json
+          import urllib.request
+
+          prompt = (
+              'You are a professional, authentic machine translation engine. '
+              'Only Output the translated text, do not include any other text.\n\n'
+              'Translate the following markdown source text to vi. '
+              'Keep the formula notation {v*} unchanged. '
+              'Output translation directly without any additional text.\n\n'
+              'Source Text: This document is a simple translation test.\n\n'
+              'Translated Text:'
+          )
+          body = json.dumps({
+              'model': 'argos-en-vi',
+              'messages': [{'role': 'user', 'content': prompt}],
+              'stream': False,
+          }).encode('utf-8')
+          request = urllib.request.Request(
+              'http://127.0.0.1:18080/v1/chat/completions',
+              data=body,
+              headers={'Content-Type': 'application/json'},
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:
+              payload = json.load(response)
+          translated = payload['choices'][0]['message']['content'].strip()
+          print('translation:', translated)
+          if not translated or translated.casefold() == 'This document is a simple translation test.'.casefold():
+              raise SystemExit('bridge returned no semantic translation')
+          if not any(ord(char) > 127 for char in translated):
+              raise SystemExit('bridge translation lacks non-ASCII Vietnamese signal')
+          PY
+
+      - name: Translate PDF through unmodified PDFMathTranslate provider interface
+        run: |
+          set -euo pipefail
+          timeout 300s pdf2zh \
+            "$WORK/input/argos-en-vi.pdf" \
+            --lang-in en \
+            --lang-out vi \
+            --service openailiked \
+            --thread 1 \
+            --ultrafast \
+            --ignore-cache \
+            --output "$WORK/output" \
+            2>&1 | tee "$WORK/evidence/pdf2zh-bridge.log"
+
+      - name: Validate translated PDF outputs
+        run: |
+          set -euo pipefail
+          mapfile -t mono < <(find "$WORK/output" -maxdepth 1 -type f -name '*-mono.pdf' -print)
+          mapfile -t dual < <(find "$WORK/output" -maxdepth 1 -type f -name '*-dual.pdf' -print)
+          test "${#mono[@]}" -eq 1
+          test "${#dual[@]}" -eq 1
+          for pdf in "${mono[0]}" "${dual[0]}"; do
+            test -s "$pdf"
+            test "$(head -c 5 "$pdf")" = '%PDF-'
+            pdfinfo "$pdf" >> "$WORK/evidence/output-pdfinfo.txt"
+            echo '---' >> "$WORK/evidence/output-pdfinfo.txt"
+          done
+          pdftotext -layout "${mono[0]}" "$WORK/evidence/mono.txt" || true
+          pdftotext -layout "${dual[0]}" "$WORK/evidence/dual.txt" || true
+          python - <<'PY' | tee "$WORK/evidence/result-summary.txt"
+          import os
+          import unicodedata
+          from pathlib import Path
+
+          root = Path(os.environ['WORK'])
+          mono = unicodedata.normalize('NFC', (root / 'evidence/mono.txt').read_text('utf-8', errors='replace')).casefold()
+          dual = unicodedata.normalize('NFC', (root / 'evidence/dual.txt').read_text('utf-8', errors='replace')).casefold()
+          source_sentence = 'this document is a simple translation test.'
+          markers = ('tài liệu', 'dịch', 'tiếng việt', 'quyền riêng tư', 'xử lý', 'trang', 'bố cục')
+          hits = sorted({marker for marker in markers if marker in mono})
+          print('Vietnamese markers:', ', '.join(hits))
+          if len(hits) < 2:
+              raise SystemExit(f'Insufficient Vietnamese signal in mono output: {hits!r}')
+          if source_sentence in mono:
+              raise SystemExit('Mono output still contains the exact English source sentence')
+          if source_sentence not in dual:
+              raise SystemExit('Dual output does not retain the English source sentence')
+          print('local Argos provider bridge PDF diagnostic: PASS')
+          PY
+          cp "${mono[0]}" "$WORK/evidence/argos-bridge-en-vi-mono.pdf"
+          cp "${dual[0]}" "$WORK/evidence/argos-bridge-en-vi-dual.pdf"
+
+      - name: Stop loopback bridge
+        if: always()
+        run: |
+          if [ -f "$WORK/bridge.pid" ]; then
+            kill "$(cat "$WORK/bridge.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload bridge diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-translation-argos-provider-bridge-en-vi
+          path: /tmp/solyan-argos-bridge/evidence
+          if-no-files-found: warn
+          retention-days: 14

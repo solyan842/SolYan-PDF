@@ -1,0 +1,259 @@
+name: PDF Translation Full Stack Diagnostic
+
+on:
+  push:
+    branches:
+      - test/v1.6-argos-live-diagnostic-20261016
+    paths:
+      - '.github/workflows/pdf-translation-full-stack-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-stack-en-vi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PDF2ZH_REPO: https://github.com/PDFMathTranslate/PDFMathTranslate.git
+      PDF2ZH_SHA: d16604dabb5c3f4c6d4daf37197b218b0dbd4df2
+      ARGOS_MODEL_URL: https://data.argosopentech.com/argospm/v1/translate-en_vi-1_9.argosmodel
+      ARGOS_MODEL_SHA256: 86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16
+      WORK: /tmp/solyan-translation-full-stack
+      UPSTREAM_VENV: /tmp/solyan-translation-full-stack/upstream-venv
+      CELERY_BROKER: redis://127.0.0.1:6379/0
+      CELERY_RESULT: redis://127.0.0.1:6379/0
+      OPENAILIKED_BASE_URL: http://127.0.0.1:18080/v1
+      OPENAILIKED_API_KEY: local-only
+      OPENAILIKED_MODEL: argos-en-vi
+      OPENAILIKED_STREAM: 'false'
+      TRANSLATION_SERVICE_URL: http://127.0.0.1:11008
+      TRANSLATION_DEFAULT_SERVICE: argos
+      TRANSLATION_ALLOWED_SERVICES: argos
+      TRANSLATION_LOCAL_SERVICES: argos
+      TRANSLATION_UPSTREAM_SERVICE_MAP: argos:openailiked
+      TRANSLATION_TIMEOUT_SECONDS: '1200'
+      TRANSLATION_POLL_INTERVAL_SECONDS: '0.5'
+
+    steps:
+      - name: Checkout SolYan PDF
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system verification tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          mkdir -p "$WORK/evidence" "$WORK/upstream"
+
+      - name: Checkout pinned PDFMathTranslate upstream
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout "$PDF2ZH_REPO" "$WORK/upstream/PDFMathTranslate"
+          git -C "$WORK/upstream/PDFMathTranslate" checkout --detach "$PDF2ZH_SHA"
+          test "$(git -C "$WORK/upstream/PDFMathTranslate" rev-parse HEAD)" = "$PDF2ZH_SHA"
+          echo "$PDF2ZH_SHA" | tee "$WORK/evidence/pdf2zh-commit.txt"
+
+      - name: Install external translation runtime in isolated venv
+        run: |
+          set -euo pipefail
+          python -m venv "$UPSTREAM_VENV"
+          "$UPSTREAM_VENV/bin/python" -m pip install --upgrade pip
+          "$UPSTREAM_VENV/bin/python" -m pip install \
+            "$WORK/upstream/PDFMathTranslate[backend]" \
+            2>&1 | tee "$WORK/evidence/install-pdf2zh.log"
+          "$UPSTREAM_VENV/bin/python" -m pip install \
+            -r engines/translation-provider/requirements.txt \
+            2>&1 | tee "$WORK/evidence/install-argos-provider.log"
+          "$UPSTREAM_VENV/bin/python" -m pip check \
+            2>&1 | tee "$WORK/evidence/upstream-pip-check.txt"
+          "$UPSTREAM_VENV/bin/pdf2zh" --version | tee "$WORK/evidence/pdf2zh-version.txt"
+
+      - name: Install SolYan backend in its own runtime
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock \
+            2>&1 | tee "$WORK/evidence/install-solyan-hashed.log"
+          python -m pip install --no-deps -r backend/requirements.txt \
+            2>&1 | tee "$WORK/evidence/install-solyan.log"
+          python -m pip check 2>&1 | tee "$WORK/evidence/solyan-pip-check.txt"
+          {
+            echo "solyan_python=$(python -c 'import sys; print(sys.executable)')"
+            echo "upstream_python=$($UPSTREAM_VENV/bin/python -c 'import sys; print(sys.executable)')"
+            test "$(python -c 'import sys; print(sys.executable)')" != "$($UPSTREAM_VENV/bin/python -c 'import sys; print(sys.executable)')"
+            echo 'runtime_isolation=PASS'
+          } | tee "$WORK/evidence/runtime-isolation.txt"
+
+      - name: Download and install pinned Argos model in external runtime
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2 \
+            "$ARGOS_MODEL_URL" \
+            --output "$WORK/translate-en_vi-1_9.argosmodel"
+          echo "$ARGOS_MODEL_SHA256  $WORK/translate-en_vi-1_9.argosmodel" | sha256sum --check -
+          sha256sum "$WORK/translate-en_vi-1_9.argosmodel" | tee "$WORK/evidence/argos-model-sha256.txt"
+          "$UPSTREAM_VENV/bin/python" - <<'PY' | tee "$WORK/evidence/argos-model-install.txt"
+          import os
+          from pathlib import Path
+          import argostranslate.package
+
+          model = Path(os.environ['WORK']) / 'translate-en_vi-1_9.argosmodel'
+          argostranslate.package.install_from_path(model)
+          installed = argostranslate.package.get_installed_packages()
+          if not any(pkg.from_code == 'en' and pkg.to_code == 'vi' for pkg in installed):
+              raise SystemExit('Argos EN->VI model install failed')
+          print('Argos EN->VI model install: PASS')
+          PY
+
+      - name: Start local Argos provider in external runtime
+        run: |
+          set -euo pipefail
+          "$UPSTREAM_VENV/bin/python" engines/translation-provider/argos_openai_bridge.py \
+            --host 127.0.0.1 --port 18080 \
+            --source-language en --target-language vi \
+            > "$WORK/evidence/argos-bridge.log" 2>&1 &
+          echo $! > "$WORK/argos-bridge.pid"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:18080/health > "$WORK/evidence/argos-health.json"; then
+              cat "$WORK/evidence/argos-health.json"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'Argos bridge did not become ready' >&2
+          exit 1
+
+      - name: Start pinned PDFMathTranslate Flask and Celery services
+        run: |
+          set -euo pipefail
+          "$UPSTREAM_VENV/bin/pdf2zh" --flask > "$WORK/evidence/pdf2zh-flask.log" 2>&1 &
+          echo $! > "$WORK/pdf2zh-flask.pid"
+          "$UPSTREAM_VENV/bin/pdf2zh" --celery worker > "$WORK/evidence/pdf2zh-celery.log" 2>&1 &
+          echo $! > "$WORK/pdf2zh-celery.pid"
+          for attempt in $(seq 1 120); do
+            state="$(curl --silent --max-time 2 http://127.0.0.1:11008/v1/translate/solyan-health || true)"
+            if printf '%s' "$state" | grep -q 'state'; then
+              printf '%s\n' "$state" | tee "$WORK/evidence/pdf2zh-health.json"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'PDFMathTranslate HTTP task service did not become ready' >&2
+          tail -n 100 "$WORK/evidence/pdf2zh-flask.log" || true
+          tail -n 100 "$WORK/evidence/pdf2zh-celery.log" || true
+          exit 1
+
+      - name: Exercise SolYan FastAPI proxy through full external stack
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python scripts/generate_translation_fixture.py "$WORK/source.pdf"
+          python - <<'PY' 2>&1 | tee "$WORK/evidence/solyan-proxy.log"
+          import asyncio
+          import os
+          from pathlib import Path
+
+          import httpx
+
+          from backend.app.main import app
+
+          async def main() -> None:
+              source_path = Path(os.environ['WORK']) / 'source.pdf'
+              transport = httpx.ASGITransport(app=app)
+              timeout = httpx.Timeout(1300.0, connect=10.0)
+              async with httpx.AsyncClient(transport=transport, base_url='http://solyan.test', timeout=timeout) as client:
+                  response = await client.post(
+                      '/pdf/translate',
+                      files={'file': ('source.pdf', source_path.read_bytes(), 'application/pdf')},
+                      data={
+                          'source_language': 'en',
+                          'target_language': 'vi',
+                          'service': 'argos',
+                          'output_mode': 'bilingual',
+                          'thread_count': '1',
+                      },
+                  )
+              print('status:', response.status_code)
+              print('service:', response.headers.get('x-solyan-translation-service'))
+              print('local:', response.headers.get('x-solyan-translation-local'))
+              print('mode:', response.headers.get('x-solyan-translation-mode'))
+              if response.status_code != 200:
+                  raise SystemExit(response.text[:2000])
+              if not response.content.startswith(b'%PDF-'):
+                  raise SystemExit('SolYan proxy returned a non-PDF result')
+              if response.headers.get('x-solyan-translation-service') != 'argos':
+                  raise SystemExit('Public provider identity was not preserved as argos')
+              if response.headers.get('x-solyan-translation-local') != '1':
+                  raise SystemExit('Argos result was not classified local')
+              if response.headers.get('x-solyan-translation-mode') != 'bilingual':
+                  raise SystemExit('Unexpected translation output mode')
+              output = Path(os.environ['WORK']) / 'evidence' / 'solyan-full-stack-bilingual.pdf'
+              output.write_bytes(response.content)
+              print('wrote:', output, len(response.content))
+
+          asyncio.run(main())
+          PY
+
+      - name: Validate final bilingual PDF and Vietnamese text
+        run: |
+          set -euo pipefail
+          pdf="$WORK/evidence/solyan-full-stack-bilingual.pdf"
+          test -s "$pdf"
+          pdfinfo "$pdf" | tee "$WORK/evidence/final-pdfinfo.txt"
+          pdftotext -layout "$pdf" "$WORK/evidence/final.txt"
+          python - <<'PY' | tee "$WORK/evidence/result-summary.txt"
+          import os
+          import unicodedata
+          from pathlib import Path
+
+          text = unicodedata.normalize(
+              'NFC',
+              (Path(os.environ['WORK']) / 'evidence' / 'final.txt').read_text('utf-8', errors='replace'),
+          ).casefold()
+          markers = ('tài liệu', 'dịch', 'tiếng việt', 'quyền riêng tư', 'xử lý', 'trang', 'bố cục')
+          hits = sorted({marker for marker in markers if marker in text})
+          print('Vietnamese markers:', ', '.join(hits))
+          if len(hits) < 2:
+              raise SystemExit(f'Insufficient Vietnamese signal: {hits!r}')
+          if 'this document is a simple translation test.' not in text:
+              raise SystemExit('Bilingual result does not retain the original English sentence')
+          print('SolYan proxy -> PDFMathTranslate HTTP/Celery/Redis -> local Argos bridge: PASS')
+          PY
+
+      - name: Stop external translation processes
+        if: always()
+        run: |
+          for pidfile in "$WORK/pdf2zh-celery.pid" "$WORK/pdf2zh-flask.pid" "$WORK/argos-bridge.pid"; do
+            if [ -f "$pidfile" ]; then
+              kill "$(cat "$pidfile")" 2>/dev/null || true
+            fi
+          done
+
+      - name: Upload full-stack evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-translation-full-stack-en-vi
+          path: /tmp/solyan-translation-full-stack/evidence
+          if-no-files-found: warn
+          retention-days: 14

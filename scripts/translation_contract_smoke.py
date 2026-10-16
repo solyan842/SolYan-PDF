@@ -10,6 +10,7 @@ os.environ["TRANSLATION_SERVICE_URL"] = "http://127.0.0.1:11008"
 os.environ["TRANSLATION_DEFAULT_SERVICE"] = "argos"
 os.environ["TRANSLATION_ALLOWED_SERVICES"] = "argos,ollama,openai,deepl,google,bing"
 os.environ["TRANSLATION_LOCAL_SERVICES"] = "argos,ollama"
+os.environ["TRANSLATION_UPSTREAM_SERVICE_MAP"] = "argos:openailiked"
 os.environ["TRANSLATION_TIMEOUT_SECONDS"] = "10"
 os.environ["TRANSLATION_POLL_INTERVAL_SECONDS"] = "0.01"
 
@@ -102,6 +103,7 @@ async def run_contract() -> None:
         caps = capabilities.json()
         assert caps["default_service"] == "argos"
         assert caps["privacy"]["api_keys_are_not_accepted_from_browser"] is True
+        assert caps["privacy"]["provider_aliasing_is_server_side"] is True
         assert "local_classification_is_operator_configured" in caps["privacy"]
         services = {item["id"]: item for item in caps["services"]}
         assert services["argos"]["local"] is True
@@ -109,6 +111,7 @@ async def run_contract() -> None:
         assert services["argos"]["requires_credentials"] is False
         assert services["openai"]["local"] is False
         assert services["openai"]["requires_credentials"] is True
+        assert "openailiked" not in services
 
         translated = await client.post(
             "/pdf/translate",
@@ -169,7 +172,7 @@ async def run_contract() -> None:
     assert FakeTranslationHandler.submitted_payloads[0] == {
         "lang_in": "en",
         "lang_out": "vi",
-        "service": "argos",
+        "service": "openailiked",
         "thread": 3,
     }
     assert FakeTranslationHandler.submitted_payloads[1] == {
@@ -180,7 +183,7 @@ async def run_contract() -> None:
     }
     assert len(FakeTranslationHandler.deleted_tasks) == 2
     print("translation contract smoke: PASS")
-    print("validated: capabilities, mono, dual, payload, cleanup, privacy classification, input rejection")
+    print("validated: capabilities, provider alias, mono, dual, payload, cleanup, privacy classification, input rejection")
 
 
 def main() -> None:
