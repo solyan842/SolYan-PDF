@@ -1,4 +1,4 @@
-# SolYan PDF v0.1.8 — Release Dependency Manifest
+# SolYan PDF v0.1.9 — Release Dependency Manifest
 
 Release date: 2026-10-16
 
@@ -116,6 +116,18 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Bloom PDF Editor server | pinned deployment commit selected by operator | Apache-2.0 upstream; re-check exact commit/dependencies | optional external PDF → Office engine; best-effort DOCX/PPTX fallback and primary PDF → XLSX route |
 | Google Custom Search API | external service | provider terms | optional keyword-position utility |
 | Tranco-compatible ranking endpoint | external service | provider/API terms | optional website ranking utility |
+
+## PDF translation external service boundary
+
+V1.6 adds a Hybrid/local-first PDF translation surface while keeping the incompatible copyleft layout engine outside the default SolYan images and outside the Apache-2.0 core source boundary.
+
+| Component | Version / pin | License | Integration |
+|---|---|---|---|
+| PDFMathTranslate | audited commit `d16604dabb5c3f4c6d4daf37197b218b0dbd4df2` / CLI 1.9.12 | AGPL-3.0 | separately deployed Flask/Celery/Redis HTTP task service; not vendored, imported or patched by SolYan core |
+| Argos Translate | `argostranslate==1.11.0` | MIT | local translation runtime behind the SolYan-owned OpenAI-compatible provider bridge |
+| Argos EN -> VI model | `translate-en_vi-1_9.argosmodel`, SHA-256 `86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16` | upstream model/data terms apply; verify before redistribution | downloaded and hash-verified in the external translation environment; not committed to this repository |
+
+The local bridge under `engines/translation-provider/` is SolYan-owned code. Redis, Celery, Flask and PDFMathTranslate remain part of the external translation runtime and are not added to the six default release images. Optional cloud-provider credentials remain operator-side configuration and are not accepted from the browser UI.
 
 ## Resolved image inventory
 

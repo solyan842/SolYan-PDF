@@ -4,6 +4,29 @@ All notable changes to SolYan PDF are documented here.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-16
+
+Patch release delivering the **V1.6 Hybrid / local-first PDF translation lane**.
+
+### V1.6 PDF translation
+- Added translated-only and bilingual PDF outputs behind the bounded SolYan `/pdf/translate` API.
+- Added a validated free/local English -> Vietnamese route using Argos Translate with a SHA-256-pinned EN -> VI model.
+- Added server-side public-provider mapping so browser-facing `argos` routes through PDFMathTranslate's existing OpenAI-compatible provider interface without exposing the operator-side `openailiked` ID.
+- Added a small SolYan-owned local Argos bridge rather than patching or vendoring the broken upstream PDFMathTranslate 1.x `ArgosTranslator` implementation.
+
+### Verification and architecture
+- Kept PDFMathTranslate 1.9.x AGPL-3.0 code outside the Apache-2.0 SolYan core behind its HTTP task API; the audited integration pin is commit `d16604dabb5c3f4c6d4daf37197b218b0dbd4df2`.
+- Passed the live provider-boundary gate with real mono/bilingual EN -> VI PDFs and Vietnamese text checks.
+- Passed the full service-integration gate through isolated runtimes: SolYan FastAPI -> PDFMathTranslate Flask/Celery/Redis -> local Argos bridge -> bilingual PDF.
+- Preserved browser credential boundaries: provider API keys remain deployment/operator configuration and are never accepted from the translation UI.
+- Preserved the existing PDF -> Office V1 release gate at 27 cases / 68 source pages without weakening any existing acceptance threshold.
+
+### Important boundaries
+- Argos is the free/local baseline and does not imply premium or universal linguistic quality.
+- `local` is deployment metadata, not packet-level proof; operators remain responsible for trusted service-network configuration.
+- Scan-heavy/image-only PDFs remain dependent on external translation/OCR configuration; V1.6 does not silently inject OCR into this route.
+- Optional cloud providers remain operator-configured and may send document text/content outside the SolYan deployment.
+
 ## [0.1.8] - 2026-10-16
 
 Patch release completing the **V1.5 OSS-first self-contained parity pass**.
