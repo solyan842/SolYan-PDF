@@ -41,7 +41,7 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 PRINT_MODES = {"none", "low", "full"}
 MODIFY_MODES = {"none", "assembly", "form", "annotate", "all"}
 
-app = FastAPI(title="SolYan PDF API", version="0.1.7")
+app = FastAPI(title="SolYan PDF API", version="0.1.8")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("SOLYAN_ALLOWED_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
