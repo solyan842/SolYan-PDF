@@ -1,0 +1,103 @@
+name: Prepare v0.1.9 Release Docs
+
+on:
+  push:
+    branches:
+      - release/v0.1.9-20261016
+    paths:
+      - '.github/workflows/prepare-v0.1.9-release-docs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/v0.1.9-20261016
+
+      - name: Update changelog and release manifest
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          heading = '## [0.1.9] - 2026-10-16'
+          if heading not in text:
+              entry = '''## [0.1.9] - 2026-10-16
+
+Patch release delivering the **V1.6 Hybrid / local-first PDF translation lane**.
+
+### V1.6 PDF translation
+- Added translated-only and bilingual PDF outputs behind the bounded SolYan `/pdf/translate` API.
+- Added a validated free/local English -> Vietnamese route using Argos Translate with a SHA-256-pinned EN -> VI model.
+- Added server-side public-provider mapping so browser-facing `argos` routes through PDFMathTranslate's existing OpenAI-compatible provider interface without exposing the operator-side `openailiked` ID.
+- Added a small SolYan-owned local Argos bridge rather than patching or vendoring the broken upstream PDFMathTranslate 1.x `ArgosTranslator` implementation.
+
+### Verification and architecture
+- Kept PDFMathTranslate 1.9.x AGPL-3.0 code outside the Apache-2.0 SolYan core behind its HTTP task API; the audited integration pin is commit `d16604dabb5c3f4c6d4daf37197b218b0dbd4df2`.
+- Passed the live provider-boundary gate with real mono/bilingual EN -> VI PDFs and Vietnamese text checks.
+- Passed the full service-integration gate through isolated runtimes: SolYan FastAPI -> PDFMathTranslate Flask/Celery/Redis -> local Argos bridge -> bilingual PDF.
+- Preserved browser credential boundaries: provider API keys remain deployment/operator configuration and are never accepted from the translation UI.
+- Preserved the existing PDF -> Office V1 release gate at 27 cases / 68 source pages without weakening any existing acceptance threshold.
+
+### Important boundaries
+- Argos is the free/local baseline and does not imply premium or universal linguistic quality.
+- `local` is deployment metadata, not packet-level proof; operators remain responsible for trusted service-network configuration.
+- Scan-heavy/image-only PDFs remain dependent on external translation/OCR configuration; V1.6 does not silently inject OCR into this route.
+- Optional cloud providers remain operator-configured and may send document text/content outside the SolYan deployment.
+
+'''
+              marker = '## [Unreleased]\n\n'
+              if marker not in text:
+                  raise SystemExit('CHANGELOG Unreleased marker not found')
+              text = text.replace(marker, marker + entry, 1)
+              changelog.write_text(text, encoding='utf-8')
+
+          manifest = Path('docs/RELEASE-MANIFEST.md')
+          text = manifest.read_text(encoding='utf-8')
+          old_title = '# SolYan PDF v0.1.8 — Release Dependency Manifest'
+          new_title = '# SolYan PDF v0.1.9 — Release Dependency Manifest'
+          if old_title in text:
+              text = text.replace(old_title, new_title, 1)
+          elif new_title not in text:
+              raise SystemExit('Release manifest title not recognized')
+
+          section = '''## PDF translation external service boundary
+
+V1.6 adds a Hybrid/local-first PDF translation surface while keeping the incompatible copyleft layout engine outside the default SolYan images and outside the Apache-2.0 core source boundary.
+
+| Component | Version / pin | License | Integration |
+|---|---|---|---|
+| PDFMathTranslate | audited commit `d16604dabb5c3f4c6d4daf37197b218b0dbd4df2` / CLI 1.9.12 | AGPL-3.0 | separately deployed Flask/Celery/Redis HTTP task service; not vendored, imported or patched by SolYan core |
+| Argos Translate | `argostranslate==1.11.0` | MIT | local translation runtime behind the SolYan-owned OpenAI-compatible provider bridge |
+| Argos EN -> VI model | `translate-en_vi-1_9.argosmodel`, SHA-256 `86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16` | upstream model/data terms apply; verify before redistribution | downloaded and hash-verified in the external translation environment; not committed to this repository |
+
+The local bridge under `engines/translation-provider/` is SolYan-owned code. Redis, Celery, Flask and PDFMathTranslate remain part of the external translation runtime and are not added to the six default release images. Optional cloud-provider credentials remain operator-side configuration and are not accepted from the browser UI.
+
+'''
+          if '## PDF translation external service boundary' not in text:
+              marker = '## Resolved image inventory\n'
+              if marker not in text:
+                  raise SystemExit('Release manifest insertion marker not found')
+              text = text.replace(marker, section + marker, 1)
+          manifest.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit release documentation if needed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- CHANGELOG.md docs/RELEASE-MANIFEST.md; then
+            echo 'Release docs already prepared.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md docs/RELEASE-MANIFEST.md
+          git commit -m 'release: document SolYan PDF v0.1.9'
+          git push origin HEAD:release/v0.1.9-20261016
