@@ -33,6 +33,8 @@ TRANSLATION_LOCAL_SERVICES = frozenset(
 LANG_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 OUTPUT_MODES = {"translated": "mono", "bilingual": "dual"}
+SERVICES_REQUIRING_OPERATOR_CONFIGURATION = frozenset({"argos", "ollama", "openai", "deepl"})
+SERVICES_REQUIRING_CREDENTIALS = frozenset({"openai", "deepl"})
 
 
 def _read_pdf(upload: UploadFile) -> bytes:
@@ -61,21 +63,6 @@ def _validate_service(service: str | None) -> str:
     return value
 
 
-def _upstream_detail(response: httpx.Response) -> str:
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = None
-    if isinstance(payload, dict):
-        for key in ("detail", "error", "message", "info"):
-            value = payload.get(key)
-            if value:
-                if isinstance(value, (dict, list)):
-                    return json.dumps(value, ensure_ascii=False)[:3000]
-                return str(value)[:3000]
-    return (response.text or f"HTTP {response.status_code}")[:3000]
-
-
 def _cancel_task(client: httpx.Client, task_id: str) -> None:
     if not TASK_ID_RE.fullmatch(task_id):
         return
@@ -91,7 +78,8 @@ def translation_capabilities() -> dict:
         {
             "id": service,
             "local": service in TRANSLATION_LOCAL_SERVICES,
-            "requires_operator_configuration": service not in {"argos", "google", "bing"},
+            "requires_operator_configuration": service in SERVICES_REQUIRING_OPERATOR_CONFIGURATION,
+            "requires_credentials": service in SERVICES_REQUIRING_CREDENTIALS,
         }
         for service in TRANSLATION_ALLOWED_SERVICES
     ]
@@ -104,6 +92,7 @@ def translation_capabilities() -> dict:
         "max_file_size": TRANSLATION_MAX_FILE_SIZE,
         "privacy": {
             "local_services": sorted(TRANSLATION_LOCAL_SERVICES),
+            "local_classification_is_operator_configured": True,
             "cloud_services_may_send_document_text_off_device": True,
             "api_keys_are_not_accepted_from_browser": True,
         },
@@ -145,7 +134,7 @@ def translate_pdf(
                 data={"data": json.dumps(request_payload, ensure_ascii=False)},
             )
             if submit.status_code >= 400:
-                raise HTTPException(status_code=502, detail=f"Translation service rejected task: {_upstream_detail(submit)}")
+                raise HTTPException(status_code=502, detail="Translation service rejected the task")
             try:
                 task_id = str(submit.json().get("id", ""))
             except (ValueError, AttributeError) as exc:
@@ -160,7 +149,7 @@ def translate_pdf(
                         raise HTTPException(status_code=504, detail="PDF translation timed out")
                     status_response = client.get(f"{TRANSLATION_SERVICE_URL}/v1/translate/{task_id}")
                     if status_response.status_code >= 400:
-                        raise HTTPException(status_code=502, detail=f"Translation status failed: {_upstream_detail(status_response)}")
+                        raise HTTPException(status_code=502, detail="Translation status request failed")
                     try:
                         status_payload = status_response.json()
                     except ValueError as exc:
@@ -169,10 +158,7 @@ def translate_pdf(
                     if state == "SUCCESS":
                         break
                     if state in {"FAILURE", "REVOKED"}:
-                        detail = status_payload.get("info") or status_payload.get("result") or state
-                        if isinstance(detail, (dict, list)):
-                            detail = json.dumps(detail, ensure_ascii=False)
-                        raise HTTPException(status_code=502, detail=f"Translation failed: {str(detail)[:3000]}")
+                        raise HTTPException(status_code=502, detail="Translation task failed")
                     time.sleep(max(0.2, TRANSLATION_POLL_INTERVAL_SECONDS))
 
                 result_response = client.get(
@@ -180,7 +166,7 @@ def translate_pdf(
                     timeout=httpx.Timeout(120.0, connect=10.0),
                 )
                 if result_response.status_code >= 400:
-                    raise HTTPException(status_code=502, detail=f"Translation result download failed: {_upstream_detail(result_response)}")
+                    raise HTTPException(status_code=502, detail="Translation result download failed")
                 result = result_response.content
                 if not result.startswith(b"%PDF-"):
                     raise HTTPException(status_code=502, detail="Translation service returned a non-PDF result")
