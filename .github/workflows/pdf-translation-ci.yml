@@ -1,0 +1,87 @@
+name: PDF Translation CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/translation_proxy.py'
+      - 'backend/app/main.py'
+      - 'scripts/translation_contract_smoke.py'
+      - 'frontend/app/translate/**'
+      - 'frontend/app/page.tsx'
+      - '.env.example'
+      - 'docker-compose.yml'
+      - 'docs/V1.6-PDF-TRANSLATION.md'
+      - '.github/workflows/pdf-translation-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/translation_proxy.py'
+      - 'backend/app/main.py'
+      - 'scripts/translation_contract_smoke.py'
+      - 'frontend/app/translate/**'
+      - 'frontend/app/page.tsx'
+      - '.env.example'
+      - 'docker-compose.yml'
+      - 'docs/V1.6-PDF-TRANSLATION.md'
+      - '.github/workflows/pdf-translation-ci.yml'
+
+jobs:
+  translation-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install hash-verified backend dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip check
+
+      - name: Compile translation adapter and contract gate
+        run: python -m compileall backend/app/translation_proxy.py scripts/translation_contract_smoke.py
+
+      - name: Run PDFMathTranslate-compatible contract gate
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-pdf-translation
+          python scripts/translation_contract_smoke.py 2>&1 | tee /tmp/solyan-pdf-translation/contract.log
+
+      - name: Gate product wiring and privacy boundary
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-pdf-translation
+          grep -q 'from .translation_proxy import router as translation_router' backend/app/main.py
+          grep -q 'app.include_router(translation_router)' backend/app/main.py
+          grep -q 'X-SolYan-Translation-Service' backend/app/main.py
+          grep -q '/pdf/translate' frontend/app/translate/page.tsx
+          grep -q "href: '/translate'" frontend/app/page.tsx
+          grep -q 'api_keys_are_not_accepted_from_browser' backend/app/translation_proxy.py
+          grep -q 'PDFMathTranslate/PDFMathTranslate' docs/V1.6-PDF-TRANSLATION.md
+          grep -q 'AGPL-3.0' docs/V1.6-PDF-TRANSLATION.md
+          grep -q 'TRANSLATION_DEFAULT_SERVICE=argos' .env.example
+          grep -q 'run PDFMathTranslate/BabelDOC separately' docker-compose.yml
+          if grep -Eiq 'api[_-]?key[^\n]{0,40}(input|Form\()' frontend/app/translate/page.tsx; then
+            echo 'Browser translation UI appears to accept an API key' >&2
+            exit 1
+          fi
+          echo 'Translation route/UI/license/privacy wiring: PASS' | tee -a /tmp/solyan-pdf-translation/contract.log
+
+      - name: Upload PDF translation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-translation-evidence
+          path: /tmp/solyan-pdf-translation/contract.log
+          if-no-files-found: warn
+          retention-days: 14
