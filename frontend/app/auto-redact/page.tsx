@@ -37,6 +37,7 @@ export default function AutoRedactPage() {
   const [termsText, setTermsText] = useState('');
   const [matchMode, setMatchMode] = useState<MatchMode>('literal');
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -107,7 +108,8 @@ export default function AutoRedactPage() {
       let textItems = 0;
 
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-        setProgress(`Đang ${matchMode === 'safe_regex' ? 'khớp Safe Regex' : 'tìm nội dung'} cần che · trang ${pageNumber}/${pdf.numPages}…`);
+        const searchLabel = matchMode === 'safe_regex' ? 'khớp Safe Regex' : (wholeWord ? 'tìm nguyên từ' : 'tìm nội dung');
+        setProgress(`Đang ${searchLabel} cần che · trang ${pageNumber}/${pdf.numPages}…`);
         const page = await pdf.getPage(pageNumber);
         const textContent = await page.getTextContent();
         const pageTextItems = Array.isArray(textContent.items)
@@ -120,7 +122,7 @@ export default function AutoRedactPage() {
         const viewport = page.getViewport({ scale: 1 });
         const matches = matchMode === 'safe_regex'
           ? findSafeRegexAutoRedactMatches(textContent, viewport, safePatterns)
-          : findAutoRedactMatches(textContent, viewport, terms, caseSensitive);
+          : findAutoRedactMatches(textContent, viewport, terms, caseSensitive, undefined, wholeWord);
         if (matches.length === 0) continue;
         totalMatches += matches.length;
         if (totalMatches > MAX_MATCHES) throw new Error(`Vượt giới hạn ${MAX_MATCHES} text-run cần redact. Hãy chia tài liệu hoặc giảm số mục.`);
@@ -132,7 +134,9 @@ export default function AutoRedactPage() {
         if (textItems === 0) throw new Error('PDF không có text layer để Auto Redact. Với tài liệu scan, hãy OCR trước rồi chạy lại.');
         throw new Error(matchMode === 'safe_regex'
           ? 'Không tìm thấy Safe Regex/preset đã nhập trong các text-run của PDF. Pattern không khớp xuyên qua nhiều PDF text-run.'
-          : 'Không tìm thấy cụm từ đã nhập trong các text-run của PDF. Cụm từ bị tách qua nhiều text-run có thể cần nhập thành các phần ngắn hơn.');
+          : wholeWord
+            ? 'Không tìm thấy nguyên từ/cụm từ đã nhập trong các text-run của PDF. Whole Word dùng boundary Unicode và không khớp xuyên qua nhiều PDF text-run.'
+            : 'Không tìm thấy cụm từ đã nhập trong các text-run của PDF. Cụm từ bị tách qua nhiều text-run có thể cần nhập thành các phần ngắn hơn.');
       }
 
       const replacements: RasterizedPageReplacement[] = [];
@@ -202,14 +206,16 @@ export default function AutoRedactPage() {
 
   return <main className="shell">
     <header className="topbar"><a className="brand" href="/">SolYan PDF</a><div className="privacy-pill">Local · PDF.js · Secure raster redaction</div></header>
-    <section className="hero compact-hero"><p className="eyebrow">V1.5 · SECURITY</p><h1>Tự động redact theo nội dung</h1><p className="subtitle">Tìm literal hoặc Safe Regex trong text layer, che toàn bộ text-run chứa nội dung khớp rồi rasterize chỉ các trang bị ảnh hưởng để không copy content stream gốc.</p><label className="picker"><input type="file" accept="application/pdf,.pdf" onChange={onFile}/><span>+ Chọn file PDF</span></label></section>
+    <section className="hero compact-hero"><p className="eyebrow">V1.5 · SECURITY</p><h1>Tự động redact theo nội dung</h1><p className="subtitle">Tìm literal, nguyên từ Unicode-aware hoặc Safe Regex trong text layer, che toàn bộ text-run chứa nội dung khớp rồi rasterize chỉ các trang bị ảnh hưởng để không copy content stream gốc.</p><label className="picker"><input type="file" accept="application/pdf,.pdf" onChange={onFile}/><span>+ Chọn file PDF</span></label></section>
     <section className="workspace form-workspace">
       <label className="field"><span>Kiểu tìm kiếm</span><select value={matchMode} onChange={(event)=>{ setMatchMode(event.target.value as MatchMode); setError(''); setProgress(''); }}><option value="literal">Literal · từ/cụm từ chính xác</option><option value="safe_regex">Safe Regex · pattern giới hạn chống ReDoS</option></select></label>
       <label className="field"><span>{matchMode === 'safe_regex' ? 'Safe Regex / preset cần che · mỗi dòng một mục' : 'Từ / cụm từ cần che · mỗi dòng một mục'}</span><textarea rows={7} value={termsText} onChange={(event)=>setTermsText(event.target.value)} placeholder={matchMode === 'safe_regex' ? '<EMAIL>\n\\d{3}-\\d{2}-\\d{4}\n[A-Z]{2}\\d{6}' : 'Số căn cước\nMã khách hàng\nSECRET-842'}/></label>
       {matchMode === 'safe_regex' && <div className="result-box"><strong>Preset an toàn</strong><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>{(Object.keys(SAFE_AUTO_REDACT_PRESETS) as Array<keyof typeof SAFE_AUTO_REDACT_PRESETS>).map((token)=><button className="secondary-button" type="button" key={token} onClick={()=>appendPreset(token)}>{token}</button>)}</div><p style={{ marginBottom: 0, marginTop: 10 }}><code>&lt;EMAIL&gt;</code> · <code>&lt;CARD&gt;</code> · <code>&lt;SSN&gt;</code> · <code>&lt;VN_PHONE&gt;</code> · <code>&lt;IBAN&gt;</code></p></div>}
+      {matchMode === 'literal' && <label className="field"><span><input type="checkbox" checked={wholeWord} onChange={(event)=>setWholeWord(event.target.checked)}/> Chỉ khớp nguyên từ / cụm từ (Unicode-aware)</span><small>Dùng Letter/Number/Mark/_ làm ký tự thuộc từ, phù hợp hơn với tiếng Việt và Unicode so với boundary ASCII.</small></label>}
       <label className="field"><span><input type="checkbox" checked={caseSensitive} onChange={(event)=>setCaseSensitive(event.target.checked)}/> Phân biệt chữ hoa / chữ thường</span></label>
       {file && <p className="selected-file">Đã chọn: <strong>{file.name}</strong></p>}
       <div className="error"><strong>Secure Auto Redact:</strong> công cụ che toàn bộ text-run chứa nội dung khớp, vì vậy có thể che rộng hơn chính xác chuỗi/pattern. Trang có match sẽ rasterize 150 DPI và được dựng lại mà không mang theo content stream gốc; text/vector/form/annotation tương tác trên trang đó sẽ mất. PDF scan không có text layer cần OCR trước.</div>
+      {matchMode === 'literal' && wholeWord && <p className="hint"><strong>Whole Word:</strong> chỉ áp dụng cho Literal. Ví dụ tìm <code>an</code> sẽ khớp trong <code>an toàn</code> vì có ranh giới từ sau <code>an</code>, nhưng không khớp bên trong <code>banana</code>. Với tiếng Việt có dấu, chữ cái và combining mark đều được tính là ký tự thuộc từ.</p>}
       {matchMode === 'safe_regex' && <p className="hint"><strong>Safe Regex subset:</strong> pattern tùy chỉnh tối đa 200 ký tự; không hỗ trợ group/lookaround, backreference, <code>*</code>, <code>+</code> hay <code>{'{m,}'}</code>. Dùng <code>?</code> và quantifier hữu hạn <code>{'{m}'}</code>/<code>{'{m,n}'}</code> với n ≤ 64. Các preset trên là pattern nội bộ đã được kiểm soát. Regex chỉ chạy trên từng text-run, không nối toàn tài liệu.</p>}
       <p className="hint">Giới hạn: 100 MB · 500 trang · 100.000 text-run · 20 mục · 500 text-run match · 40 trang redact · 25 triệu pixel/trang · 80 triệu pixel tổng. Match không vượt qua ranh giới giữa các PDF text-run.</p>
       {progress && <div className="result-box">{progress}</div>}

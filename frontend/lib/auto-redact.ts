@@ -39,6 +39,7 @@ const MAX_SAFE_REGEX_LENGTH = 200;
 const MAX_SAFE_REGEX_COMPLEXITY = 4096;
 const MAX_SAFE_REGEX_ALTERNATIVES = 16;
 const MAX_REGEX_TEXT_RUN_LENGTH = 4096;
+const UNICODE_WORD_CHAR = /[\p{L}\p{N}\p{M}_]/u;
 
 export const SAFE_AUTO_REDACT_PRESETS = {
   '<EMAIL>': '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,63}',
@@ -54,12 +55,69 @@ export function normalizeAutoRedactTerms(raw: string, caseSensitive = false): st
   for (const line of raw.split(/\r?\n/)) {
     const term = line.trim();
     if (!term) continue;
-    const key = caseSensitive ? term : term.toLocaleLowerCase('vi');
+    const normalized = term.normalize('NFC');
+    const key = caseSensitive ? normalized : normalized.toLocaleLowerCase('vi');
     if (seen.has(key)) continue;
     seen.add(key);
     terms.push(term);
   }
   return terms;
+}
+
+function codePointAtIndex(text: string, index: number): string | null {
+  if (index < 0 || index >= text.length) return null;
+  const point = text.codePointAt(index);
+  return point === undefined ? null : String.fromCodePoint(point);
+}
+
+function codePointBeforeIndex(text: string, index: number): string | null {
+  if (index <= 0 || index > text.length) return null;
+  let start = index - 1;
+  const unit = text.charCodeAt(start);
+  if (unit >= 0xdc00 && unit <= 0xdfff && start > 0) {
+    const previous = text.charCodeAt(start - 1);
+    if (previous >= 0xd800 && previous <= 0xdbff) start -= 1;
+  }
+  return text.slice(start, index);
+}
+
+function isUnicodeWordChar(value: string | null): boolean {
+  return value !== null && UNICODE_WORD_CHAR.test(value);
+}
+
+function hasWholeWordOccurrence(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  const firstNeedle = codePointAtIndex(needle, 0);
+  const lastNeedle = codePointBeforeIndex(needle, needle.length);
+  const requiresLeftBoundary = isUnicodeWordChar(firstNeedle);
+  const requiresRightBoundary = isUnicodeWordChar(lastNeedle);
+  let fromIndex = 0;
+
+  while (fromIndex <= haystack.length - needle.length) {
+    const index = haystack.indexOf(needle, fromIndex);
+    if (index < 0) return false;
+    const before = codePointBeforeIndex(haystack, index);
+    const after = codePointAtIndex(haystack, index + needle.length);
+    const leftOk = !requiresLeftBoundary || !isUnicodeWordChar(before);
+    const rightOk = !requiresRightBoundary || !isUnicodeWordChar(after);
+    if (leftOk && rightOk) return true;
+    fromIndex = index + 1;
+  }
+
+  return false;
+}
+
+export function autoRedactLiteralMatches(
+  haystack: string,
+  needle: string,
+  wholeWord = false,
+): boolean {
+  if (!needle) return false;
+  const normalizedHaystack = haystack.normalize('NFC');
+  const normalizedNeedle = needle.normalize('NFC');
+  return wholeWord
+    ? hasWholeWordOccurrence(normalizedHaystack, normalizedNeedle)
+    : normalizedHaystack.includes(normalizedNeedle);
 }
 
 function validateCustomSafeRegex(source: string): void {
@@ -248,21 +306,27 @@ export function findAutoRedactMatches(
   terms: string[],
   caseSensitive = false,
   padding = DEFAULT_PADDING,
+  wholeWord = false,
 ): AutoRedactMatch[] {
   if (!Number.isFinite(padding) || padding < 0 || padding > 20) throw new Error('Auto-redact padding must be between 0 and 20 points.');
   const normalizedTerms = terms.map((term) => term.trim()).filter(Boolean);
   if (normalizedTerms.length === 0) return [];
-  const searchableTerms = normalizedTerms.map((term) => caseSensitive ? term : term.toLocaleLowerCase('vi'));
+  const searchableTerms = normalizedTerms.map((term) => {
+    const normalized = term.normalize('NFC');
+    return caseSensitive ? normalized : normalized.toLocaleLowerCase('vi');
+  });
   const matches: AutoRedactMatch[] = [];
 
   for (const item of normalizedItems(textContent)) {
     if (typeof item.str !== 'string' || !item.str.trim()) continue;
-    const haystack = caseSensitive ? item.str : item.str.toLocaleLowerCase('vi');
-    const matchedTerms = normalizedTerms.filter((_, index) => haystack.includes(searchableTerms[index]));
+    const text = item.str;
+    const normalizedText = text.normalize('NFC');
+    const haystack = caseSensitive ? normalizedText : normalizedText.toLocaleLowerCase('vi');
+    const matchedTerms = normalizedTerms.filter((_, index) => autoRedactLiteralMatches(haystack, searchableTerms[index], wholeWord));
     if (matchedTerms.length === 0) continue;
     const rect = itemRect(item, viewport, padding);
     if (!rect) continue;
-    matches.push({ text: item.str, terms: matchedTerms, rect });
+    matches.push({ text, terms: matchedTerms, rect });
   }
 
   return matches;
