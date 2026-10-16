@@ -160,6 +160,21 @@ V1.3 is complete. Detailed engine decisions and boundaries are in `docs/V1.3-PAR
 
 V1.4 is complete. Detailed architecture, boundaries, regression evidence and deferred dependency/product decisions are in `docs/V1.4-PARITY-AUDIT.md` and `docs/V1.4-CLOSEOUT.md`.
 
+## V1.5 — OSS-first self-contained parity completion
+
+- [x] Add PDF → SVG export
+- [x] Add certification signature / DocMDP permissions to the local PKCS#12 signing path
+- [x] Add PDF Portfolio / Collection creation
+- [x] Add logical PDF Page Labels
+- [x] Add bounded Safe Regex Auto Redact and Unicode-aware Whole Word matching
+- [x] Add explicit Full Page Flatten
+- [x] Add Advanced Page Numbers / Bates
+- [x] Add Advanced Metadata editing
+- [x] Add Advanced PDF → Images and Advanced Images → PDF
+- [x] Close and release the self-contained V1.5 scope as v0.1.8
+
+V1.5 is complete. Detailed research, boundaries and close-out are in `docs/V1.5-PARITY-AUDIT.md`, `docs/V1.5-PARITY-STATUS.md` and `docs/V1.5-CLOSEOUT.md`.
+
 ## Tiện ích Việt Nam — V1
 
 ### Văn bản
@@ -267,6 +282,10 @@ V1.4 is complete. Detailed architecture, boundaries, regression evidence and def
 - [x] Remove completed `v0.1.5` one-shot publisher after successful publication
 - [x] Publish V1.3 OSS-first self-contained parity/converter patch release `v0.1.6`
 - [x] Remove completed `v0.1.6` one-shot publisher after successful publication
+- [x] Publish V1.4 security/scan/vector-export patch release `v0.1.7`
+- [x] Remove completed `v0.1.7` one-shot publisher after successful publication
+- [x] Publish V1.5 OSS-first self-contained parity patch release `v0.1.8`
+- [x] Remove completed `v0.1.8` one-shot publisher after successful publication
 
 ## Release decisions / external inputs still required
 
