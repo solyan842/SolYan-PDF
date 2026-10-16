@@ -10,6 +10,7 @@ const tools = [
   { href: '/bookmarks', title: 'Bookmark / Mục lục PDF', description: 'Đọc, thêm, lồng cấp, sắp xếp và gán trang đích cho outline ngay trên thiết bị.', local: true },
   { href: '/pdfa', title: 'PDF/A', description: 'Tạo PDF/A bằng internal validator, không fallback Ghostscript.', local: false, badge: 'OCRmyPDF' },
   { href: '/workflow', title: 'Workflow PDF', description: 'Chạy nhiều thao tác local trong một lần xử lý.', local: true },
+  { href: '/translate', title: 'Dịch PDF', description: 'Dịch PDF giữ bố cục theo kiến trúc Hybrid: Argos/Ollama local miễn phí, cloud provider là tùy chọn.', local: false, badge: 'Hybrid · V1.6' },
   { href: '/pdf-to-office', title: 'PDF → Office', description: 'DOCX/PPTX theo LibreOffice-first; XLSX theo Bloom → PP-StructureV3 fallback.', local: false, badge: 'V1 Gate' },
   { href: '/pdf-to-csv', title: 'PDF → CSV', description: 'Nhận diện bảng bằng PP-StructureV3, xuất CSV UTF-8 theo trang và đóng ZIP khi có nhiều trang dữ liệu.', local: false, badge: 'PP-StructureV3' },
   { href: '/pdf-to-html', title: 'PDF → HTML', description: 'Xuất một file HTML tự chứa bằng Poppler, nhúng ảnh bằng data URL và chặn scheme liên kết nguy hiểm.', local: false, badge: 'Poppler' },
@@ -74,7 +75,7 @@ export default function HomePage() {
       <section className="hero home-hero"><p className="eyebrow">SOLYAN PDF</p><h1>Công cụ PDF đơn giản, nhanh và riêng tư</h1><p className="subtitle">Tác vụ nhẹ chạy ngay trong trình duyệt; tác vụ nặng được tách thành các engine service riêng để dễ thay thế và mở rộng.</p></section>
       <section className="feature-banner"><div><span className="feature-kicker">DÀNH CHO NGƯỜI DÙNG VIỆT NAM</span><h2>13 Tiện ích Việt Nam</h2><p>Đổi số tiền thành chữ, VAT, phần trăm, tính tuổi, BMI, công suất điều hòa, IP, ping, vị trí từ khóa và website rank.</p></div><a className="feature-action" href="/vietnamese">Mở Tiện ích Việt Nam →</a></section>
       <section className="tool-grid" aria-label="Công cụ PDF">{tools.map((tool) => <a className="tool-card" href={tool.href} key={tool.href}><span className="tool-icon">PDF</span><h2>{tool.title}</h2><p>{tool.description}</p><span className={tool.local ? 'tool-badge local' : 'tool-badge server'}>{tool.local ? 'Trên thiết bị' : (tool.badge ?? 'Server')}</span><span className="tool-link">Mở công cụ →</span></a>)}</section>
-      <section className="coming-soon"><h2>V1.5 đang phát triển · v0.1.7 stable</h2><p>V1.5 tiếp tục OSS-first với PDF → SVG, certified signing/DocMDP, PDF Portfolio và Page Labels bằng các engine đã có sẵn trong stack.</p></section>
+      <section className="coming-soon"><h2>V1.6 đang phát triển · v0.1.8 stable</h2><p>V1.6 mở lane PDF Translation theo kiến trúc Hybrid: local-first miễn phí, cloud provider tùy chọn và engine layout tách biệt khỏi Apache-2.0 core.</p></section>
       <footer>SolYan PDF · Browser-first · PWA-ready</footer>
     </main>
   );
