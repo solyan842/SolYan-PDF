@@ -15,6 +15,7 @@ on:
       - 'docs/V1.6-PDF-TRANSLATION.md'
       - '.github/workflows/pdf-translation-ci.yml'
       - '.github/workflows/pdf-translation-argos-bridge-diagnostic.yml'
+      - '.github/workflows/pdf-translation-full-stack-diagnostic.yml'
   push:
     branches:
       - main
@@ -31,6 +32,7 @@ on:
       - 'docs/V1.6-PDF-TRANSLATION.md'
       - '.github/workflows/pdf-translation-ci.yml'
       - '.github/workflows/pdf-translation-argos-bridge-diagnostic.yml'
+      - '.github/workflows/pdf-translation-full-stack-diagnostic.yml'
 
 jobs:
   translation-contract:
@@ -88,6 +90,9 @@ jobs:
           grep -q 'argostranslate==1.11.0' engines/translation-provider/requirements.txt
           grep -q '86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16' engines/translation-provider/README.md
           grep -q 'workflow_dispatch' .github/workflows/pdf-translation-argos-bridge-diagnostic.yml
+          grep -q 'workflow_dispatch' .github/workflows/pdf-translation-full-stack-diagnostic.yml
+          grep -q 'UPSTREAM_VENV' .github/workflows/pdf-translation-full-stack-diagnostic.yml
+          grep -q 'runtime_isolation=PASS' .github/workflows/pdf-translation-full-stack-diagnostic.yml
           grep -q 'run PDFMathTranslate/BabelDOC separately' docker-compose.yml
           if grep -Eiq 'api[_-]?key[^\n]{0,40}(input|Form\()' frontend/app/translate/page.tsx; then
             echo 'Browser translation UI appears to accept an API key' >&2
