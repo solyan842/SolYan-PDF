@@ -11,6 +11,29 @@ from fastapi.responses import Response
 
 router = APIRouter(prefix="/pdf", tags=["PDF translation"])
 
+LANG_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
+TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+SERVICE_ID_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
+OUTPUT_MODES = {"translated": "mono", "bilingual": "dual"}
+SERVICES_REQUIRING_OPERATOR_CONFIGURATION = frozenset({"argos", "ollama", "openai", "deepl"})
+SERVICES_REQUIRING_CREDENTIALS = frozenset({"openai", "deepl"})
+
+
+def _parse_upstream_service_map(raw: str) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for item in raw.split(","):
+        value = item.strip().lower()
+        if not value:
+            continue
+        if value.count(":") != 1:
+            raise RuntimeError("TRANSLATION_UPSTREAM_SERVICE_MAP entries must use public:upstream syntax")
+        public_service, upstream_service = (part.strip() for part in value.split(":", 1))
+        if not SERVICE_ID_RE.fullmatch(public_service) or not SERVICE_ID_RE.fullmatch(upstream_service):
+            raise RuntimeError("TRANSLATION_UPSTREAM_SERVICE_MAP contains an invalid service identifier")
+        mapping[public_service] = upstream_service
+    return mapping
+
+
 TRANSLATION_SERVICE_URL = os.getenv("TRANSLATION_SERVICE_URL", "http://translation-service:11008").rstrip("/")
 TRANSLATION_MAX_FILE_SIZE = int(os.getenv("TRANSLATION_MAX_FILE_SIZE", str(100 * 1024 * 1024)))
 TRANSLATION_TIMEOUT_SECONDS = int(os.getenv("TRANSLATION_TIMEOUT_SECONDS", "900"))
@@ -29,12 +52,20 @@ TRANSLATION_LOCAL_SERVICES = frozenset(
     for item in os.getenv("TRANSLATION_LOCAL_SERVICES", "argos,ollama").split(",")
     if item.strip()
 )
+TRANSLATION_UPSTREAM_SERVICE_MAP = _parse_upstream_service_map(
+    os.getenv("TRANSLATION_UPSTREAM_SERVICE_MAP", "")
+)
 
-LANG_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
-TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-OUTPUT_MODES = {"translated": "mono", "bilingual": "dual"}
-SERVICES_REQUIRING_OPERATOR_CONFIGURATION = frozenset({"argos", "ollama", "openai", "deepl"})
-SERVICES_REQUIRING_CREDENTIALS = frozenset({"openai", "deepl"})
+if not SERVICE_ID_RE.fullmatch(TRANSLATION_DEFAULT_SERVICE):
+    raise RuntimeError("TRANSLATION_DEFAULT_SERVICE contains an invalid service identifier")
+if TRANSLATION_DEFAULT_SERVICE not in TRANSLATION_ALLOWED_SERVICES:
+    raise RuntimeError("TRANSLATION_DEFAULT_SERVICE must be present in TRANSLATION_ALLOWED_SERVICES")
+if any(not SERVICE_ID_RE.fullmatch(service) for service in TRANSLATION_ALLOWED_SERVICES):
+    raise RuntimeError("TRANSLATION_ALLOWED_SERVICES contains an invalid service identifier")
+if not set(TRANSLATION_LOCAL_SERVICES).issubset(TRANSLATION_ALLOWED_SERVICES):
+    raise RuntimeError("TRANSLATION_LOCAL_SERVICES must be a subset of TRANSLATION_ALLOWED_SERVICES")
+if not set(TRANSLATION_UPSTREAM_SERVICE_MAP).issubset(TRANSLATION_ALLOWED_SERVICES):
+    raise RuntimeError("TRANSLATION_UPSTREAM_SERVICE_MAP keys must be public allowed services")
 
 
 def _read_pdf(upload: UploadFile) -> bytes:
@@ -61,6 +92,10 @@ def _validate_service(service: str | None) -> str:
         allowed = ", ".join(TRANSLATION_ALLOWED_SERVICES)
         raise HTTPException(status_code=422, detail=f"translation service must be one of: {allowed}")
     return value
+
+
+def _upstream_service(public_service: str) -> str:
+    return TRANSLATION_UPSTREAM_SERVICE_MAP.get(public_service, public_service)
 
 
 def _cancel_task(client: httpx.Client, task_id: str) -> None:
@@ -95,6 +130,7 @@ def translation_capabilities() -> dict:
             "local_classification_is_operator_configured": True,
             "cloud_services_may_send_document_text_off_device": True,
             "api_keys_are_not_accepted_from_browser": True,
+            "provider_aliasing_is_server_side": True,
         },
     }
 
@@ -121,7 +157,7 @@ def translate_pdf(
     request_payload = {
         "lang_in": lang_in,
         "lang_out": lang_out,
-        "service": selected_service,
+        "service": _upstream_service(selected_service),
         "thread": thread_count,
     }
 
