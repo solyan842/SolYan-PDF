@@ -97,7 +97,7 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] Local batch workflow builder
 - [ ] Cloud-storage connectors — requires provider/credential decision
 - [ ] AI document summarization — optional, requires model/provider decision
-- [ ] PDF translation — optional, requires translation/model provider decision
+- [x] PDF translation — Hybrid/local-first provider decision implemented and live-gated for EN -> VI with Argos
 
 ## V1.1 — Self-hosted utility parity and hardening
 
@@ -174,6 +174,21 @@ V1.4 is complete. Detailed architecture, boundaries, regression evidence and def
 - [x] Close and release the self-contained V1.5 scope as v0.1.8
 
 V1.5 is complete. Detailed research, boundaries and close-out are in `docs/V1.5-PARITY-AUDIT.md`, `docs/V1.5-PARITY-STATUS.md` and `docs/V1.5-CLOSEOUT.md`.
+
+## V1.6 — Hybrid PDF translation
+
+- [x] Choose Hybrid / local-first translation architecture with a free local route and optional cloud providers
+- [x] Keep PDFMathTranslate/BabelDOC AGPL code outside the Apache-2.0 SolYan core behind a narrow HTTP boundary
+- [x] Add bounded SolYan FastAPI translation proxy with server-side provider allow-list, polling timeout and mono/bilingual PDF outputs
+- [x] Add translation UI without browser API-key entry and preserve explicit local/cloud privacy classification
+- [x] Audit current PDFMathTranslate 1.x and 2.0 lines before locking the integration contract
+- [x] Add local Argos provider bridge instead of patching the broken upstream 1.x `ArgosTranslator` path
+- [x] Pin and verify Argos EN -> VI model by SHA-256
+- [x] Gate public `argos` -> upstream `openailiked` mapping server-side while keeping the public service identity stable
+- [x] Pass live provider-boundary Argos EN -> VI PDF translation with mono/dual outputs and Vietnamese text checks
+- [x] Pass full service-integration gate with isolated SolYan and external translation runtimes: SolYan proxy -> PDFMathTranslate Flask/Celery/Redis -> local Argos bridge -> bilingual PDF
+
+V1.6 translation implementation is feature-complete for the validated free/local English -> Vietnamese lane. Cloud providers remain optional operator configuration, not V1.6 release prerequisites. Detailed architecture, licensing/privacy boundaries and live evidence are in `docs/V1.6-PDF-TRANSLATION.md`.
 
 ## Tiện ích Việt Nam — V1
 
@@ -255,6 +270,9 @@ V1.5 is complete. Detailed research, boundaries and close-out are in `docs/V1.5-
 - [x] Run all six runtime images as non-root with writable HOME enforced by CI
 - [x] PDF-to-Office synthetic V1 release gate
 - [x] PDF-to-Office public real-world V1 release gate
+- [x] PDF translation contract/privacy CI gate
+- [x] Live Argos EN -> VI provider-boundary PDF translation gate
+- [x] Full-stack translation service integration gate with isolated runtimes and real bilingual PDF validation
 
 ## Release packaging
 
@@ -293,7 +311,7 @@ V1.5 is complete. Detailed research, boundaries and close-out are in `docs/V1.5-
 - [ ] Choose whether multi-party remote signing belongs in V1 or a later release
 - [ ] Choose cloud-storage providers and provide credentials if connectors are wanted
 - [ ] Choose model/provider if AI summarization is wanted
-- [ ] Choose translation/model provider if PDF translation is wanted
+- [x] Choose translation/model provider for PDF translation: Hybrid/local-first with Argos EN -> VI as the validated free route; cloud providers remain optional operator configuration
 
 ## Research rule for difficult features
 
