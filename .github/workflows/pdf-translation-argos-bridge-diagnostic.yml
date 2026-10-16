@@ -1,13 +1,6 @@
 name: PDF Translation Argos Bridge Diagnostic
 
 on:
-  push:
-    branches:
-      - test/v1.6-argos-live-diagnostic-20261016
-    paths:
-      - 'scripts/generate_translation_fixture.py'
-      - 'scripts/argos_openai_bridge.py'
-      - '.github/workflows/pdf-translation-argos-bridge-diagnostic.yml'
   workflow_dispatch:
 
 permissions:
@@ -65,11 +58,12 @@ jobs:
             echo 'Provider route: built-in openailiked -> loopback SolYan Argos bridge'
           } | tee "$WORK/evidence/upstream.txt"
 
-      - name: Install pinned upstream with Argos and ultrafast extras
+      - name: Install pinned upstream and SolYan Argos provider
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install "$WORK/PDFMathTranslate[argostranslate,ultrafast]" 2>&1 | tee "$WORK/evidence/install.log"
+          python -m pip install "$WORK/PDFMathTranslate[ultrafast]" 2>&1 | tee "$WORK/evidence/install-upstream.log"
+          python -m pip install -r engines/translation-provider/requirements.txt 2>&1 | tee "$WORK/evidence/install-provider.log"
           python -m pip check 2>&1 | tee "$WORK/evidence/pip-check.txt"
           pdf2zh --version | tee "$WORK/evidence/pdf2zh-version.txt"
 
@@ -97,7 +91,7 @@ jobs:
       - name: Start loopback Argos OpenAI-compatible provider
         run: |
           set -euo pipefail
-          python scripts/argos_openai_bridge.py \
+          python engines/translation-provider/argos_openai_bridge.py \
             --host 127.0.0.1 \
             --port 18080 \
             --source-language en \
