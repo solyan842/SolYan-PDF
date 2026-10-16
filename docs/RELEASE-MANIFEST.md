@@ -1,6 +1,6 @@
-# SolYan PDF v0.1.7 — Release Dependency Manifest
+# SolYan PDF v0.1.8 — Release Dependency Manifest
 
-Release date: 2026-10-15
+Release date: 2026-10-16
 
 Project license: **Apache-2.0** (`LICENSE`)
 
@@ -49,9 +49,9 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Next.js | 15.5.27 | MIT | bundled npm runtime |
 | React | 19.1.1 | MIT | bundled npm runtime |
 | React DOM | 19.1.1 | MIT | bundled npm runtime |
-| pdf-lib | 1.17.1 | MIT | bundled browser PDF engine; core PDF, N-up, booklet, crop and resize |
-| pdfjs-dist / PDF.js | 6.4.299 | Apache-2.0 | bundled browser viewer/rendering engine |
-| JSZip | 3.10.2 | MIT | bundled browser ZIP engine |
+| pdf-lib | 1.17.1 | MIT | bundled browser PDF engine; core PDF, N-up, booklet, crop, resize, numbering/Bates, metadata and image/PDF composition |
+| pdfjs-dist / PDF.js | 6.4.299 | Apache-2.0 | bundled browser viewer/rendering engine; text-layer matching for literal/regex/whole-word auto-redaction |
+| JSZip | 3.10.2 | MIT | bundled browser ZIP engine for multi-file image/SVG export surfaces |
 | PostCSS override | 8.5.29 | MIT | transitive security override |
 
 ## Backend orchestration
@@ -62,8 +62,8 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
 | httpx | 0.28.1 | BSD-3-Clause | Python runtime dependency |
-| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI for protect/unlock/repair/compression, linearization, flattening and page selection |
-| Poppler utilities | snapshot-resolved distro package | GPL-2.0-or-later family; verify exact Debian package metadata at release build | separate CLI tools (`pdfimages`, `pdftotext`, `pdftoppm`, `pdftops`) for image extraction, text/blank-page analysis and PS/EPS vector export |
+| qpdf | snapshot-resolved distro package | Apache-2.0 | CLI for protect/unlock/repair/compression, linearization, flattening, page selection, portfolio/collection structure and page labels |
+| Poppler utilities | snapshot-resolved distro package | GPL-2.0-or-later family; verify exact Debian package metadata at release build | separate CLI tools (`pdfimages`, `pdftotext`, `pdftoppm`, `pdftops`) for image extraction, text/blank-page analysis and PS/EPS/vector-export support |
 | iputils-ping | snapshot-resolved distro package | BSD/GPL-family package licensing; verify image package metadata at release build | CLI for network utility |
 
 ## OCR service
@@ -95,7 +95,7 @@ For OCR, `scripts/hash-pinned-pypi.py` records every published SHA-256 distribut
 | FastAPI | 0.119.0 | MIT | Python runtime dependency |
 | Uvicorn | 0.37.0 | BSD-3-Clause | Python runtime dependency |
 | python-multipart | 0.0.20 | Apache-2.0 | Python runtime dependency |
-| pyHanko | 0.37.0 | MIT | PDF cryptographic signing |
+| pyHanko | 0.37.0 | MIT | local PKCS#12 PDF signing, including certification signatures and DocMDP permission levels |
 
 ## PDF/A archive service
 
