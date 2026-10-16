@@ -55,7 +55,8 @@ export function normalizeAutoRedactTerms(raw: string, caseSensitive = false): st
   for (const line of raw.split(/\r?\n/)) {
     const term = line.trim();
     if (!term) continue;
-    const key = caseSensitive ? term : term.toLocaleLowerCase('vi');
+    const normalized = term.normalize('NFC');
+    const key = caseSensitive ? normalized : normalized.toLocaleLowerCase('vi');
     if (seen.has(key)) continue;
     seen.add(key);
     terms.push(term);
@@ -100,7 +101,7 @@ function hasWholeWordOccurrence(haystack: string, needle: string): boolean {
     const leftOk = !requiresLeftBoundary || !isUnicodeWordChar(before);
     const rightOk = !requiresRightBoundary || !isUnicodeWordChar(after);
     if (leftOk && rightOk) return true;
-    fromIndex = index + Math.max(needle.length, 1);
+    fromIndex = index + 1;
   }
 
   return false;
@@ -112,7 +113,11 @@ export function autoRedactLiteralMatches(
   wholeWord = false,
 ): boolean {
   if (!needle) return false;
-  return wholeWord ? hasWholeWordOccurrence(haystack, needle) : haystack.includes(needle);
+  const normalizedHaystack = haystack.normalize('NFC');
+  const normalizedNeedle = needle.normalize('NFC');
+  return wholeWord
+    ? hasWholeWordOccurrence(normalizedHaystack, normalizedNeedle)
+    : normalizedHaystack.includes(normalizedNeedle);
 }
 
 function validateCustomSafeRegex(source: string): void {
@@ -306,13 +311,17 @@ export function findAutoRedactMatches(
   if (!Number.isFinite(padding) || padding < 0 || padding > 20) throw new Error('Auto-redact padding must be between 0 and 20 points.');
   const normalizedTerms = terms.map((term) => term.trim()).filter(Boolean);
   if (normalizedTerms.length === 0) return [];
-  const searchableTerms = normalizedTerms.map((term) => caseSensitive ? term : term.toLocaleLowerCase('vi'));
+  const searchableTerms = normalizedTerms.map((term) => {
+    const normalized = term.normalize('NFC');
+    return caseSensitive ? normalized : normalized.toLocaleLowerCase('vi');
+  });
   const matches: AutoRedactMatch[] = [];
 
   for (const item of normalizedItems(textContent)) {
     if (typeof item.str !== 'string' || !item.str.trim()) continue;
     const text = item.str;
-    const haystack = caseSensitive ? text : text.toLocaleLowerCase('vi');
+    const normalizedText = text.normalize('NFC');
+    const haystack = caseSensitive ? normalizedText : normalizedText.toLocaleLowerCase('vi');
     const matchedTerms = normalizedTerms.filter((_, index) => autoRedactLiteralMatches(haystack, searchableTerms[index], wholeWord));
     if (matchedTerms.length === 0) continue;
     const rect = itemRect(item, viewport, padding);
