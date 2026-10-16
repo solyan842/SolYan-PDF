@@ -20,74 +20,12 @@ jobs:
           ref: release/v0.1.9-20261016
 
       - name: Update changelog and release manifest
+        env:
+          RELEASE_DOC_SCRIPT_B64: ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpjaGFuZ2Vsb2cgPSBQYXRoKCJDSEFOR0VMT0cubWQiKQp0ZXh0ID0gY2hhbmdlbG9nLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQpoZWFkaW5nID0gIiMjIFswLjEuOV0gLSAyMDI2LTEwLTE2IgppZiBoZWFkaW5nIG5vdCBpbiB0ZXh0OgogICAgZW50cnkgPSAiIiIjIyBbMC4xLjldIC0gMjAyNi0xMC0xNgoKUGF0Y2ggcmVsZWFzZSBkZWxpdmVyaW5nIHRoZSAqKlYxLjYgSHlicmlkIC8gbG9jYWwtZmlyc3QgUERGIHRyYW5zbGF0aW9uIGxhbmUqKi4KCiMjIyBWMS42IFBERiB0cmFuc2xhdGlvbgotIEFkZGVkIHRyYW5zbGF0ZWQtb25seSBhbmQgYmlsaW5ndWFsIFBERiBvdXRwdXRzIGJlaGluZCB0aGUgYm91bmRlZCBTb2xZYW4gYC9wZGYvdHJhbnNsYXRlYCBBUEkuCi0gQWRkZWQgYSB2YWxpZGF0ZWQgZnJlZS9sb2NhbCBFbmdsaXNoIC0+IFZpZXRuYW1lc2Ugcm91dGUgdXNpbmcgQXJnb3MgVHJhbnNsYXRlIHdpdGggYSBTSEEtMjU2LXBpbm5lZCBFTiAtPiBWSSBtb2RlbC4KLSBBZGRlZCBzZXJ2ZXItc2lkZSBwdWJsaWMtcHJvdmlkZXIgbWFwcGluZyBzbyBicm93c2VyLWZhY2luZyBgYXJnb3NgIHJvdXRlcyB0aHJvdWdoIFBERk1hdGhUcmFuc2xhdGUncyBleGlzdGluZyBPcGVuQUktY29tcGF0aWJsZSBwcm92aWRlciBpbnRlcmZhY2Ugd2l0aG91dCBleHBvc2luZyB0aGUgb3BlcmF0b3Itc2lkZSBgb3BlbmFpbGlrZWRgIElELgotIEFkZGVkIGEgc21hbGwgU29sWWFuLW93bmVkIGxvY2FsIEFyZ29zIGJyaWRnZSByYXRoZXIgdGhhbiBwYXRjaGluZyBvciB2ZW5kb3JpbmcgdGhlIGJyb2tlbiB1cHN0cmVhbSBQREZNYXRoVHJhbnNsYXRlIDEueCBgQXJnb3NUcmFuc2xhdG9yYCBpbXBsZW1lbnRhdGlvbi4KCiMjIyBWZXJpZmljYXRpb24gYW5kIGFyY2hpdGVjdHVyZQotIEtlcHQgUERGTWF0aFRyYW5zbGF0ZSAxLjkueCBBR1BMLTMuMCBjb2RlIG91dHNpZGUgdGhlIEFwYWNoZS0yLjAgU29sWWFuIGNvcmUgYmVoaW5kIGl0cyBIVFRQIHRhc2sgQVBJOyB0aGUgYXVkaXRlZCBpbnRlZ3JhdGlvbiBwaW4gaXMgY29tbWl0IGBkMTY2MDRkYWJiNWMzZjRjNmQ0ZGFmMzcxOTdiMjE4YjBkYmQ0ZGYyYC4KLSBQYXNzZWQgdGhlIGxpdmUgcHJvdmlkZXItYm91bmRhcnkgZ2F0ZSB3aXRoIHJlYWwgbW9uby9iaWxpbmd1YWwgRU4gLT4gVkkgUERGcyBhbmQgVmlldG5hbWVzZSB0ZXh0IGNoZWNrcy4KLSBQYXNzZWQgdGhlIGZ1bGwgc2VydmljZS1pbnRlZ3JhdGlvbiBnYXRlIHRocm91Z2ggaXNvbGF0ZWQgcnVudGltZXM6IFNvbFlhbiBGYXN0QVBJIC0+IFBERk1hdGhUcmFuc2xhdGUgRmxhc2svQ2VsZXJ5L1JlZGlzIC0+IGxvY2FsIEFyZ29zIGJyaWRnZSAtPiBiaWxpbmd1YWwgUERGLgotIFByZXNlcnZlZCBicm93c2VyIGNyZWRlbnRpYWwgYm91bmRhcmllczogcHJvdmlkZXIgQVBJIGtleXMgcmVtYWluIGRlcGxveW1lbnQvb3BlcmF0b3IgY29uZmlndXJhdGlvbiBhbmQgYXJlIG5ldmVyIGFjY2VwdGVkIGZyb20gdGhlIHRyYW5zbGF0aW9uIFVJLgotIFByZXNlcnZlZCB0aGUgZXhpc3RpbmcgUERGIC0+IE9mZmljZSBWMSByZWxlYXNlIGdhdGUgYXQgMjcgY2FzZXMgLyA2OCBzb3VyY2UgcGFnZXMgd2l0aG91dCB3ZWFrZW5pbmcgYW55IGV4aXN0aW5nIGFjY2VwdGFuY2UgdGhyZXNob2xkLgoKIyMjIEltcG9ydGFudCBib3VuZGFyaWVzCi0gQXJnb3MgaXMgdGhlIGZyZWUvbG9jYWwgYmFzZWxpbmUgYW5kIGRvZXMgbm90IGltcGx5IHByZW1pdW0gb3IgdW5pdmVyc2FsIGxpbmd1aXN0aWMgcXVhbGl0eS4KLSBgbG9jYWxgIGlzIGRlcGxveW1lbnQgbWV0YWRhdGEsIG5vdCBwYWNrZXQtbGV2ZWwgcHJvb2Y7IG9wZXJhdG9ycyByZW1haW4gcmVzcG9uc2libGUgZm9yIHRydXN0ZWQgc2VydmljZS1uZXR3b3JrIGNvbmZpZ3VyYXRpb24uCi0gU2Nhbi1oZWF2eS9pbWFnZS1vbmx5IFBERnMgcmVtYWluIGRlcGVuZGVudCBvbiBleHRlcm5hbCB0cmFuc2xhdGlvbi9PQ1IgY29uZmlndXJhdGlvbjsgVjEuNiBkb2VzIG5vdCBzaWxlbnRseSBpbmplY3QgT0NSIGludG8gdGhpcyByb3V0ZS4KLSBPcHRpb25hbCBjbG91ZCBwcm92aWRlcnMgcmVtYWluIG9wZXJhdG9yLWNvbmZpZ3VyZWQgYW5kIG1heSBzZW5kIGRvY3VtZW50IHRleHQvY29udGVudCBvdXRzaWRlIHRoZSBTb2xZYW4gZGVwbG95bWVudC4KCiIiIgogICAgbWFya2VyID0gIiMjIFtVbnJlbGVhc2VkXVxuXG4iCiAgICBpZiBtYXJrZXIgbm90IGluIHRleHQ6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgiQ0hBTkdFTE9HIFVucmVsZWFzZWQgbWFya2VyIG5vdCBmb3VuZCIpCiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKG1hcmtlciwgbWFya2VyICsgZW50cnksIDEpCiAgICBjaGFuZ2Vsb2cud3JpdGVfdGV4dCh0ZXh0LCBlbmNvZGluZz0idXRmLTgiKQoKbWFuaWZlc3QgPSBQYXRoKCJkb2NzL1JFTEVBU0UtTUFOSUZFU1QubWQiKQp0ZXh0ID0gbWFuaWZlc3QucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCm9sZF90aXRsZSA9ICIjIFNvbFlhbiBQREYgdjAuMS44IOKAlCBSZWxlYXNlIERlcGVuZGVuY3kgTWFuaWZlc3QiCm5ld190aXRsZSA9ICIjIFNvbFlhbiBQREYgdjAuMS45IOKAlCBSZWxlYXNlIERlcGVuZGVuY3kgTWFuaWZlc3QiCmlmIG9sZF90aXRsZSBpbiB0ZXh0OgogICAgdGV4dCA9IHRleHQucmVwbGFjZShvbGRfdGl0bGUsIG5ld190aXRsZSwgMSkKZWxpZiBuZXdfdGl0bGUgbm90IGluIHRleHQ6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJSZWxlYXNlIG1hbmlmZXN0IHRpdGxlIG5vdCByZWNvZ25pemVkIikKCnNlY3Rpb24gPSAiIiIjIyBQREYgdHJhbnNsYXRpb24gZXh0ZXJuYWwgc2VydmljZSBib3VuZGFyeQoKVjEuNiBhZGRzIGEgSHlicmlkL2xvY2FsLWZpcnN0IFBERiB0cmFuc2xhdGlvbiBzdXJmYWNlIHdoaWxlIGtlZXBpbmcgdGhlIGluY29tcGF0aWJsZSBjb3B5bGVmdCBsYXlvdXQgZW5naW5lIG91dHNpZGUgdGhlIGRlZmF1bHQgU29sWWFuIGltYWdlcyBhbmQgb3V0c2lkZSB0aGUgQXBhY2hlLTIuMCBjb3JlIHNvdXJjZSBib3VuZGFyeS4KCnwgQ29tcG9uZW50IHwgVmVyc2lvbiAvIHBpbiB8IExpY2Vuc2UgfCBJbnRlZ3JhdGlvbiB8CnwtLS18LS0tfC0tLXwtLS18CnwgUERGTWF0aFRyYW5zbGF0ZSB8IGF1ZGl0ZWQgY29tbWl0IGBkMTY2MDRkYWJiNWMzZjRjNmQ0ZGFmMzcxOTdiMjE4YjBkYmQ0ZGYyYCAvIENMSSAxLjkuMTIgfCBBR1BMLTMuMCB8IHNlcGFyYXRlbHkgZGVwbG95ZWQgRmxhc2svQ2VsZXJ5L1JlZGlzIEhUVFAgdGFzayBzZXJ2aWNlOyBub3QgdmVuZG9yZWQsIGltcG9ydGVkIG9yIHBhdGNoZWQgYnkgU29sWWFuIGNvcmUgfAp8IEFyZ29zIFRyYW5zbGF0ZSB8IGBhcmdvc3RyYW5zbGF0ZT09MS4xMS4wYCB8IE1JVCB8IGxvY2FsIHRyYW5zbGF0aW9uIHJ1bnRpbWUgYmVoaW5kIHRoZSBTb2xZYW4tb3duZWQgT3BlbkFJLWNvbXBhdGlibGUgcHJvdmlkZXIgYnJpZGdlIHwKfCBBcmdvcyBFTiAtPiBWSSBtb2RlbCB8IGB0cmFuc2xhdGUtZW5fdmktMV85LmFyZ29zbW9kZWxgLCBTSEEtMjU2IGA4Njk1NzEwMWFhNDA5OWFhOWExYTc0OTJlNDE5ODdkOTM4ZDNjZjBmZGFmNGZiNjg0YzA3OTdhOWQ1NjdkZDE2YCB8IHVwc3RyZWFtIG1vZGVsL2RhdGEgdGVybXMgYXBwbHk7IHZlcmlmeSBiZWZvcmUgcmVkaXN0cmlidXRpb24gfCBkb3dubG9hZGVkIGFuZCBoYXNoLXZlcmlmaWVkIGluIHRoZSBleHRlcm5hbCB0cmFuc2xhdGlvbiBlbnZpcm9ubWVudDsgbm90IGNvbW1pdHRlZCB0byB0aGlzIHJlcG9zaXRvcnkgfAoKVGhlIGxvY2FsIGJyaWRnZSB1bmRlciBgZW5naW5lcy90cmFuc2xhdGlvbi1wcm92aWRlci9gIGlzIFNvbFlhbi1vd25lZCBjb2RlLiBSZWRpcywgQ2VsZXJ5LCBGbGFzayBhbmQgUERGTWF0aFRyYW5zbGF0ZSByZW1haW4gcGFydCBvZiB0aGUgZXh0ZXJuYWwgdHJhbnNsYXRpb24gcnVudGltZSBhbmQgYXJlIG5vdCBhZGRlZCB0byB0aGUgc2l4IGRlZmF1bHQgcmVsZWFzZSBpbWFnZXMuIE9wdGlvbmFsIGNsb3VkLXByb3ZpZGVyIGNyZWRlbnRpYWxzIHJlbWFpbiBvcGVyYXRvci1zaWRlIGNvbmZpZ3VyYXRpb24gYW5kIGFyZSBub3QgYWNjZXB0ZWQgZnJvbSB0aGUgYnJvd3NlciBVSS4KCiIiIgppZiAiIyMgUERGIHRyYW5zbGF0aW9uIGV4dGVybmFsIHNlcnZpY2UgYm91bmRhcnkiIG5vdCBpbiB0ZXh0OgogICAgbWFya2VyID0gIiMjIFJlc29sdmVkIGltYWdlIGludmVudG9yeVxuIgogICAgaWYgbWFya2VyIG5vdCBpbiB0ZXh0OgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoIlJlbGVhc2UgbWFuaWZlc3QgaW5zZXJ0aW9uIG1hcmtlciBub3QgZm91bmQiKQogICAgdGV4dCA9IHRleHQucmVwbGFjZShtYXJrZXIsIHNlY3Rpb24gKyBtYXJrZXIsIDEpCm1hbmlmZXN0LndyaXRlX3RleHQodGV4dCwgZW5jb2Rpbmc9InV0Zi04IikK
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          changelog = Path('CHANGELOG.md')
-          text = changelog.read_text(encoding='utf-8')
-          heading = '## [0.1.9] - 2026-10-16'
-          if heading not in text:
-              entry = '''## [0.1.9] - 2026-10-16
-
-Patch release delivering the **V1.6 Hybrid / local-first PDF translation lane**.
-
-### V1.6 PDF translation
-- Added translated-only and bilingual PDF outputs behind the bounded SolYan `/pdf/translate` API.
-- Added a validated free/local English -> Vietnamese route using Argos Translate with a SHA-256-pinned EN -> VI model.
-- Added server-side public-provider mapping so browser-facing `argos` routes through PDFMathTranslate's existing OpenAI-compatible provider interface without exposing the operator-side `openailiked` ID.
-- Added a small SolYan-owned local Argos bridge rather than patching or vendoring the broken upstream PDFMathTranslate 1.x `ArgosTranslator` implementation.
-
-### Verification and architecture
-- Kept PDFMathTranslate 1.9.x AGPL-3.0 code outside the Apache-2.0 SolYan core behind its HTTP task API; the audited integration pin is commit `d16604dabb5c3f4c6d4daf37197b218b0dbd4df2`.
-- Passed the live provider-boundary gate with real mono/bilingual EN -> VI PDFs and Vietnamese text checks.
-- Passed the full service-integration gate through isolated runtimes: SolYan FastAPI -> PDFMathTranslate Flask/Celery/Redis -> local Argos bridge -> bilingual PDF.
-- Preserved browser credential boundaries: provider API keys remain deployment/operator configuration and are never accepted from the translation UI.
-- Preserved the existing PDF -> Office V1 release gate at 27 cases / 68 source pages without weakening any existing acceptance threshold.
-
-### Important boundaries
-- Argos is the free/local baseline and does not imply premium or universal linguistic quality.
-- `local` is deployment metadata, not packet-level proof; operators remain responsible for trusted service-network configuration.
-- Scan-heavy/image-only PDFs remain dependent on external translation/OCR configuration; V1.6 does not silently inject OCR into this route.
-- Optional cloud providers remain operator-configured and may send document text/content outside the SolYan deployment.
-
-'''
-              marker = '## [Unreleased]\n\n'
-              if marker not in text:
-                  raise SystemExit('CHANGELOG Unreleased marker not found')
-              text = text.replace(marker, marker + entry, 1)
-              changelog.write_text(text, encoding='utf-8')
-
-          manifest = Path('docs/RELEASE-MANIFEST.md')
-          text = manifest.read_text(encoding='utf-8')
-          old_title = '# SolYan PDF v0.1.8 — Release Dependency Manifest'
-          new_title = '# SolYan PDF v0.1.9 — Release Dependency Manifest'
-          if old_title in text:
-              text = text.replace(old_title, new_title, 1)
-          elif new_title not in text:
-              raise SystemExit('Release manifest title not recognized')
-
-          section = '''## PDF translation external service boundary
-
-V1.6 adds a Hybrid/local-first PDF translation surface while keeping the incompatible copyleft layout engine outside the default SolYan images and outside the Apache-2.0 core source boundary.
-
-| Component | Version / pin | License | Integration |
-|---|---|---|---|
-| PDFMathTranslate | audited commit `d16604dabb5c3f4c6d4daf37197b218b0dbd4df2` / CLI 1.9.12 | AGPL-3.0 | separately deployed Flask/Celery/Redis HTTP task service; not vendored, imported or patched by SolYan core |
-| Argos Translate | `argostranslate==1.11.0` | MIT | local translation runtime behind the SolYan-owned OpenAI-compatible provider bridge |
-| Argos EN -> VI model | `translate-en_vi-1_9.argosmodel`, SHA-256 `86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16` | upstream model/data terms apply; verify before redistribution | downloaded and hash-verified in the external translation environment; not committed to this repository |
-
-The local bridge under `engines/translation-provider/` is SolYan-owned code. Redis, Celery, Flask and PDFMathTranslate remain part of the external translation runtime and are not added to the six default release images. Optional cloud-provider credentials remain operator-side configuration and are not accepted from the browser UI.
-
-'''
-          if '## PDF translation external service boundary' not in text:
-              marker = '## Resolved image inventory\n'
-              if marker not in text:
-                  raise SystemExit('Release manifest insertion marker not found')
-              text = text.replace(marker, section + marker, 1)
-          manifest.write_text(text, encoding='utf-8')
-          PY
+          printf '%s' "$RELEASE_DOC_SCRIPT_B64" | base64 --decode > /tmp/prepare-release-docs.py
+          python /tmp/prepare-release-docs.py
 
       - name: Commit release documentation if needed
         run: |
