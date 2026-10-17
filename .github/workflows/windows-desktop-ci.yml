@@ -132,10 +132,10 @@ jobs:
           if (-not (Test-Path desktop/src-tauri/resources/core/solyan-core.exe)) { throw "solyan-core.exe was not staged" }
           Get-ChildItem desktop/src-tauri/resources/core -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-resource-inventory.log
 
-      - name: Install Tauri CLI
+      - name: Check pinned Tauri CLI
         shell: pwsh
         run: |
-          cargo install tauri-cli --version "^2" --locked 2>&1 | Tee-Object -FilePath "artifacts/tauri-cli-install.log"
+          npx --yes @tauri-apps/cli@2.12.3 --version 2>&1 | Tee-Object -FilePath "artifacts/tauri-cli-version.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Cargo check
@@ -149,7 +149,7 @@ jobs:
         shell: pwsh
         working-directory: desktop/src-tauri
         run: |
-          cargo tauri build --bundles nsis 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-tauri-build.log"
+          npx --yes @tauri-apps/cli@2.12.3 build --bundles nsis 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-tauri-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify installer exists
