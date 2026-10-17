@@ -7,6 +7,7 @@
     "frontendDist": "../ui"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -28,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "resources": ["resources/core/**/*"],
     "category": "Productivity",
     "shortDescription": "Bộ công cụ PDF dễ dùng cho Windows",
     "longDescription": "SolYan PDF cho Windows cung cấp các công cụ sắp xếp, chỉnh sửa, chuyển đổi, OCR, bảo mật và xử lý PDF theo hướng local-first.",
