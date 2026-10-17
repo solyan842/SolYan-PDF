@@ -1,0 +1,77 @@
+name: Fix v0.1.9 Permissions Password Parsing
+
+on:
+  push:
+    branches:
+      - release/v0.1.9-20261016
+    paths:
+      - '.github/workflows/fix-v0.1.9-permissions.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/v0.1.9-20261016
+
+      - name: Patch qpdf encryption arguments and deterministic regression
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          main = Path('backend/app/main.py')
+          text = main.read_text(encoding='utf-8')
+          old = '''        [
+            "--encrypt",
+            password,
+            owner,
+            "256",
+            f"--print={print_mode}",
+            f"--modify={modify_mode}",
+            f"--extract={'y' if allow_extract else 'n'}",
+            "--",
+        ],'''
+          new = '''        [
+            "--encrypt",
+            f"--user-password={password}",
+            f"--owner-password={owner}",
+            "--bits=256",
+            f"--print={print_mode}",
+            f"--modify={modify_mode}",
+            f"--extract={'y' if allow_extract else 'n'}",
+            "--",
+        ],'''
+          if old not in text:
+              raise SystemExit('main.py encryption block not found')
+          main.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          workflow = Path('.github/workflows/pdf-permissions-ci.yml')
+          text = workflow.read_text(encoding='utf-8')
+          replacements = {
+              "'password': 'reader-pass',": "'password': '-reader-pass',",
+              "'owner_password': 'owner-pass',": "'owner_password': '-owner-pass',",
+              "intermediate_info = encryption_info(intermediate_path, 'reader-pass')": "intermediate_info = encryption_info(intermediate_path, '-reader-pass')",
+              "owner_info = encryption_info(intermediate_path, 'owner-pass')": "owner_info = encryption_info(intermediate_path, '-owner-pass')",
+              "print('qpdf AES-256 permissions and random-owner behavior ok')": "print('qpdf AES-256 permissions, leading-dash passwords, and random-owner behavior ok')",
+          }
+          for old_text, new_text in replacements.items():
+              if old_text not in text:
+                  raise SystemExit(f'permissions regression marker not found: {old_text}')
+              text = text.replace(old_text, new_text, 1)
+          workflow.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit fix
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/main.py .github/workflows/pdf-permissions-ci.yml
+          git commit -m 'fix: make qpdf password arguments option-safe'
+          git push origin HEAD:release/v0.1.9-20261016
