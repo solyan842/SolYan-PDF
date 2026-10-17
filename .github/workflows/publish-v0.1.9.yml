@@ -1,0 +1,75 @@
+name: Publish v0.1.9
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/publish-v0.1.9.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release content
+        uses: actions/checkout@v4
+
+      - name: Verify release metadata
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = json.loads(Path('frontend/package.json').read_text())
+          lock = json.loads(Path('frontend/package-lock.json').read_text())
+          backend = Path('backend/app/main.py').read_text()
+          changelog = Path('CHANGELOG.md').read_text()
+          manifest = Path('docs/RELEASE-MANIFEST.md').read_text()
+          architecture = Path('docs/V1.6-PDF-TRANSLATION.md').read_text()
+          closeout = Path('docs/V1.6-CLOSEOUT.md').read_text()
+          notes = Path('docs/RELEASE-NOTES-v0.1.9.md')
+          provider_readme = Path('engines/translation-provider/README.md').read_text()
+          provider_requirements = Path('engines/translation-provider/requirements.txt').read_text()
+          env_example = Path('.env.example').read_text()
+
+          assert package['version'] == '0.1.9', package['version']
+          assert lock['version'] == '0.1.9', lock['version']
+          assert lock['packages']['']['version'] == '0.1.9', lock['packages']['']['version']
+          assert 'version="0.1.9"' in backend
+          assert '## [0.1.9] - 2026-10-16' in changelog
+          assert '# SolYan PDF v0.1.9 — Release Dependency Manifest' in manifest
+          assert 'Release date: 2026-10-16' in manifest
+          assert 'PDF translation external service boundary' in manifest
+          assert notes.is_file()
+          assert 'Hybrid / local-first' in architecture
+          assert 'd16604dabb5c3f4c6d4daf37197b218b0dbd4df2' in architecture
+          assert 'V1.6 PDF translation implementation is complete' in closeout
+          assert '38880970041' in closeout
+          assert 'pdf-translation-full-stack-en-vi' in closeout
+          assert 'argostranslate==1.11.0' in provider_requirements
+          assert '86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16' in provider_readme
+          assert 'TRANSLATION_UPSTREAM_SERVICE_MAP=argos:openailiked' in env_example
+          assert not list(Path('.github/workflows').glob('prepare-v0.1.9-*.yml'))
+          assert not list(Path('.github/workflows').glob('diag-v0.1.9-*.yml'))
+          assert not Path('scripts/prepare-v0.1.9.py').exists()
+          PY
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.1.9 --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release v0.1.9 already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create v0.1.9 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "SolYan PDF v0.1.9" \
+            --notes-file docs/RELEASE-NOTES-v0.1.9.md

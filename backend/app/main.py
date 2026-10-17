@@ -42,7 +42,7 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 PRINT_MODES = {"none", "low", "full"}
 MODIFY_MODES = {"none", "assembly", "form", "annotate", "all"}
 
-app = FastAPI(title="SolYan PDF API", version="0.1.8")
+app = FastAPI(title="SolYan PDF API", version="0.1.9")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("SOLYAN_ALLOWED_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
@@ -191,9 +191,9 @@ def protect_pdf(
         data,
         [
             "--encrypt",
-            password,
-            owner,
-            "256",
+            f"--user-password={password}",
+            f"--owner-password={owner}",
+            "--bits=256",
             f"--print={print_mode}",
             f"--modify={modify_mode}",
             f"--extract={'y' if allow_extract else 'n'}",
