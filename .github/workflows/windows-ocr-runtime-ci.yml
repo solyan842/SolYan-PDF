@@ -119,7 +119,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --recursive-copy-metadata paddlex --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --recursive-copy-metadata paddlex --copy-metadata imagesize --copy-metadata opencv-contrib-python --copy-metadata pyclipper --copy-metadata pypdfium2 --copy-metadata python-bidi --copy-metadata shapely --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path dist/solyan-ocr.exe)) { throw "solyan-ocr.exe was not produced" }
           Get-Item dist/solyan-ocr.exe | Select-Object Name, Length, FullName | Format-List | Out-String | Set-Content artifacts/windows-ocr-sidecar-inventory.log
