@@ -40,6 +40,7 @@ from .sanitize import router as sanitize_router
 from .sign_proxy import router as sign_router
 from .translation_proxy import router as translation_router
 from .unlock_forms import router as unlock_forms_router
+from .webdav_storage import router as webdav_storage_router
 
 MAX_FILE_SIZE = 100 * 1024 * 1024
 PRINT_MODES = {"none", "low", "full"}
@@ -134,6 +135,9 @@ app.include_router(office_router)
 app.include_router(sign_router)
 app.include_router(archive_router)
 app.include_router(bloom_router)
+# Register the concrete WebDAV routes before the provider-id Cloud Storage router,
+# whose dynamic /storage/{provider_id}/... paths would otherwise catch "webdav".
+app.include_router(webdav_storage_router)
 app.include_router(cloud_storage_router)
 app.include_router(extract_images_router)
 app.include_router(remove_images_router)

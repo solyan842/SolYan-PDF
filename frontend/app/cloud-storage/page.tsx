@@ -4,14 +4,18 @@ import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+type ProviderId = 'google' | 'onedrive' | 'webdav';
+
 type ProviderStatus = {
-  id: 'google' | 'onedrive';
+  id: ProviderId;
   label: string;
   configured: boolean;
   connected: boolean;
   scopes: string[];
   picker_configured?: boolean;
   least_privilege_scope?: string;
+  auth_mode?: 'oauth' | 'server-configured';
+  credentials_server_side?: boolean;
   supports: { list: boolean; download: boolean; upload: boolean; replace: boolean };
 };
 
@@ -62,7 +66,7 @@ async function errorMessage(response: Response) {
 
 export default function CloudStoragePage() {
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<'google' | 'onedrive'>('google');
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId>('google');
   const [items, setItems] = useState<CloudItem[]>([]);
   const [crumbs, setCrumbs] = useState<FolderCrumb[]>([{ id: 'root', name: 'Root' }]);
   const [maxFileSize, setMaxFileSize] = useState(100 * 1024 * 1024);
@@ -83,9 +87,17 @@ export default function CloudStoragePage() {
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     const payload = await response.json() as ProviderPayload;
-    setProviders(payload.providers);
+
+    const webdavResponse = await fetch(`${API_BASE}/storage/webdav/status`, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!webdavResponse.ok) throw new Error(await errorMessage(webdavResponse));
+    const webdav = await webdavResponse.json() as ProviderStatus;
+    const merged = [...payload.providers, webdav];
+    setProviders(merged);
     setMaxFileSize(payload.max_file_size);
-    return payload.providers;
+    return merged;
   }
 
   async function loadFiles(providerId = selectedProvider, folderId = currentFolder.id) {
@@ -130,7 +142,7 @@ export default function CloudStoragePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function chooseProvider(providerId: 'google' | 'onedrive') {
+  function chooseProvider(providerId: ProviderId) {
     setSelectedProvider(providerId);
     setCrumbs([{ id: 'root', name: 'Root' }]);
     setItems([]);
@@ -140,13 +152,32 @@ export default function CloudStoragePage() {
     if (next?.connected) void loadFiles(providerId, 'root');
   }
 
-  function connect(providerId: 'google' | 'onedrive') {
-    window.location.assign(
-      `${API_BASE}/storage/${providerId}/auth/start?return_path=${encodeURIComponent('/cloud-storage')}`,
-    );
+  async function connect(providerId: ProviderId) {
+    if (providerId !== 'webdav') {
+      window.location.assign(
+        `${API_BASE}/storage/${providerId}/auth/start?return_path=${encodeURIComponent('/cloud-storage')}`,
+      );
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/storage/webdav/connect`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      await refreshProviders();
+      setResult('Đã mở phiên WebDAV bằng credential phía server.');
+      await loadFiles('webdav', 'root');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể kết nối WebDAV.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function logout(providerId: 'google' | 'onedrive') {
+  async function logout(providerId: ProviderId) {
     setBusy(true);
     setError('');
     try {
@@ -158,7 +189,7 @@ export default function CloudStoragePage() {
       await refreshProviders();
       setItems([]);
       setCrumbs([{ id: 'root', name: 'Root' }]);
-      setResult(`Đã ngắt kết nối ${providerId === 'google' ? 'Google Drive' : 'OneDrive'}.`);
+      setResult(`Đã ngắt kết nối ${provider?.label ?? providerId}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể ngắt kết nối.');
     } finally {
@@ -204,7 +235,7 @@ export default function CloudStoragePage() {
     input.value = '';
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setError('V1.7 chỉ nhận file PDF.');
+      setError('Cloud Storage chỉ nhận file PDF.');
       return;
     }
     if (file.size > maxFileSize) {
@@ -239,7 +270,7 @@ export default function CloudStoragePage() {
     input.value = '';
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setError('V1.7 chỉ nhận file PDF.');
+      setError('Cloud Storage chỉ nhận file PDF.');
       return;
     }
     if (file.size > maxFileSize) {
@@ -271,13 +302,13 @@ export default function CloudStoragePage() {
   return <main className="shell">
     <header className="topbar">
       <a className="brand" href="/">SolYan PDF</a>
-      <div className="privacy-pill server-pill">OAuth · Server-side tokens</div>
+      <div className="privacy-pill server-pill">Server-side credentials</div>
     </header>
 
     <section className="hero compact-hero">
-      <p className="eyebrow">CLOUD STORAGE · V1.7</p>
-      <h1>Google Drive & OneDrive</h1>
-      <p className="subtitle">Mở, tải và lưu PDF qua cloud mà không đưa client secret hoặc refresh token xuống trình duyệt.</p>
+      <p className="eyebrow">CLOUD STORAGE · V1.8</p>
+      <h1>Google Drive · OneDrive · WebDAV</h1>
+      <p className="subtitle">Mở, tải và lưu PDF qua cloud mà không đưa client secret, refresh token hoặc mật khẩu WebDAV xuống trình duyệt.</p>
     </section>
 
     <section className="workspace form-workspace">
@@ -297,16 +328,20 @@ export default function CloudStoragePage() {
 
       {provider && !provider.configured && <div className="result-box">
         <strong>{provider.label} chưa được cấu hình.</strong><br/>
-        Deployment cần OAuth Client ID/Secret tương ứng trong biến môi trường. SolYan vẫn build và chạy bình thường khi bỏ trống credential.
+        {provider.id === 'webdav'
+          ? 'Deployment cần WEBDAV_BASE_URL/USERNAME/PASSWORD phía server. SolYan không gửi các credential này xuống trình duyệt.'
+          : 'Deployment cần OAuth Client ID/Secret tương ứng trong biến môi trường. SolYan vẫn build và chạy bình thường khi bỏ trống credential.'}
       </div>}
 
       {provider?.configured && !provider.connected && <div>
         <p className="hint">
           {provider.id === 'google'
             ? 'Google Drive dùng scope drive.file: SolYan chỉ thấy file được ứng dụng tạo hoặc được người dùng cấp cho ứng dụng; không tự xin quyền toàn bộ Drive.'
-            : 'OneDrive dùng Microsoft Graph delegated Files.ReadWrite + offline_access. Token được giữ trong session phía server.'}
+            : provider.id === 'onedrive'
+              ? 'OneDrive dùng Microsoft Graph delegated Files.ReadWrite + offline_access. Token được giữ trong session phía server.'
+              : 'WebDAV dùng credential do operator cấu hình phía server. Nút Kết nối chỉ mở một session HttpOnly cho trình duyệt này; username/password không được gửi xuống client.'}
         </p>
-        <button className="merge-button" type="button" onClick={() => connect(provider.id)} disabled={busy}>
+        <button className="merge-button" type="button" onClick={() => void connect(provider.id)} disabled={busy}>
           Kết nối {provider.label}
         </button>
       </div>}
@@ -329,6 +364,10 @@ export default function CloudStoragePage() {
           <strong>Quyền tối thiểu:</strong> <code>drive.file</code>. {provider.picker_configured
             ? 'Deployment đã có cấu hình Google Picker; backend chỉ cấp access token ngắn hạn khi UI Picker được gọi, refresh token vẫn ở server.'
             : 'Muốn chọn PDF có sẵn ngoài phạm vi app-visible, operator có thể cấu hình Google Picker API key/App ID mà không cần mở rộng sang full-Drive scope.'}
+        </p>}
+
+        {provider.id === 'webdav' && <p className="hint">
+          <strong>WebDAV:</strong> chỉ chấp nhận PDF, dùng đường dẫn ID mờ trong browser, không cho upload mới ghi đè file đã tồn tại; ghi đè chỉ đi qua thao tác Replace có xác nhận.
         </p>}
 
         <div className="result-box">
@@ -362,7 +401,7 @@ export default function CloudStoragePage() {
       {result && <div className="result-box">{result}</div>}
       {error && <div className="error">{error}</div>}
 
-      <p className="hint">Session OAuth V1.7 được giữ trong bộ nhớ server và mất khi backend restart. Deployment nhiều replica sẽ cần shared encrypted session store trước khi scale ngang.</p>
+      <p className="hint">Cloud sessions được giữ trong bộ nhớ server và mất khi backend restart. OAuth token của Google/OneDrive và credential WebDAV đều không được lưu trong browser storage.</p>
     </section>
   </main>;
 }
