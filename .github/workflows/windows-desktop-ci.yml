@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "desktop/**"
+      - "backend/app/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
   push:
@@ -11,6 +12,7 @@ on:
       - "feat/windows-desktop-v1"
     paths:
       - "desktop/**"
+      - "backend/app/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
 
@@ -29,6 +31,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: desktop/backend/requirements-windows.txt
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
@@ -41,7 +50,7 @@ jobs:
         shell: pwsh
         run: New-Item -ItemType Directory -Force artifacts | Out-Null
 
-      - name: Validate desktop UI contract
+      - name: Validate desktop UI contract and CSP hygiene
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -66,7 +75,39 @@ jobs:
           foreach ($text in @("Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam")) {
             if (-not $catalog.Contains($text)) { throw "Desktop catalog missing: $text" }
           }
-          "Desktop UI contract OK" | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
+          foreach ($page in @("desktop/ui/index.html", "desktop/ui/merge.html", "desktop/ui/workspace.html")) {
+            if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" }
+          }
+          "Desktop UI contract and CSP hygiene OK" | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
+
+      - name: Build local core resources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath artifacts/desktop-pip-bootstrap.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install -r desktop/backend/requirements-windows.txt 2>&1 | Tee-Object -FilePath artifacts/desktop-pip-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $manifest = Get-Content desktop/vendor/qpdf-windows-x64.json -Raw | ConvertFrom-Json
+          Invoke-WebRequest -Uri $manifest.url -OutFile qpdf.zip
+          $actual = (Get-FileHash qpdf.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $manifest.sha256.ToLowerInvariant()) {
+            throw "qpdf SHA256 mismatch: expected $($manifest.sha256), got $actual"
+          }
+          Remove-Item desktop/src-tauri/resources/core -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force desktop/src-tauri/resources/core/qpdf | Out-Null
+          Expand-Archive qpdf.zip -DestinationPath desktop/src-tauri/resources/core/qpdf -Force
+          $qpdf = Get-ChildItem desktop/src-tauri/resources/core/qpdf -Filter qpdf.exe -Recurse | Select-Object -First 1
+          if (-not $qpdf) { throw "qpdf.exe not found in staged resources" }
+          & $qpdf.FullName --version 2>&1 | Tee-Object -FilePath artifacts/desktop-qpdf-version.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-core --paths . --collect-submodules backend.app desktop/backend/runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-core-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item dist/solyan-core.exe desktop/src-tauri/resources/core/solyan-core.exe
+          if (-not (Test-Path desktop/src-tauri/resources/core/solyan-core.exe)) { throw "solyan-core.exe was not staged" }
+          Get-ChildItem desktop/src-tauri/resources/core -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-resource-inventory.log
 
       - name: Install Tauri CLI
         shell: pwsh
@@ -81,7 +122,7 @@ jobs:
           cargo check 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-cargo-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build NSIS installer
+      - name: Build NSIS installer with local core
         shell: pwsh
         working-directory: desktop/src-tauri
         run: |
