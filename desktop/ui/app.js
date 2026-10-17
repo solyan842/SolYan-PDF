@@ -14,18 +14,13 @@
   const toolsEyebrow = document.getElementById('tools-eyebrow');
   const toolsSubtitle = document.getElementById('tools-subtitle');
   const toast = document.getElementById('toast');
-
   const byCategory = new Map(categories.map(c => [c.id, c]));
+  const routes = { merge: './merge.html', 'edit-pdf': './workspace.html' };
   let activeCategory = 'all';
 
   function card(tool) {
-    return `<button class="tool-card" data-tool="${tool.id}" title="${tool.name}">
-      <span class="tool-icon tone-${tool.tone || 'blue'}">${tool.icon}</span>
-      <span class="tool-body"><span class="tool-name">${tool.name}</span><span class="tool-desc">${tool.desc}</span></span>
-      <span class="tool-arrow">›</span>
-    </button>`;
+    return `<button class="tool-card" data-tool="${tool.id}" title="${tool.name}"><span class="tool-icon tone-${tool.tone || 'blue'}">${tool.icon}</span><span class="tool-body"><span class="tool-name">${tool.name}</span><span class="tool-desc">${tool.desc}</span></span><span class="tool-arrow">›</span></button>`;
   }
-
   function mini(tool) {
     return `<button class="mini-item" data-tool="${tool.id}"><span class="mini-dot tone-${tool.tone || 'blue'}">${tool.icon}</span><span>${tool.name}</span><span>›</span></button>`;
   }
@@ -39,15 +34,11 @@
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     if (target) target.classList.add('active');
   }
-
   function showHome(target) {
-    activeCategory = 'all';
-    search.value = '';
-    homeView.classList.add('active-view');
-    toolsView.classList.remove('active-view');
+    activeCategory = 'all'; search.value = '';
+    homeView.classList.add('active-view'); toolsView.classList.remove('active-view');
     setNavActive(target || document.querySelector('[data-filter="home"]'));
   }
-
   function renderTools(query = '') {
     const q = query.trim().toLocaleLowerCase('vi');
     let filtered = tools;
@@ -57,78 +48,40 @@
     toolCount.textContent = `${filtered.length} công cụ`;
     emptyState.hidden = filtered.length !== 0;
   }
-
   function showTools(category = 'all', target = null) {
-    activeCategory = category;
-    homeView.classList.remove('active-view');
-    toolsView.classList.add('active-view');
+    activeCategory = category; homeView.classList.remove('active-view'); toolsView.classList.add('active-view');
     const meta = byCategory.get(category);
     toolsEyebrow.textContent = meta ? 'NHÓM CÔNG CỤ' : 'TẤT CẢ CÔNG CỤ';
     toolsTitle.textContent = meta ? meta.label : 'Tất cả công cụ';
-    toolsSubtitle.textContent = meta
-      ? `Mọi công cụ ${meta.label.toLocaleLowerCase('vi')} đều ở cùng một nơi.`
-      : 'Chọn đúng việc cần làm. Mọi công cụ đều có thể tìm bằng Ctrl + K.';
-    renderTools(search.value);
-    if (target) setNavActive(target);
+    toolsSubtitle.textContent = meta ? `Mọi công cụ ${meta.label.toLocaleLowerCase('vi')} đều ở cùng một nơi.` : 'Chọn đúng việc cần làm. Mọi công cụ đều có thể tìm bằng Ctrl + K.';
+    renderTools(search.value); if (target) setNavActive(target);
   }
-
-  function notify(toolId) {
-    const tool = tools.find(t => t.id === toolId);
-    if (!tool) return;
-    toast.textContent = `${tool.name}: giao diện đã sẵn sàng để nối engine hiện có.`;
-    toast.classList.add('show');
-    clearTimeout(window.__solyanToastTimer);
+  function launchTool(toolId) {
+    if (routes[toolId]) { window.location.href = routes[toolId]; return; }
+    const tool = tools.find(t => t.id === toolId); if (!tool) return;
+    toast.textContent = `${tool.name}: đã có trong catalog; sẽ nối vào engine hiện có theo thứ tự desktop V1.`;
+    toast.classList.add('show'); clearTimeout(window.__solyanToastTimer);
     window.__solyanToastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
   }
 
   document.addEventListener('click', e => {
-    const toolButton = e.target.closest('[data-tool]');
-    if (toolButton) return notify(toolButton.dataset.tool);
-
-    const categoryButton = e.target.closest('[data-category]');
-    if (categoryButton) return showTools(categoryButton.dataset.category, categoryButton.classList.contains('nav-item') ? categoryButton : null);
-
+    const toolButton = e.target.closest('[data-tool]'); if (toolButton) return launchTool(toolButton.dataset.tool);
+    const categoryButton = e.target.closest('[data-category]'); if (categoryButton) return showTools(categoryButton.dataset.category, categoryButton.classList.contains('nav-item') ? categoryButton : null);
     const filter = e.target.closest('[data-filter]');
     if (filter) {
       const value = filter.dataset.filter;
       if (value === 'home') return showHome(filter);
       if (value === 'all') return showTools('all', filter);
-      if (value === 'recent') {
-        showTools('all', filter);
-        toolsTitle.textContent = 'Gần đây';
-        toolsSubtitle.textContent = 'Tệp và công cụ bạn vừa sử dụng sẽ xuất hiện ở đây.';
-        return;
-      }
-      if (value === 'favorite') {
-        showTools('all', filter);
-        toolsTitle.textContent = 'Yêu thích';
-        toolsSubtitle.textContent = 'Ghim công cụ dùng thường xuyên để mở trong một lần bấm.';
-        return;
-      }
-      if (value === 'settings') {
-        notify('workflow');
-        return;
-      }
+      if (value === 'recent') { showTools('all', filter); toolsTitle.textContent = 'Gần đây'; toolsSubtitle.textContent = 'Tệp và công cụ bạn vừa sử dụng sẽ xuất hiện ở đây.'; return; }
+      if (value === 'favorite') { showTools('all', filter); toolsTitle.textContent = 'Yêu thích'; toolsSubtitle.textContent = 'Ghim công cụ dùng thường xuyên để mở trong một lần bấm.'; return; }
+      if (value === 'settings') { toast.textContent = 'Cài đặt desktop sẽ được nối ở D1C.'; toast.classList.add('show'); return; }
     }
-
     if (e.target.closest('[data-show-all]')) showTools('all', document.querySelector('[data-filter="all"]'));
   });
 
-  search.addEventListener('input', () => {
-    if (!toolsView.classList.contains('active-view')) showTools('all', document.querySelector('[data-filter="all"]'));
-    renderTools(search.value);
-  });
-
+  search.addEventListener('input', () => { if (!toolsView.classList.contains('active-view')) showTools('all', document.querySelector('[data-filter="all"]')); renderTools(search.value); });
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      search.focus();
-      search.select();
-    }
-    if (e.key === 'Escape' && document.activeElement === search) {
-      search.value = '';
-      search.blur();
-      if (toolsView.classList.contains('active-view')) renderTools('');
-    }
+    if (e.ctrlKey && e.key.toLowerCase() === 'k') { e.preventDefault(); search.focus(); search.select(); }
+    if (e.key === 'Escape' && document.activeElement === search) { search.value = ''; search.blur(); if (toolsView.classList.contains('active-view')) renderTools(''); }
   });
 })();
