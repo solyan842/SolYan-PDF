@@ -15,6 +15,13 @@ Read first:
 
 Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion unless new evidence creates a real product decision. The user explicitly selected Windows first and approved the current Windows Fluent/iLovePDF-ease visual direction.
 
+## Continuation rule — DO NOT DROP
+
+- `ok`, `tiếp`, `tiếp tục` means continue the agreed Windows implementation automatically.
+- Keep working continuously through normal engineering choices and CI iterations.
+- Stop only for a genuine user product decision, credentials/permissions, an irreversible/destructive choice, or a hard tool boundary.
+- Do not leave the Windows lane as a demo-only shell: continue converting catalog placeholders into real tools by reusing the existing backend first.
+
 ## Implemented on this branch
 
 ### D1A — Windows UI shell — PASS
@@ -26,8 +33,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - System light/dark styling baseline.
 - `Nối PDF` is functional and processed browser-local with pinned `pdf-lib 1.17.1`; picker, drag/drop, ordering and local result download are implemented.
 - Document workspace shell with page thumbnails, canvas, contextual toolbar and right-side inspector.
-- `Sửa lỗi PDF` routes from Home to the bundled qpdf sidecar.
-- `Trích xuất hình ảnh` routes from Home to the bundled Poppler `pdfimages` backend and downloads the resulting ZIP locally.
+- Real tool routes currently include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, and `Kiểm tra nội dung chủ động`.
 
 ### D1B — Tauri / installer gate — PASS
 
@@ -38,7 +44,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - Strict CSP remains enabled; no `unsafe-inline` workaround.
 - Installer bundles `solyan-core.exe`, pinned qpdf and pinned Poppler; no Docker, Python, system qpdf or system Poppler install is required on the user machine.
 - Windows Desktop CI preserves diagnostics and installer artifacts and cancels superseded branch builds.
-- Repair-PDF exact-head baseline: Windows Desktop CI run `39028459915` / #39 passed UI contract, Cargo, NSIS, silent install, local-core lifecycle and installer artifact upload.
+- Runtime gate performs silent NSIS install, starts the installed app, verifies bundled native resources, observes `solyan-core.exe`, exits the app and verifies no orphan core remains.
 
 ### D2 — local core sidecar — PASS
 
@@ -51,8 +57,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - `desktop/backend/stage-native-runtimes.ps1` is the shared staging point for native Windows runtimes: exact URL, SHA-256 verification, extraction and CLI presence/version checks.
 - Tauri supervisor resolves bundled qpdf + Poppler paths, chooses a free loopback port, generates the session token, starts the core, waits for authenticated qpdf-backed health and exposes the session through `desktop_core_session`.
 - Core process is assigned to a Windows Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, while graceful exit still kill/waits explicitly. This prevents orphan `solyan-core.exe` even when the desktop parent is terminated abnormally.
-- Core lifecycle baseline: Windows Desktop CI run `39027946794` / #33 passed silent install, launch, child-core startup, parent shutdown/kill fallback and child-core cleanup.
-- Poppler packaging baseline: Windows Desktop CI run `39028885480` / #43 on commit `1cd11407c34b71a78ecdbbb7dfdf38e2eca1248d` passed pinned runtime download/hash/extract, Poppler CLI validation, Cargo, NSIS, installed `pdftoppm.exe`/`pdfinfo.exe`, app launch and core cleanup.
+- Exact installed-runtime baseline: Windows Desktop CI run `39029525483` / #49 on `52db3ca9d682b1a75aadf6bf575460c9f877b22b` PASS.
 
 ## Native tools wired
 
@@ -64,19 +69,36 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - Result downloads locally; source file is never overwritten.
 - Exact Windows Desktop CI baseline: `39028459915` / #39 PASS.
 
-### Trích xuất hình ảnh — WIRED / FINAL EXACT-HEAD GATE IN PROGRESS
+### Trích xuất hình ảnh — PASS
 
 - Reuses existing `POST /pdf/extract-images`; no duplicate engine/API.
 - Backend uses Poppler `pdfimages`, preflights image count/dimensions and enforces image/pixel/output-size safety limits.
-- Existing `Extract Images CI` performs real embedded-image extraction: generates a PDF with an RGB image, calls the endpoint, verifies ZIP + PNG payload, and also checks no-image and invalid-PDF failures.
 - Windows UI obtains endpoint/token from `desktop_core_session`, sends multipart `file`, reads `X-SolYan-Extracted-Images`, and downloads the ZIP locally.
-- Windows Desktop CI contract now requires the Extract Images page, route, token header and endpoint strings while preserving strict CSP.
+- Exact installed-runtime branch baseline: Windows Desktop CI run `39029525483` / #49 PASS.
+
+### Thông tin PDF — PASS
+
+- Reuses existing `POST /pdf/info`; no duplicate desktop endpoint.
+- qpdf provides structure/encryption analysis; Poppler `pdfinfo`, `pdffonts`, and `pdfimages -list` provide document metadata, font and image tables.
+- Supports optional PDF password.
+- Desktop UI presents summaries, metadata, structural/security counts, font/image details and SHA-256 without dumping raw JSON as the primary UX.
+- No new runtime or dependency was added.
+- Exact Windows Desktop CI baseline: run `39030593053` / #54 on commit `6a448aefff88365bb57706346a92c5fd67dbcf8d` PASS, including UI contract, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+
+### Kiểm tra nội dung chủ động — WIRED / EXACT-HEAD GATE IN PROGRESS
+
+- Reuses existing `POST /pdf/inspect-active-content`; no duplicate desktop endpoint.
+- qpdf JSON inspector searches reachable object graph for JavaScript, actions, triggers, active annotations and attachment references.
+- Optional PDF password supported.
+- JavaScript payload is displayed only as text and is never executed by the desktop UI.
+- UI preserves the web product safety language: a finding does not mean a PDF is certainly malicious; this structural inspector is not antivirus and cannot guarantee a PDF is completely safe.
+- Windows Desktop CI contract requires the page, route, token header, endpoint and strict-CSP hygiene.
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD for `Trích xuất hình ảnh`.
-2. Continue converting catalog placeholders into real tools by reusing existing backend endpoints first; avoid duplicate APIs.
-3. Next low-risk candidates: `Thông tin PDF`, other existing qpdf/Poppler-backed inspection/optimization tools, then PDF-to-image rendering if an existing route can be reused.
+1. Keep Windows Desktop CI green on the final exact HEAD for `Kiểm tra nội dung chủ động` and record its exact run/commit as PASS.
+2. Continue low-risk existing qpdf/Poppler-backed tools before adding new heavy runtimes. Prioritize existing APIs such as attachments/security inspection/optimization where UX can remain clear and local-first.
+3. Then connect PDF-to-image rendering if the existing Poppler-backed route can be reused cleanly.
 4. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
 5. D4: package OCR runtime and connect OCR/scan tools.
 
