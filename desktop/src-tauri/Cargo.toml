@@ -1,0 +1,16 @@
+[package]
+name = "solyan-pdf-desktop"
+version = "0.1.0"
+description = "SolYan PDF Windows desktop shell"
+authors = ["SolYan"]
+edition = "2021"
+license = "Apache-2.0"
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2" }
+
+[features]
+default = []
