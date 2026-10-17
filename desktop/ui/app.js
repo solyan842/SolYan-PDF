@@ -15,7 +15,7 @@
   const toolsSubtitle = document.getElementById('tools-subtitle');
   const toast = document.getElementById('toast');
   const byCategory = new Map(categories.map(c => [c.id, c]));
-  const routes = { merge: './merge.html', 'edit-pdf': './workspace.html' };
+  const routes = { merge: './merge.html', repair: './repair.html', 'edit-pdf': './workspace.html' };
   let activeCategory = 'all';
 
   function card(tool) {
