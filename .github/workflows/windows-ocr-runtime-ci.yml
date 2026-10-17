@@ -184,7 +184,7 @@ jobs:
             text = str(payload.get("text") or "")
             assert "SOLYAN" in text.upper(), text
             print(text)
-            '@
+          '@
             $paddleSmoke | Set-Content artifacts/run-windows-ocr-paddle-smoke.py -Encoding utf8
             python artifacts/run-windows-ocr-paddle-smoke.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-paddle-smoke.log
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
