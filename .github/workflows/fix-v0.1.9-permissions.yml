@@ -27,26 +27,8 @@ jobs:
 
           main = Path('backend/app/main.py')
           text = main.read_text(encoding='utf-8')
-          old = '''        [
-            "--encrypt",
-            password,
-            owner,
-            "256",
-            f"--print={print_mode}",
-            f"--modify={modify_mode}",
-            f"--extract={'y' if allow_extract else 'n'}",
-            "--",
-        ],'''
-          new = '''        [
-            "--encrypt",
-            f"--user-password={password}",
-            f"--owner-password={owner}",
-            "--bits=256",
-            f"--print={print_mode}",
-            f"--modify={modify_mode}",
-            f"--extract={'y' if allow_extract else 'n'}",
-            "--",
-        ],'''
+          old = '        [\n            "--encrypt",\n            password,\n            owner,\n            "256",\n            f"--print={print_mode}",\n            f"--modify={modify_mode}",\n            f"--extract={\'y\' if allow_extract else \'n\'}",\n            "--",\n        ],'
+          new = '        [\n            "--encrypt",\n            f"--user-password={password}",\n            f"--owner-password={owner}",\n            "--bits=256",\n            f"--print={print_mode}",\n            f"--modify={modify_mode}",\n            f"--extract={\'y\' if allow_extract else \'n\'}",\n            "--",\n        ],'
           if old not in text:
               raise SystemExit('main.py encryption block not found')
           main.write_text(text.replace(old, new, 1), encoding='utf-8')
