@@ -184,7 +184,7 @@ fn stop_core(app: &tauri::AppHandle) {
             let _ = process.kill();
             let _ = process.wait();
         }
-    }
+    };
 }
 
 fn main() {
