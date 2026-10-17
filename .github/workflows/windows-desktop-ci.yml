@@ -69,6 +69,8 @@ jobs:
             "desktop/ui/info.js",
             "desktop/ui/active-content.html",
             "desktop/ui/active-content.js",
+            "desktop/ui/attachments.html",
+            "desktop/ui/attachments.js",
             "desktop/ui/workspace.html",
             "desktop/backend/stage-native-runtimes.ps1",
             "desktop/vendor/qpdf-windows-x64.json",
@@ -85,13 +87,14 @@ jobs:
           $extractImages = Get-Content "desktop/ui/extract-images.js" -Raw
           $info = Get-Content "desktop/ui/info.js" -Raw
           $activeContent = Get-Content "desktop/ui/active-content.js" -Raw
+          $attachments = Get-Content "desktop/ui/attachments.js" -Raw
           foreach ($text in @("Công cụ phổ biến", "Tất cả công cụ", "Ctrl K")) {
             if (-not $html.Contains($text)) { throw "Desktop UI contract missing: $text" }
           }
-          foreach ($text in @("Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam", "Sửa lỗi PDF", "Trích xuất hình ảnh", "Thông tin PDF", "Kiểm tra nội dung chủ động")) {
+          foreach ($text in @("Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam", "Sửa lỗi PDF", "Trích xuất hình ảnh", "Thông tin PDF", "Kiểm tra nội dung chủ động", "Tệp đính kèm")) {
             if (-not $catalog.Contains($text)) { throw "Desktop catalog missing: $text" }
           }
-          foreach ($text in @("repair: './repair.html'", "'extract-images': './extract-images.html'", "info: './info.html'", "'active-content': './active-content.html'")) {
+          foreach ($text in @("repair: './repair.html'", "'extract-images': './extract-images.html'", "info: './info.html'", "'active-content': './active-content.html'", "attachments: './attachments.html'")) {
             if (-not $app.Contains($text)) { throw "Desktop route contract missing: $text" }
           }
           foreach ($text in @("desktop_core_session", "/pdf/repair", "X-SolYan-Desktop-Token")) {
@@ -106,7 +109,10 @@ jobs:
           foreach ($text in @("desktop_core_session", "/pdf/inspect-active-content", "X-SolYan-Desktop-Token", "password")) {
             if (-not $activeContent.Contains($text)) { throw "Active Content local-core contract missing: $text" }
           }
-          foreach ($page in @("desktop/ui/index.html", "desktop/ui/merge.html", "desktop/ui/repair.html", "desktop/ui/extract-images.html", "desktop/ui/info.html", "desktop/ui/active-content.html", "desktop/ui/workspace.html")) {
+          foreach ($text in @("desktop_core_session", "/pdf/attachments/list", "/pdf/attachments/add", "/pdf/attachments/extract", "/pdf/attachments/remove", "X-SolYan-Desktop-Token")) {
+            if (-not $attachments.Contains($text)) { throw "Attachments local-core contract missing: $text" }
+          }
+          foreach ($page in @("desktop/ui/index.html", "desktop/ui/merge.html", "desktop/ui/repair.html", "desktop/ui/extract-images.html", "desktop/ui/info.html", "desktop/ui/active-content.html", "desktop/ui/attachments.html", "desktop/ui/workspace.html")) {
             if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" }
           }
           "Desktop UI contract and CSP hygiene OK" | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
