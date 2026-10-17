@@ -64,6 +64,9 @@ jobs:
             "desktop/ui/repair.html",
             "desktop/ui/repair.js",
             "desktop/ui/workspace.html",
+            "desktop/backend/stage-native-runtimes.ps1",
+            "desktop/vendor/qpdf-windows-x64.json",
+            "desktop/vendor/poppler-windows-x64.json",
             "desktop/src-tauri/tauri.conf.json"
           )
           foreach ($path in $required) {
@@ -122,18 +125,7 @@ jobs:
           python -m pip install -r desktop/backend/requirements-windows.txt 2>&1 | Tee-Object -FilePath artifacts/desktop-pip-install.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $manifest = Get-Content desktop/vendor/qpdf-windows-x64.json -Raw | ConvertFrom-Json
-          Invoke-WebRequest -Uri $manifest.url -OutFile qpdf.zip
-          $actual = (Get-FileHash qpdf.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $manifest.sha256.ToLowerInvariant()) {
-            throw "qpdf SHA256 mismatch: expected $($manifest.sha256), got $actual"
-          }
-          Remove-Item desktop/src-tauri/resources/core -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force desktop/src-tauri/resources/core/qpdf | Out-Null
-          Expand-Archive qpdf.zip -DestinationPath desktop/src-tauri/resources/core/qpdf -Force
-          $qpdf = Get-ChildItem desktop/src-tauri/resources/core/qpdf -Filter qpdf.exe -Recurse | Select-Object -First 1
-          if (-not $qpdf) { throw "qpdf.exe not found in staged resources" }
-          & $qpdf.FullName --version 2>&1 | Tee-Object -FilePath artifacts/desktop-qpdf-version.log
+          & ./desktop/backend/stage-native-runtimes.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           python -m PyInstaller --noconfirm --clean --onefile --name solyan-core --paths . --collect-submodules backend.app desktop/backend/runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-core-pyinstaller.log
@@ -203,8 +195,12 @@ jobs:
           $installRoot = Split-Path $appExe -Parent
           $coreExe = Get-ChildItem $installRoot -Filter "solyan-core.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           $qpdfExe = Get-ChildItem $installRoot -Filter "qpdf.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $pdftoppmExe = Get-ChildItem $installRoot -Filter "pdftoppm.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $pdfinfoExe = Get-ChildItem $installRoot -Filter "pdfinfo.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $coreExe) { throw "Installed solyan-core.exe resource was not found" }
           if (-not $qpdfExe) { throw "Installed qpdf.exe resource was not found" }
+          if (-not $pdftoppmExe) { throw "Installed pdftoppm.exe resource was not found" }
+          if (-not $pdfinfoExe) { throw "Installed pdfinfo.exe resource was not found" }
 
           Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $appExe -PassThru
@@ -240,6 +236,8 @@ jobs:
             "app=$appExe",
             "core=$($coreExe.FullName)",
             "qpdf=$($qpdfExe.FullName)",
+            "pdftoppm=$($pdftoppmExe.FullName)",
+            "pdfinfo=$($pdfinfoExe.FullName)",
             "runtime_core_started=true",
             "runtime_core_stopped=true"
           ) | Set-Content "artifacts/desktop-installed-runtime-smoke.log"
