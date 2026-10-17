@@ -159,6 +159,68 @@ jobs:
           if ($installers.Count -lt 1) { throw "No NSIS installer was produced" }
           $installers | Select-Object Name, Length, FullName | Format-Table | Out-String | Tee-Object -FilePath "artifacts/desktop-installer-inventory.log"
 
+      - name: Smoke silent install and local core lifecycle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer is unavailable for runtime smoke" }
+
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)" }
+
+          $expectedRoot = Join-Path $env:LOCALAPPDATA "SolYan PDF"
+          $appExe = Join-Path $expectedRoot "SolYan PDF.exe"
+          if (-not (Test-Path $appExe)) {
+            $candidate = Get-ChildItem $env:LOCALAPPDATA -Filter "SolYan PDF.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($candidate) { $appExe = $candidate.FullName }
+          }
+          if (-not (Test-Path $appExe)) { throw "Installed SolYan PDF.exe was not found" }
+
+          $installRoot = Split-Path $appExe -Parent
+          $coreExe = Get-ChildItem $installRoot -Filter "solyan-core.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $qpdfExe = Get-ChildItem $installRoot -Filter "qpdf.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $coreExe) { throw "Installed solyan-core.exe resource was not found" }
+          if (-not $qpdfExe) { throw "Installed qpdf.exe resource was not found" }
+
+          Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $app = Start-Process -FilePath $appExe -PassThru
+          $core = $null
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Milliseconds 500
+            $core = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core) { break }
+            if ($app.HasExited) { throw "SolYan PDF exited before local core became ready" }
+          }
+          if (-not $core) { throw "SolYan PDF did not start solyan-core.exe" }
+
+          $closed = $app.CloseMainWindow()
+          if ($closed) { $null = $app.WaitForExit(10000) }
+          if (-not $app.HasExited) {
+            $app.Kill()
+            $app.WaitForExit()
+          }
+
+          $orphan = $null
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            $orphan = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $orphan) { break }
+          }
+          if ($orphan) {
+            $orphan | Stop-Process -Force -ErrorAction SilentlyContinue
+            throw "solyan-core.exe remained after SolYan PDF exited"
+          }
+
+          @(
+            "installer=$($installer.Name)",
+            "app=$appExe",
+            "core=$($coreExe.FullName)",
+            "qpdf=$($qpdfExe.FullName)",
+            "runtime_core_started=true",
+            "runtime_core_stopped=true"
+          ) | Set-Content "artifacts/desktop-installed-runtime-smoke.log"
+
       - name: Upload desktop diagnostics
         if: always()
         uses: actions/upload-artifact@v4
