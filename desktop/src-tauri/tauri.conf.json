@@ -30,7 +30,8 @@
     "active": true,
     "targets": ["nsis"],
     "resources": {
-      "resources/core/": "core/"
+      "resources/core/": "core/",
+      "resources/office/": "office/"
     },
     "category": "Productivity",
     "shortDescription": "Bộ công cụ PDF dễ dùng cho Windows",

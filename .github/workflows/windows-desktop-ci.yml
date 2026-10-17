@@ -5,6 +5,7 @@ on:
     paths:
       - "desktop/**"
       - "backend/app/**"
+      - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - "desktop/**"
       - "backend/app/**"
+      - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
 
@@ -79,7 +81,7 @@ jobs:
           $bundleHash = (Get-FileHash desktop/ui/vendor/pdf-lib.min.js -Algorithm SHA256).Hash.ToLowerInvariant()
           "pdf-lib 1.17.1 $bundleHash" | Tee-Object -FilePath artifacts/desktop-pdf-lib.log
 
-      - name: Build local core resources
+      - name: Build local core and Office resources
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -90,12 +92,21 @@ jobs:
 
           & ./desktop/backend/stage-native-runtimes.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./desktop/backend/stage-office-runtime.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-office --paths engines/office-service --collect-submodules app desktop/backend/office_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-office-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item dist/solyan-office.exe desktop/src-tauri/resources/office/solyan-office.exe
+          if (-not (Test-Path desktop/src-tauri/resources/office/solyan-office.exe)) { throw "solyan-office.exe was not staged" }
 
           python -m PyInstaller --noconfirm --clean --onefile --name solyan-core --paths . --collect-submodules backend.app desktop/backend/runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-core-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item dist/solyan-core.exe desktop/src-tauri/resources/core/solyan-core.exe
           if (-not (Test-Path desktop/src-tauri/resources/core/solyan-core.exe)) { throw "solyan-core.exe was not staged" }
-          Get-ChildItem desktop/src-tauri/resources/core -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-resource-inventory.log
+
+          Get-ChildItem desktop/src-tauri/resources/core -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-core-resource-inventory.log
+          Get-ChildItem desktop/src-tauri/resources/office -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-office-resource-inventory.log
 
       - name: Check pinned Tauri CLI
         shell: pwsh
@@ -110,7 +121,7 @@ jobs:
           cargo check 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-cargo-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build NSIS installer with local core
+      - name: Build NSIS installer with local sidecars
         shell: pwsh
         working-directory: desktop/src-tauri
         run: |
@@ -124,7 +135,7 @@ jobs:
           if ($installers.Count -lt 1) { throw "No NSIS installer was produced" }
           $installers | Select-Object Name, Length, FullName | Format-Table | Out-String | Tee-Object -FilePath "artifacts/desktop-installer-inventory.log"
 
-      - name: Smoke silent install and local core lifecycle
+      - name: Smoke silent install and local sidecar lifecycle
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -157,52 +168,71 @@ jobs:
 
           $installRoot = Split-Path $appExe -Parent
           $coreExe = Get-ChildItem $installRoot -Filter "solyan-core.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $officeExe = Get-ChildItem $installRoot -Filter "solyan-office.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $sofficeExe = Get-ChildItem $installRoot -Filter "soffice.com" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $sofficeExe) { $sofficeExe = Get-ChildItem $installRoot -Filter "soffice.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
           $qpdfExe = Get-ChildItem $installRoot -Filter "qpdf.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           $pdftoppmExe = Get-ChildItem $installRoot -Filter "pdftoppm.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           $pdfinfoExe = Get-ChildItem $installRoot -Filter "pdfinfo.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $coreExe) { throw "Installed solyan-core.exe resource was not found" }
+          if (-not $officeExe) { throw "Installed solyan-office.exe resource was not found" }
+          if (-not $sofficeExe) { throw "Installed LibreOffice soffice resource was not found" }
           if (-not $qpdfExe) { throw "Installed qpdf.exe resource was not found" }
           if (-not $pdftoppmExe) { throw "Installed pdftoppm.exe resource was not found" }
           if (-not $pdfinfoExe) { throw "Installed pdfinfo.exe resource was not found" }
 
           Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $appExe -PassThru
           $core = $null
-          for ($i = 0; $i -lt 60; $i++) {
+          $office = $null
+          for ($i = 0; $i -lt 120; $i++) {
             Start-Sleep -Milliseconds 500
             $core = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($core) { break }
-            if ($app.HasExited) { throw "SolYan PDF exited before local core became ready" }
+            $office = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core -and $office) { break }
+            if ($app.HasExited) { throw "SolYan PDF exited before local sidecars became ready" }
           }
+          if (-not $office) { throw "SolYan PDF did not start solyan-office.exe" }
           if (-not $core) { throw "SolYan PDF did not start solyan-core.exe" }
 
           $closed = $app.CloseMainWindow()
-          if ($closed) { $null = $app.WaitForExit(10000) }
+          if ($closed) { $null = $app.WaitForExit(15000) }
           if (-not $app.HasExited) {
             $app.Kill()
             $app.WaitForExit()
           }
 
-          $orphan = $null
-          for ($i = 0; $i -lt 20; $i++) {
+          $coreOrphan = $null
+          $officeOrphan = $null
+          for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep -Milliseconds 500
-            $orphan = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $orphan) { break }
+            $coreOrphan = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $officeOrphan = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $coreOrphan -and -not $officeOrphan) { break }
           }
-          if ($orphan) {
-            $orphan | Stop-Process -Force -ErrorAction SilentlyContinue
+          if ($coreOrphan) {
+            $coreOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
             throw "solyan-core.exe remained after SolYan PDF exited"
+          }
+          if ($officeOrphan) {
+            $officeOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
+            throw "solyan-office.exe remained after SolYan PDF exited"
           }
 
           @(
             "installer=$($installer.Name)",
             "app=$appExe",
             "core=$($coreExe.FullName)",
+            "office=$($officeExe.FullName)",
+            "libreoffice=$($sofficeExe.FullName)",
             "qpdf=$($qpdfExe.FullName)",
             "pdftoppm=$($pdftoppmExe.FullName)",
             "pdfinfo=$($pdfinfoExe.FullName)",
             "runtime_core_started=true",
-            "runtime_core_stopped=true"
+            "runtime_office_started=true",
+            "runtime_core_stopped=true",
+            "runtime_office_stopped=true"
           ) | Set-Content "artifacts/desktop-installed-runtime-smoke.log"
 
       - name: Upload desktop diagnostics
