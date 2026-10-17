@@ -1,0 +1,105 @@
+name: Windows Desktop CI
+
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "docs/WINDOWS-DESKTOP-*.md"
+      - ".github/workflows/windows-desktop-ci.yml"
+  push:
+    branches:
+      - "feat/windows-desktop-v1"
+    paths:
+      - "desktop/**"
+      - "docs/WINDOWS-DESKTOP-*.md"
+      - ".github/workflows/windows-desktop-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop/src-tauri -> target"
+
+      - name: Prepare diagnostics directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force artifacts | Out-Null
+
+      - name: Validate desktop UI contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $required = @(
+            "desktop/ui/index.html",
+            "desktop/ui/styles.css",
+            "desktop/ui/catalog.js",
+            "desktop/ui/app.js",
+            "desktop/src-tauri/tauri.conf.json"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) { throw "Missing required desktop file: $path" }
+          }
+          $html = Get-Content "desktop/ui/index.html" -Raw
+          $catalog = Get-Content "desktop/ui/catalog.js" -Raw
+          foreach ($text in @("Công cụ phổ biến", "Tất cả công cụ", "Ctrl K")) {
+            if (-not $html.Contains($text)) { throw "Desktop UI contract missing: $text" }
+          }
+          foreach ($text in @("Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam")) {
+            if (-not $catalog.Contains($text)) { throw "Desktop catalog missing: $text" }
+          }
+          "Desktop UI contract OK" | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
+
+      - name: Install Tauri CLI
+        shell: pwsh
+        run: |
+          cargo install tauri-cli --version "^2" --locked 2>&1 | Tee-Object -FilePath "artifacts/tauri-cli-install.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Cargo check
+        shell: pwsh
+        working-directory: desktop/src-tauri
+        run: |
+          cargo check 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-cargo-check.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build NSIS installer
+        shell: pwsh
+        working-directory: desktop/src-tauri
+        run: |
+          cargo tauri build --bundles nsis 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-tauri-build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis" -Filter "*.exe" -ErrorAction Stop)
+          if ($installers.Count -lt 1) { throw "No NSIS installer was produced" }
+          $installers | Select-Object Name, Length, FullName | Format-Table | Out-String | Tee-Object -FilePath "artifacts/desktop-installer-inventory.log"
+
+      - name: Upload desktop diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-diagnostics
+          path: artifacts/
+          if-no-files-found: warn
+
+      - name: Upload Windows installer
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolYan-PDF-Windows-x64
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
