@@ -186,13 +186,12 @@ fn wait_for_health(port: u16, token: &str) -> Result<(), String> {
     Err("local core did not reach qpdf-backed health in time".to_string())
 }
 
-fn prepend_path(directory: &Path) -> OsString {
-    let mut value = OsString::from(directory.as_os_str());
-    value.push(";");
+fn prepend_paths(directories: &[&Path]) -> Result<OsString, String> {
+    let mut paths: Vec<PathBuf> = directories.iter().map(|path| path.to_path_buf()).collect();
     if let Some(existing) = std::env::var_os("PATH") {
-        value.push(existing);
+        paths.extend(std::env::split_paths(&existing));
     }
-    value
+    std::env::join_paths(paths).map_err(|error| format!("could not compose local core PATH: {error}"))
 }
 
 fn start_core(app: &tauri::AppHandle) -> Result<(CoreProcess, CoreSession), String> {
@@ -204,11 +203,20 @@ fn start_core(app: &tauri::AppHandle) -> Result<(CoreProcess, CoreSession), Stri
         .path()
         .resolve("core/qpdf", BaseDirectory::Resource)
         .map_err(|error| format!("could not resolve qpdf resource: {error}"))?;
+    let poppler_root = app
+        .path()
+        .resolve("core/poppler", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve Poppler resource: {error}"))?;
     let qpdf_exe = find_file(&qpdf_root, "qpdf.exe")
         .ok_or_else(|| format!("qpdf.exe was not found under {}", qpdf_root.display()))?;
+    let pdftoppm_exe = find_file(&poppler_root, "pdftoppm.exe")
+        .ok_or_else(|| format!("pdftoppm.exe was not found under {}", poppler_root.display()))?;
     let qpdf_bin = qpdf_exe
         .parent()
         .ok_or_else(|| "qpdf binary directory could not be resolved".to_string())?;
+    let poppler_bin = pdftoppm_exe
+        .parent()
+        .ok_or_else(|| "Poppler binary directory could not be resolved".to_string())?;
 
     if !core_exe.is_file() {
         return Err(format!("local core executable is missing: {}", core_exe.display()));
@@ -222,7 +230,7 @@ fn start_core(app: &tauri::AppHandle) -> Result<(CoreProcess, CoreSession), Stri
         .arg(port.to_string())
         .arg("--token")
         .arg(&token)
-        .env("PATH", prepend_path(qpdf_bin))
+        .env("PATH", prepend_paths(&[qpdf_bin, poppler_bin])?)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
