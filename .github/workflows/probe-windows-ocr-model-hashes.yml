@@ -1,0 +1,80 @@
+name: Probe Windows OCR Model Hashes
+
+on:
+  push:
+    branches:
+      - probe/windows-ocr-model-hashes
+    paths:
+      - '.github/workflows/probe-windows-ocr-model-hashes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hash-official-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download and hash pinned Paddle inference models
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/models
+          base='https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0'
+          models=(
+            PP-LCNet_x1_0_doc_ori
+            UVDoc
+            PP-LCNet_x1_0_textline_ori
+            PP-OCRv6_medium_det
+            PP-OCRv6_medium_rec
+          )
+          : > artifacts/ocr-model-hashes.txt
+          for model in "${models[@]}"; do
+            file="artifacts/models/${model}_infer.tar"
+            url="$base/${model}_infer.tar"
+            echo "Downloading $url"
+            curl -fL --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 1200 "$url" -o "$file"
+            tar -tf "$file" >/dev/null
+            sha="$(sha256sum "$file" | awk '{print $1}')"
+            bytes="$(stat -c '%s' "$file")"
+            printf '%s\t%s\t%s\t%s\n' "$model" "$sha" "$bytes" "$url" | tee -a artifacts/ocr-model-hashes.txt
+          done
+
+      - name: Emit JSON manifest
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = []
+          for line in Path('artifacts/ocr-model-hashes.txt').read_text().splitlines():
+              name, sha256, size, url = line.split('\t')
+              rows.append({
+                  'name': name,
+                  'sha256': sha256,
+                  'size_bytes': int(size),
+                  'url': url,
+              })
+          payload = {
+              'paddleocr_version': '3.7.0',
+              'paddlex_version': '3.7.2',
+              'paddlex_commit': 'ffb64904d23708863ff5b8da312a5cbd52a7f462',
+              'models': rows,
+          }
+          Path('artifacts/ocr-model-hashes.json').write_text(json.dumps(payload, indent=2) + '\n')
+          print(json.dumps(payload, indent=2))
+          PY
+
+      - name: Upload hash evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ocr-model-hash-probe
+          path: |
+            artifacts/ocr-model-hashes.txt
+            artifacts/ocr-model-hashes.json
+          if-no-files-found: error
+          retention-days: 7
