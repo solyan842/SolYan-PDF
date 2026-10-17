@@ -22,119 +22,72 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - Stop only for a genuine user product decision, credentials/permissions, an irreversible/destructive choice, or a hard tool boundary.
 - Do not leave the Windows lane as a demo-only shell: continue converting catalog placeholders into real tools by reusing the existing backend first.
 
-## Implemented on this branch
+## Platform status
 
 ### D1A — Windows UI shell — PASS
+- Windows Fluent-style Home matching the approved concept direction.
+- `Ctrl + K` search, complete catalog, category navigation, system light/dark baseline.
+- `Nối PDF` is functional browser-local with pinned `pdf-lib 1.17.1`.
+- Document workspace shell is present.
+- `desktop/ui/validate-contract.ps1` is the central UI/route/endpoint/strict-CSP contract gate.
 
-- Windows Fluent-style Home surface matching the approved concept direction.
-- Prominent `Ctrl + K` tool search.
-- Complete user-facing tool catalog in `desktop/ui/catalog.js`.
-- Locked category navigation and popular-tool surface.
-- System light/dark styling baseline.
-- `Nối PDF` is functional and processed browser-local with pinned `pdf-lib 1.17.1`; picker, drag/drop, ordering and local result download are implemented.
-- Document workspace shell with page thumbnails, canvas, contextual toolbar and right-side inspector.
-- Real desktop tool routes now include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, `Tệp đính kèm`, `Xóa hình ảnh`, `Làm sạch PDF`, `Tối ưu xem web`, `Giải nén cấu trúc PDF`, `Nén PDF`, `Flatten PDF`, and `Tối ưu hình ảnh`.
-
-### D1B — Tauri / installer gate — PASS
-
-- Tauri 2 Rust shell under `desktop/src-tauri/`.
-- Standard Windows decorated/resizable window.
-- NSIS current-user installer with Vietnamese/English languages.
-- `.pdf` file association declaration.
-- Strict CSP remains enabled; no `unsafe-inline` workaround.
-- Installer bundles `solyan-core.exe`, pinned qpdf and pinned Poppler; no Docker, Python, system qpdf or system Poppler install is required on the user machine.
-- Windows Desktop CI preserves diagnostics and installer artifacts and cancels superseded branch builds.
-- Runtime gate performs silent NSIS install, starts the installed app, verifies bundled native resources, observes `solyan-core.exe`, exits the app and verifies no orphan core remains.
+### D1B — Tauri / installer — PASS
+- Tauri 2 Rust shell, Windows decorated/resizable window.
+- NSIS current-user installer, Vietnamese/English, `.pdf` association.
+- Strict CSP; no `unsafe-inline` workaround.
+- Installer bundles `solyan-core.exe`, qpdf and Poppler; user needs no Docker/Python/system qpdf/system Poppler.
+- CI silent-installs the built NSIS, launches installed app, verifies bundled runtimes, observes `solyan-core.exe`, closes app and verifies no orphan core.
 
 ### D2 — local core sidecar — PASS
-
-- Windows-safe packaging requirements are separate from the Linux backend lock; the Linux lock is not reused because it contains Linux-only `uvloop`.
-- Existing `backend.app.main` remains the API source of truth; there is no second desktop API fork.
-- `desktop/backend/runner.py` binds only to `127.0.0.1` and requires a random per-launch `X-SolYan-Desktop-Token`.
-- Desktop CORS origin defaults to Tauri Windows production origin `http://tauri.localhost` without changing normal web deployment defaults.
-- qpdf Windows x64 runtime is pinned in `desktop/vendor/qpdf-windows-x64.json` at qpdf `12.4.2`, SHA-256 `db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d`.
-- Poppler Windows x64 runtime is pinned in `desktop/vendor/poppler-windows-x64.json` at `26.09.0-0`, asset `Release-26.09.0-0.zip`, SHA-256 `7a6f256a0ddf7536182246a5733331bf4677cbcc34f4663774947ad34556c8d0`.
-- `desktop/backend/stage-native-runtimes.ps1` is the shared staging point for native Windows runtimes: exact URL, SHA-256 verification, extraction and CLI presence/version checks.
-- Tauri supervisor resolves bundled qpdf + Poppler paths, chooses a free loopback port, generates the session token, starts the core, waits for authenticated qpdf-backed health and exposes the session through `desktop_core_session`.
-- Core process is assigned to a Windows Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, while graceful exit still kill/waits explicitly. This prevents orphan `solyan-core.exe` even when the desktop parent is terminated abnormally.
-- Exact installed-runtime baseline: Windows Desktop CI run `39029525483` / #49 on `52db3ca9d682b1a75aadf6bf575460c9f877b22b` PASS.
+- Existing `backend.app.main` remains source of truth; no desktop API fork.
+- `desktop/backend/runner.py` binds only `127.0.0.1` and requires random per-launch `X-SolYan-Desktop-Token`.
+- qpdf Windows x64: `12.4.2`, SHA-256 `db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d`.
+- Poppler Windows x64: `26.09.0-0`, SHA-256 `7a6f256a0ddf7536182246a5733331bf4677cbcc34f4663774947ad34556c8d0`.
+- Tauri supervisor resolves native resources, allocates loopback port/token, waits for authenticated qpdf-backed health and exposes the session through `desktop_core_session`.
+- Windows Job Object uses `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; graceful exit also kill/waits explicitly.
 
 ## Native tools wired
 
-### Sửa lỗi PDF — PASS
-- Reuses `POST /pdf/repair`; no duplicate desktop endpoint.
-- Exact Windows Desktop CI baseline: `39028459915` / #39 PASS.
+### Earlier PASS baselines
+- `Sửa lỗi PDF` → `POST /pdf/repair`; run `39028459915` / #39 PASS.
+- `Trích xuất hình ảnh` → `POST /pdf/extract-images`; installed-runtime run `39029525483` / #49 PASS.
+- `Thông tin PDF` → `POST /pdf/info`; run `39030593053` / #54 on `6a448aefff88365bb57706346a92c5fd67dbcf8d` PASS.
+- `Kiểm tra nội dung chủ động` → `POST /pdf/inspect-active-content`; run `39031147389` / #60 on `2bf8cf314deea8b07bf9bed964767fa25a25aec4` PASS.
+- `Tệp đính kèm` → existing list/add/extract/remove endpoints; run `39031676738` / #66 on `a0027f239ac16504d0b26590b1d3e4a12a68b8e2` PASS.
+- `Xóa hình ảnh` → `POST /pdf/remove-images`; covered by later exact-head gates.
+- `Làm sạch PDF` → `POST /pdf/sanitize`; run `39032719002` / #75 on `627a3a7d3295bd93a990b1d009dcc080cdd17119` PASS.
 
-### Trích xuất hình ảnh — PASS
-- Reuses `POST /pdf/extract-images`; no duplicate engine/API.
-- Exact installed-runtime branch baseline: Windows Desktop CI run `39029525483` / #49 PASS.
+### qpdf optimize/security batch — CODE-BEARING BASELINE PASS
+Windows Desktop CI run `39034173163` / #91 on exact code-bearing HEAD `b36c666681a488dc682b2d78358b38b37eb1100e` PASS end-to-end: UI/CSP contract, pinned browser engine, packaged local core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
 
-### Thông tin PDF — PASS
-- Reuses `POST /pdf/info`; qpdf + Poppler provide structure, encryption, metadata, font and image inspection.
-- Optional PDF password; desktop presents summaries/details instead of raw JSON as primary UX.
-- Exact Windows Desktop CI baseline: `39030593053` / #54 on `6a448aefff88365bb57706346a92c5fd67dbcf8d` PASS.
+That PASS covers the code present at that HEAD, including:
 
-### Kiểm tra nội dung chủ động — PASS
-- Reuses `POST /pdf/inspect-active-content`; no duplicate desktop endpoint.
-- Searches reachable qpdf object graph for JavaScript, actions, triggers, active annotations and attachment references.
-- JavaScript is displayed as text only and never executed.
-- Product language stays explicit: findings do not prove malware; this is structural inspection, not antivirus.
-- Exact Windows Desktop CI baseline: `39031147389` / #60 on `2bf8cf314deea8b07bf9bed964767fa25a25aec4` PASS, including UI/CSP contract, Cargo, NSIS, silent install, installed app launch and core cleanup.
+- `Tối ưu xem web` → `POST /pdf/web-optimize`; downloads `solyan-web-optimized.pdf`.
+- `Giải nén cấu trúc PDF` → `POST /pdf/decompress`; downloads `solyan-decompressed.pdf` and warns size may grow.
+- `Nén PDF` → `POST /pdf/compress`; structural qpdf compression, no image-downsampling claim.
+- `Flatten PDF` → `POST /pdf/flatten`; warns interaction/editability can be lost.
+- `Tối ưu hình ảnh` → `POST /pdf/compress-images`; uses qpdf image optimization/recompression.
+- `Bảo vệ PDF` → `POST /pdf/protect`; AES-256 with user password, optional owner password, print/modify/extract permissions.
+- `Mở khóa PDF` → `POST /pdf/unlock`; requires legitimate access and never claims to bypass an unknown password.
 
-### Tệp đính kèm — PASS
-- Reuses existing qpdf endpoints: `POST /pdf/attachments/list`, `/add`, `/extract`, `/remove`.
-- No duplicate engine/API and no new runtime dependency.
-- UI can list embedded files, extract one attachment, add multiple bounded attachments, or remove one attachment into a newly generated PDF.
-- Add/remove never overwrite the source PDF; result is downloaded as a new file.
-- Backend limits remain authoritative: PDF 100 MB, at most 20 attachments per add, 25 MB each, 50 MB combined, extracted payload bounded to 100 MB.
-- Exact Windows Desktop CI baseline: `39031676738` / #66 on `a0027f239ac16504d0b26590b1d3e4a12a68b8e2` PASS, including route + four endpoint contract, strict CSP, Cargo, NSIS, silent install, installed app launch and core cleanup.
-
-### Xóa hình ảnh — PASS
-- Reuses existing `POST /pdf/remove-images`; no duplicate desktop endpoint or new runtime dependency.
-- qpdf JSON removes reachable Image XObject references from page/Form resources while preserving text/vector structure supported by the existing engine.
-- Backend validates output using `qpdf --check` and returns `X-SolYan-Images-Removed` with the number of Image XObjects removed.
-- Desktop always downloads `solyan-images-removed.pdf` as a new file; source PDF is never overwritten.
-- UX explicitly warns that visual layout may change when images are important page content.
-- The route and installed runtime are covered by later exact-head Windows Desktop gates, including #75 below.
-
-### Làm sạch PDF — PASS
-- Reuses existing `POST /pdf/sanitize`; no duplicate desktop endpoint.
-- User can independently remove actions/active content, links, metadata, and embedded files.
-- Desktop presents removal counts from `X-SolYan-Sanitize-*` response headers and always creates a new PDF.
-- UX explicitly states structural sanitization is not antivirus and does not prove a file is completely safe.
-- Exact Windows Desktop CI baseline: run `39032719002` / #75 on `627a3a7d3295bd93a990b1d009dcc080cdd17119` PASS.
-
-### Tối ưu xem web — WIRED / EXACT-HEAD GATE IN PROGRESS
-- Reuses existing `POST /pdf/web-optimize` (`qpdf --linearize`).
-- No duplicate backend/API and no extra runtime dependency.
-- Desktop explains that linearization improves byte-range/page-first loading and is not image compression.
-- Source PDF is never overwritten; result downloads as `solyan-web-optimized.pdf`.
-
-### Giải nén cấu trúc PDF — WIRED / EXACT-HEAD GATE IN PROGRESS
-- Reuses existing `POST /pdf/decompress` (`--stream-data=uncompress`, `--object-streams=disable`).
-- No duplicate backend/API and no extra runtime dependency.
-- Desktop makes the technical purpose explicit and warns that output size may grow substantially.
-- Source PDF is never overwritten; result downloads as `solyan-decompressed.pdf`.
-
-### Nén PDF / Flatten PDF / Tối ưu hình ảnh — WIRED / EXACT-HEAD GATE IN PROGRESS
-- Reuse existing `POST /pdf/compress`, `POST /pdf/flatten`, and `POST /pdf/compress-images` endpoints.
-- Share `desktop/ui/transform.html` + `transform.js` rather than duplicating three nearly identical desktop surfaces.
-- `Nén PDF` is structural qpdf compression and explicitly does not claim image downsampling.
-- `Flatten PDF` warns that interactive/editable annotation or form behavior can be lost in the generated copy.
-- `Tối ưu hình ảnh` uses qpdf image optimization/recompression and states that reduction depends on embedded codecs.
-- All three always download a new PDF and never overwrite the source.
+### Xóa chữ ký — WIRED / EXACT-HEAD GATE IN PROGRESS
+- Reuses existing `POST /pdf/remove-signatures`; no duplicate desktop API/runtime.
+- Always writes a new `solyan-unsigned.pdf`; source is never overwritten.
+- UX explicitly warns the generated copy loses digital-signature verification state.
+- Desktop reports five backend counters: signature fields, widgets, values, permission entries and DSS entries removed.
+- Central validator locks the route, local-core token, endpoint and all five result headers.
 
 ## PDF sang ảnh parity boundary
 
-- V1.5 web behavior is intentionally browser-local using PDF.js + Canvas + JSZip, with DPI/page/color/annotation/single-vs-multiple semantics.
-- Do not silently replace that behavior with a different Poppler-only desktop contract merely because Poppler is already bundled.
-- Reuse/package the web contract or document an explicit parity decision before changing semantics.
+- V1.5 web behavior is intentionally browser-local using PDF.js + Canvas + JSZip, including page selection, DPI, PNG/JPEG/WebP, color mode, annotation mode, ZIP vs single composite and strict render budgets.
+- Do not silently replace that behavior with a different Poppler-only desktop contract merely because Poppler is bundled.
+- Reuse/package the existing web contract or make an explicit parity decision before changing semantics.
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD for `Tối ưu xem web`, `Giải nén cấu trúc PDF`, `Nén PDF`, `Flatten PDF`, and `Tối ưu hình ảnh`; then record the exact run/commit as PASS.
-2. Continue low-risk existing qpdf security tools next: `Bảo vệ PDF` and `Mở khóa PDF`, preserving current permissions/password backend semantics.
-3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
+1. Keep Windows Desktop CI green on the final exact HEAD containing `Xóa chữ ký` + centralized contract validator; record exact run/commit as PASS.
+2. Continue low-risk existing backend tools before new heavy runtimes; inspect `Quyền hạn PDF`, annotation/signature/form utilities and route only where semantics are already defined.
+3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
 4. D4: package OCR runtime and connect OCR/scan tools.
 
 Stop only for a genuine user product decision, credentials/permissions, irreversible/destructive choice, or a hard tool boundary.
