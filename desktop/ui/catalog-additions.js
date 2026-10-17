@@ -10,7 +10,8 @@
     { id:'pdf-html', name:'PDF sang HTML', desc:'Xuất HTML một tệp có CSP an toàn', category:'convert', icon:'H', tone:'orange' },
     { id:'pdf-xml', name:'PDF sang XML', desc:'Xuất cấu trúc pdf2xml và tọa độ text', category:'convert', icon:'XML', tone:'blue' },
     { id:'pdf-cbz', name:'PDF sang CBZ', desc:'Render trang thành PNG và đóng gói CBZ', category:'convert', icon:'CBZ', tone:'purple' },
-    { id:'pdf-svg', name:'PDF sang SVG', desc:'Xuất một hoặc nhiều trang thành SVG', category:'convert', icon:'SVG', tone:'green' }
+    { id:'pdf-svg', name:'PDF sang SVG', desc:'Xuất một hoặc nhiều trang thành SVG', category:'convert', icon:'SVG', tone:'green' },
+    { id:'portfolio', name:'PDF Portfolio', desc:'Đóng gói nhiều tệp thành PDF 1.7 Collection', category:'organize', icon:'▣', tone:'blue' }
   ];
   for (const tool of additions) {
     if (!catalog.tools.some(existing => existing.id === tool.id)) catalog.tools.push(tool);

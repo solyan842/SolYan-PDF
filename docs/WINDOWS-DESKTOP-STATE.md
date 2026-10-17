@@ -77,17 +77,31 @@ Covers `Tối ưu xem web`, `Giải nén cấu trúc PDF`, `Nén PDF`, `Flatten 
 ### Blank-page / Page Labels batch — PASS
 - `Xóa trang trắng` → `POST /pdf/remove-blank-pages`; text-layer pages are hard-kept, only text-free pages are raster-classified; backend keeps 300-page/render budgets and refuses an empty all-removed result.
 - `Page Labels` → `POST /pdf/page-labels`; set/remove, up to 20 ordered rules, decimal/Roman/alpha/no-number styles, start values and optional prefixes; backend verifies physical page count and `/PageLabels` state.
-- Windows Desktop CI run `39048379715` / #101 PASS on exact HEAD `9b62c14da1e60abcc69e8755aeeb626c3a61abfe`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+- Windows Desktop CI run `39048379715` / #101 PASS on exact HEAD `9b62c14da1e60abcc69e8755aeeb626c3a61abfe`.
 
-### Poppler conversion batch — WIRED / EXACT-HEAD GATE NEXT
+### Poppler conversion batch — PASS
 Reusable Windows page `poppler-convert.html/js` routes existing backend conversions through the already-bundled Poppler runtime:
-- `PDF sang TXT` → `POST /pdf/to-text`: UTF-8, optional password/page range/layout/page-break handling.
-- `PDF sang HTML` → `POST /pdf/to-html`: single-file HTML, dangerous href schemes blocked, generated HTML receives CSP.
-- `PDF sang XML` → `POST /pdf/to-xml`: validated `pdf2xml`, optional precise coordinates/hidden text.
-- `PDF sang CBZ` → `POST /pdf/to-cbz`: PNG pages, 72–300 DPI, max 1000 selected pages, archive size budget.
-- `PDF sang SVG` → `POST /pdf/to-svg`: per-page SVG through `pdftocairo`; multi-page output ZIP, max 100 selected pages and size budgets.
-- Existing catalog cards `PDF sang PostScript` and `PDF sang EPS` now route to `POST /pdf/to-postscript`; PS supports Level 2/3, EPS is constrained to one selected page.
-- `Markdown` and `CSV` are deliberately deferred to D4 because their existing backends depend on structured OCR. `RTF` is deliberately deferred to D3 because it depends on the Office/LibreOffice service.
+- `PDF sang TXT` → `POST /pdf/to-text`.
+- `PDF sang HTML` → `POST /pdf/to-html`.
+- `PDF sang XML` → `POST /pdf/to-xml`.
+- `PDF sang CBZ` → `POST /pdf/to-cbz`.
+- `PDF sang SVG` → `POST /pdf/to-svg`.
+- Existing catalog cards `PDF sang PostScript` and `PDF sang EPS` → `POST /pdf/to-postscript`.
+- `Markdown` and `CSV` remain deliberately deferred to D4 because their existing backends depend on structured OCR. `RTF` remains deliberately deferred to D3 because it depends on Office/LibreOffice.
+- Windows Desktop CI run `39048949509` / #102 PASS on exact HEAD `85984a4866791d6d89a67a1927d353e3b8e53562`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+
+### PDF Portfolio — WIRED / EXACT-HEAD GATE NEXT
+- Reuses `POST /pdf/portfolio`; no duplicate backend API.
+- Accepts up to 50 files, max 25 MB each / 100 MB total; arbitrary attachment types are supported.
+- Backend creates PDF 1.7, `/Collection`, `/UseAttachments`, validates attachment count and qpdf integrity, and returns a new `solyan-portfolio.pdf`.
+- UI stays local-first and never mutates source files.
+
+## D3 Office runtime direction — LOCKED FOR IMPLEMENTATION
+- Keep the existing `engines/office-service` API and conversion logic; do not move LibreOffice-specific logic into the main backend.
+- Windows should package a separate loopback `solyan-office.exe` plus an official pinned LibreOffice x64 runtime, then point the existing `OFFICE_SERVICE_URL` at that local sidecar.
+- Main core remains the only browser-facing API and keeps the random per-launch desktop token; office sidecar binds loopback only.
+- Upstream target for first Windows packaging pass: official LibreOffice `26.8.1` x64 MSI, checksum-pinned. Re-run the locked PDF→Office 27-case / 68-page gate before accepting the runtime.
+- Preserve LibreOffice-first → Bloom fallback for DOCX/PPTX; do not silently change conversion ordering or quality semantics.
 
 ## PDF sang ảnh parity boundary
 
@@ -97,9 +111,8 @@ Reusable Windows page `poppler-convert.html/js` routes existing backend conversi
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on exact HEAD containing the Poppler conversion batch, then record exact run/commit as PASS.
-2. Continue remaining no-new-runtime backend tools only when semantics are already defined; do not duplicate APIs.
-3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
-4. D4: package OCR runtime and connect OCR/scan plus Markdown/CSV tools.
+1. Keep Windows Desktop CI green on exact HEAD containing `PDF Portfolio`, then record exact run/commit as PASS.
+2. D3: package LibreOffice Windows runtime + `solyan-office.exe`, preserve Office API/source-of-truth and LibreOffice-first → Bloom fallback, and execute the locked 27-case / 68-page gate.
+3. D4: package OCR runtime and connect OCR/scan plus Markdown/CSV tools.
 
 Stop only for a genuine user product decision, credentials/permissions, irreversible/destructive choice, or a hard tool boundary.
