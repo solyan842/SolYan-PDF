@@ -23,7 +23,7 @@ ORIGIN = "http://localhost:3000"
 MOCK_PDF = b"%PDF-1.4\n% SolYan WebDAV mock\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
 REQUESTS: list[tuple[str, str]] = []
 
-ROOT_XML = b'''<?xml version="1.0" encoding="utf-8"?>
+ROOT_XML = '''<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
   <d:response>
     <d:href>/remote.php/dav/files/solyan/</d:href>
@@ -35,13 +35,13 @@ ROOT_XML = b'''<?xml version="1.0" encoding="utf-8"?>
   </d:response>
   <d:response>
     <d:href>/remote.php/dav/files/solyan/T%C3%A0i%20li%E1%BB%87u.pdf</d:href>
-    <d:propstat><d:prop><d:displayname>TÃ    <d:propstat><d:prop><d:displayname>T\xc3     <d:propstat><d:prop><d:displayname>T\xc3\xa0i liá    <d:propstat><d:prop><d:displayname>T\xc3\xa0i li\xe1»    <d:propstat><d:prop><d:displayname>T\xc3\xa0i li\xe1\xbb    <d:propstat><d:prop><d:displayname>T\xc3\xa0i li\xe1\xbb\x87u.pdf</d:displayname><d:resourcetype/><d:getcontentlength>71</d:getcontentlength><d:getcontenttype>application/pdf</d:getcontenttype><d:getlastmodified>Sat, 17 Oct 2026 08:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+    <d:propstat><d:prop><d:displayname>Tài liệu.pdf</d:displayname><d:resourcetype/><d:getcontentlength>71</d:getcontentlength><d:getcontenttype>application/pdf</d:getcontenttype><d:getlastmodified>Sat, 17 Oct 2026 08:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
   </d:response>
   <d:response>
     <d:href>/remote.php/dav/files/solyan/skip.txt</d:href>
     <d:propstat><d:prop><d:displayname>skip.txt</d:displayname><d:resourcetype/><d:getcontentlength>3</d:getcontentlength><d:getcontenttype>text/plain</d:getcontenttype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
   </d:response>
-</d:multistatus>'''
+</d:multistatus>'''.encode("utf-8")
 
 
 def response(status: int, *, content: bytes = b"") -> httpx.Response:
@@ -61,7 +61,8 @@ async def fake_webdav_request(method: str, url: str, **kwargs: object) -> httpx.
     if method == "PROPFIND" and url == new_url:
         return response(404)
     if method == "PUT" and url == new_url:
-        assert kwargs.get("headers", {}).get("If-None-Match") == "*"
+        headers = kwargs.get("headers")
+        assert isinstance(headers, dict) and headers.get("If-None-Match") == "*"
         return response(201)
     if method == "PROPFIND" and url == pdf_url:
         return response(207, content=ROOT_XML)
