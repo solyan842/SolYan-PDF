@@ -170,12 +170,25 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)" }
 
           $expectedRoot = Join-Path $env:LOCALAPPDATA "SolYan PDF"
-          $appExe = Join-Path $expectedRoot "SolYan PDF.exe"
-          if (-not (Test-Path $appExe)) {
-            $candidate = Get-ChildItem $env:LOCALAPPDATA -Filter "SolYan PDF.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $candidatePaths = @(
+            (Join-Path $expectedRoot "solyan-pdf-desktop.exe"),
+            (Join-Path $expectedRoot "SolYan PDF.exe")
+          )
+          $appExe = $candidatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $appExe) {
+            $candidate = Get-ChildItem $env:LOCALAPPDATA -Filter "solyan-pdf-desktop.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $candidate) {
+              $candidate = Get-ChildItem $env:LOCALAPPDATA -Filter "SolYan PDF.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
             if ($candidate) { $appExe = $candidate.FullName }
           }
-          if (-not (Test-Path $appExe)) { throw "Installed SolYan PDF.exe was not found" }
+          if (-not $appExe -or -not (Test-Path $appExe)) {
+            Get-ChildItem $env:LOCALAPPDATA -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -like "*SolYan*" -or $_.Name -like "*solyan*" } |
+              Select-Object FullName | Format-Table | Out-String |
+              Set-Content "artifacts/desktop-install-location-diagnostic.log"
+            throw "Installed SolYan PDF application executable was not found"
+          }
 
           $installRoot = Split-Path $appExe -Parent
           $coreExe = Get-ChildItem $installRoot -Filter "solyan-core.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
