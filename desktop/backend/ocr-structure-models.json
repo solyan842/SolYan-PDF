@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "pack_id": "pp-structurev3-3.7",
+  "paddleocr_version": "3.7.0",
+  "paddlex_version": "3.7.2",
+  "paddlex_commit": "ffb64904d23708863ff5b8da312a5cbd52a7f462",
+  "cache_layout": "official_models/<model>",
+  "source_base_url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0",
+  "archive_total_bytes": 1805516800,
+  "models": [
+    {"name":"PP-DocLayout_plus-L","sha256":"80fff9c2fb598ca27380a48e733ac47ba022aaf06706ea9c39273ae63d7940dc","size_bytes":130396160},
+    {"name":"PP-DocBlockLayout","sha256":"b31a30c65d289e4a550e46d69edf2d8bbb13263c5331289ab21f9af487205e1f","size_bytes":129935360},
+    {"name":"PP-OCRv5_server_det","sha256":"22a33e0ba6a21425ea4192da03bf4395c9a0c67902bd924b7328fc859073045d","size_bytes":88340480},
+    {"name":"PP-OCRv5_server_rec","sha256":"d99be2ffd348943ab52876179168be4fb5b14f5f0812f2ae4c76d89ec2ea750a","size_bytes":84869120},
+    {"name":"PP-LCNet_x1_0_table_cls","sha256":"d00942b82838dd00b8a04f4db4f5cc0c146d27f4a56eb2fd3986de86e3e844bf","size_bytes":6860800},
+    {"name":"SLANeXt_wired","sha256":"9803e7fb73f895846184ce18208503ca041b57f7d2cac6145bb302c76476f609","size_bytes":365742080},
+    {"name":"SLANet_plus","sha256":"68526c5c6573a8a17cdc14805e026f11c2545e42d89a1317bb58d3e1e4b58318","size_bytes":7997440},
+    {"name":"RT-DETR-L_wired_table_cell_det","sha256":"da4a5ec40f1d86fd00aa6dc739e8e9d18a575b9960c0798be3ec93c47025074d","size_bytes":129935360},
+    {"name":"RT-DETR-L_wireless_table_cell_det","sha256":"6f0a78b0444fb0e50f7762a78c15ca38df6402b814558ef00dbcb1f5fc2a5a3d","size_bytes":129935360},
+    {"name":"PP-FormulaNet_plus-L","sha256":"2328cb22d93c800ddf490f9110ecbaffa70bf1e48f448d858a42c28a89c748f7","size_bytes":731504640}
+  ]
+}
