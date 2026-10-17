@@ -71,7 +71,7 @@ try {
       staged_bytes = $payloadBytes
       url = $url
     }
-    Write-Host "Staged $name: $($payloadFiles.Count) files / $payloadBytes bytes"
+    Write-Host "Staged ${name}: $($payloadFiles.Count) files / $payloadBytes bytes"
   }
 
   $expectedTotal = [int64]$spec.archive_total_bytes
