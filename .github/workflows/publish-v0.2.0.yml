@@ -1,0 +1,67 @@
+name: Publish SolYan PDF v0.2.0
+
+on:
+  push:
+    branches:
+      - release-publish/v0.2.0
+    paths:
+      - '.github/workflows/publish-v0.2.0.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SHA: add2b4138921870a9cb0482e38f11a57cf3f460a
+      TAG: v0.2.0
+    steps:
+      - name: Checkout publishing branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact release commit and versions
+        run: |
+          git fetch origin main --no-tags
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
+          python - <<'PY'
+          import json, pathlib, re
+          pkg = json.loads(pathlib.Path('frontend/package.json').read_text())
+          lock = json.loads(pathlib.Path('frontend/package-lock.json').read_text())
+          main = pathlib.Path('backend/app/main.py').read_text()
+          assert pkg['version'] == '0.2.0'
+          assert lock['version'] == '0.2.0'
+          assert lock['packages']['']['version'] == '0.2.0'
+          assert 'version="0.2.0"' in main
+          PY
+
+      - name: Verify tag and release are absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists" >&2
+            exit 1
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists" >&2
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$EXPECTED_SHA" \
+            --title "SolYan PDF v0.2.0" \
+            --notes-file docs/V0.2.0-RELEASE.md
+
+      - name: Verify published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,targetCommitish,isDraft,isPrerelease,url
