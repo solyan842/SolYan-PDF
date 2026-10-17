@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>SolYan PDF</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Điều hướng">
+      <div class="brand"><div class="brand-mark">S</div><div><strong>SolYan PDF</strong><span>Đơn giản hóa công việc với PDF</span></div></div>
+      <nav class="nav-primary"><button class="nav-item active" data-filter="home"><span>⌂</span>Trang chủ</button><button class="nav-item" data-filter="all"><span>▦</span>Tất cả công cụ</button><button class="nav-item" data-filter="recent"><span>◷</span>Gần đây</button><button class="nav-item" data-filter="favorite"><span>☆</span>Yêu thích</button></nav>
+      <div class="nav-label">CÔNG CỤ PDF</div><nav id="category-nav" class="nav-categories"></nav>
+      <div class="sidebar-footer"><button class="nav-item" data-filter="settings"><span>⚙</span>Cài đặt</button></div>
+    </aside>
+    <main class="workspace">
+      <header class="topbar"><div class="search-wrap"><span class="search-icon">⌕</span><input id="tool-search" type="search" autocomplete="off" placeholder="Tìm công cụ hoặc tệp..." aria-label="Tìm công cụ" /><kbd>Ctrl K</kbd></div><div class="top-actions"><button class="icon-btn" title="Thông báo">♢</button><span class="separator"></span><button class="profile-btn"><span class="avatar">SY</span><span>SolYan</span><span>⌄</span></button></div></header>
+      <section id="home-view" class="view active-view">
+        <section class="hero"><div class="hero-copy"><span class="eyebrow">SOLYAN PDF FOR WINDOWS</span><h1>Làm việc với PDF<br />đơn giản hơn mỗi ngày.</h1><p>Mọi công cụ quan trọng đều ở ngay trước mắt. Không menu rối, không phải đoán.</p><div class="hero-points"><span>✓ Dễ sử dụng</span><span>✓ Xử lý local</span><span>✓ Hỗ trợ tiếng Việt</span></div></div><div class="hero-art" aria-hidden="true"><div class="doc-card back"></div><div class="doc-card mid"></div><div class="doc-card front"><b>PDF</b><i></i><i></i><i></i></div></div></section>
+        <section class="section-block"><div class="section-title-row"><div><h2>Công cụ phổ biến</h2><span class="pill">Dành cho bạn</span></div><button class="link-btn" data-show-all>Xem tất cả công cụ →</button></div><div id="popular-grid" class="tool-grid popular-grid"></div></section>
+        <section class="dashboard-row"><div class="mini-panel"><div class="panel-head"><h3>Chuyển đổi</h3><button class="link-btn" data-category="convert">Xem tất cả →</button></div><div id="convert-list" class="mini-list"></div></div><div class="mini-panel"><div class="panel-head"><h3>Sắp xếp</h3><button class="link-btn" data-category="organize">Xem tất cả →</button></div><div id="organize-list" class="mini-list"></div></div><div class="mini-panel recent-panel"><div class="panel-head"><h3>Gần đây</h3><button class="link-btn">Xem tất cả →</button></div><div class="recent-head"><span>Tên tệp</span><span>Mở gần nhất</span><span>Kích thước</span></div><div class="recent-row"><span>▣ Hợp đồng kinh doanh.pdf</span><span>Hôm nay, 14:32</span><span>2,4 MB</span></div><div class="recent-row"><span>▣ Báo cáo quý 3.pdf</span><span>Hôm nay, 09:15</span><span>1,8 MB</span></div><div class="recent-row"><span>▣ Tài liệu thuyết trình.pdf</span><span>Hôm qua, 16:20</span><span>5,1 MB</span></div><div class="recent-row"><span>▣ Hướng dẫn sử dụng.pdf</span><span>12/04/2025</span><span>1,2 MB</span></div></div></section>
+      </section>
+      <section id="tools-view" class="view"><div class="tools-header"><div><span id="tools-eyebrow" class="eyebrow">TẤT CẢ CÔNG CỤ</span><h1 id="tools-title">Tất cả công cụ</h1><p id="tools-subtitle">Chọn đúng việc cần làm. Mọi công cụ đều có thể tìm bằng Ctrl + K.</p></div><span id="tool-count" class="count-badge"></span></div><div id="all-tools-grid" class="tool-grid all-grid"></div><div id="empty-state" class="empty-state" hidden><div>⌕</div><h3>Không tìm thấy công cụ</h3><p>Thử từ khóa khác như “nén”, “OCR”, “Word”, “ký” hoặc “bảo mật”.</p></div></section>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./catalog.js"></script>
+  <script src="./catalog-additions.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

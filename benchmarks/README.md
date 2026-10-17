@@ -68,7 +68,7 @@ The runner records per-case round-trip similarity, page counts and timings, plus
 
 ### Optional acceptance thresholds
 
-Thresholds are deliberately **not** embedded in the synthetic corpus. When a release policy is agreed, pass a separate JSON file:
+Thresholds are deliberately **not** embedded in the synthetic corpus. For ad-hoc experiments, a separate JSON threshold file can be supplied, for example:
 
 ```json
 {
@@ -80,8 +80,24 @@ Thresholds are deliberately **not** embedded in the synthetic corpus. When a rel
 
 Then run with `--thresholds path/to/thresholds.json`. A target whose aggregate average similarity falls below its configured threshold causes exit code 2.
 
-Any threshold values above are examples only, not current SolYan PDF release criteria.
+The example values above are not SolYan PDF release criteria. Release acceptance is defined only by the versioned release policy below.
 
-## Real-world corpus rule
+## PDF -> Office V1 release policy
 
-Real-world PDF -> Office release benchmarking remains a separate roadmap item. Any such corpus must be versioned, redistributable or fetchable with clear provenance/license, and diverse enough to represent the intended production workload.
+The authoritative V1 policy is `corpora/pdf_to_office_release_v1.json` and is enforced by `validate_pdf_to_office_release.py`.
+
+The locked release corpus contains **27 cases / 68 source pages**:
+
+- 18 deterministic synthetic cases / 18 pages;
+- 9 pinned real-world cases / 50 selected pages;
+- real text scope: 6 DOCX/PPTX cases / 41 source pages;
+- real XLSX scope: 3 cases / 9 source pages, with 9 round-trip pages required.
+
+The real corpus is described by `corpora/pdf_to_office_real_diagnostic_v1.json` and is reconstructed by `fetch_pdf_to_office_real_corpus.py` from pinned, verifiable sources rather than vendored binary documents.
+
+Release routing is also part of the contract:
+
+- DOCX/PPTX: LibreOffice first, then Bloom fallback;
+- XLSX: Bloom first, then PP-StructureV3 fallback when Bloom reports no logical table.
+
+CI release evidence is produced by the synthetic and real-world PDF-to-Office release-gate workflows. Broad fidelity claims must be based on the complete versioned release policy, not the synthetic corpus alone.
