@@ -187,8 +187,9 @@ V1.5 is complete. Detailed research, boundaries and close-out are in `docs/V1.5-
 - [x] Gate public `argos` -> upstream `openailiked` mapping server-side while keeping the public service identity stable
 - [x] Pass live provider-boundary Argos EN -> VI PDF translation with mono/dual outputs and Vietnamese text checks
 - [x] Pass full service-integration gate with isolated SolYan and external translation runtimes: SolYan proxy -> PDFMathTranslate Flask/Celery/Redis -> local Argos bridge -> bilingual PDF
+- [x] Close and release V1.6 as SolYan PDF v0.1.9
 
-V1.6 translation implementation is feature-complete for the validated free/local English -> Vietnamese lane. Cloud providers remain optional operator configuration, not V1.6 release prerequisites. Detailed architecture, licensing/privacy boundaries and live evidence are in `docs/V1.6-PDF-TRANSLATION.md`.
+V1.6 translation is complete and released as v0.1.9 for the validated free/local English -> Vietnamese lane. Cloud providers remain optional operator configuration, not V1.6 release prerequisites. Detailed architecture, licensing/privacy boundaries and live evidence are in `docs/V1.6-PDF-TRANSLATION.md` and `docs/V1.6-CLOSEOUT.md`.
 
 ## Tiện ích Việt Nam — V1
 
@@ -304,6 +305,8 @@ V1.6 translation implementation is feature-complete for the validated free/local
 - [x] Remove completed `v0.1.7` one-shot publisher after successful publication
 - [x] Publish V1.5 OSS-first self-contained parity patch release `v0.1.8`
 - [x] Remove completed `v0.1.8` one-shot publisher after successful publication
+- [x] Publish V1.6 Hybrid/local-first PDF translation patch release `v0.1.9`
+- [x] Remove completed `v0.1.9` one-shot publisher after successful publication
 
 ## Release decisions / external inputs still required
 
