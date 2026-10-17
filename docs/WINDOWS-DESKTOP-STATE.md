@@ -58,10 +58,9 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - `Làm sạch PDF` → `POST /pdf/sanitize`; run `39032719002` / #75 on `627a3a7d3295bd93a990b1d009dcc080cdd17119` PASS.
 
 ### qpdf optimize/security batch — CODE-BEARING BASELINE PASS
-Windows Desktop CI run `39034173163` / #91 on exact code-bearing HEAD `b36c666681a488dc682b2d78358b38b37eb1100e` PASS end-to-end: UI/CSP contract, pinned browser engine, packaged local core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+Windows Desktop CI run `39034173163` / #91 on exact code-bearing HEAD `b36c666681a488dc682b2d78358b38b37eb1100e` PASS end-to-end.
 
-That PASS covers the code present at that HEAD, including:
-
+Covers:
 - `Tối ưu xem web` → `POST /pdf/web-optimize`.
 - `Giải nén cấu trúc PDF` → `POST /pdf/decompress`.
 - `Nén PDF` → `POST /pdf/compress`.
@@ -71,23 +70,23 @@ That PASS covers the code present at that HEAD, including:
 - `Mở khóa PDF` → `POST /pdf/unlock`.
 
 ### Xóa chữ ký — PASS
-- Reuses existing `POST /pdf/remove-signatures`; no duplicate desktop API/runtime.
-- Always writes a new `solyan-unsigned.pdf`; source is never overwritten.
-- UX explicitly warns the generated copy loses digital-signature verification state.
-- Desktop reports five backend counters: signature fields, widgets, values, permission entries and DSS entries removed.
+- Reuses `POST /pdf/remove-signatures`.
 - Windows Desktop CI run `39034640214` / #97 PASS on exact HEAD `dc25da7ea79871140a036d82174f07eb34f6d879`.
 
 ### Quyền hạn PDF — PASS
-- Reuses existing `POST /pdf/info`; no duplicate permission endpoint.
-- Read-only inspection of `encryption.encrypted`, qpdf permission map and encryption details.
-- Optional legitimate PDF password; does not change the source and does not claim password bypass.
-- Windows Desktop CI run `39047266679` / #99 PASS on exact HEAD `ace818bc42367c961828f5360785596d60745dcc`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+- Reuses `POST /pdf/info`; read-only inspection of encryption and permission map.
+- Windows Desktop CI run `39047266679` / #99 PASS on exact HEAD `ace818bc42367c961828f5360785596d60745dcc`.
 
-### Annotation / form utility batch — WIRED / EXACT-HEAD GATE NEXT
-- `Xóa chú thích` reuses `POST /pdf/remove-annotations`; default removes comments/markup, optional `remove_all_non_widget=true`; Widget annotations are preserved. Reports comments removed, other annotations removed and widgets preserved.
-- `Mở khóa biểu mẫu` reuses `POST /pdf/unlock-forms`; clears read-only field flags, removes `/Lock`, opens recognized XFA `access="readOnly"`, and never claims to decrypt or bypass PDF password protection. Reports fields visited, readonly flags cleared, locks removed, XFA streams modified and XFA attributes opened.
-- Both always save to new output PDFs and preserve the source.
-- `catalog-additions.js` extends the existing catalog without rewriting the large stable catalog file; it also narrows the `Quyền hạn PDF` description to inspection-only semantics.
+### Annotation / form utility batch — PASS
+- `Xóa chú thích` → `POST /pdf/remove-annotations`; default removes comments/markup, optional all non-widget annotations; Widget annotations are preserved.
+- `Mở khóa biểu mẫu` → `POST /pdf/unlock-forms`; clears read-only flags, removes `/Lock`, opens recognized XFA readOnly; does not decrypt or bypass PDF password protection.
+- `catalog-additions.js` extends the catalog without rewriting the large stable catalog file and narrows the Permissions card to inspection-only semantics.
+- Windows Desktop CI run `39047834628` / #100 PASS on exact HEAD `4e79f38f93f58bfdf9341437bda5ea6014f7a958`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+
+### Blank-page / Page Labels batch — WIRED / EXACT-HEAD GATE NEXT
+- `Xóa trang trắng` reuses `POST /pdf/remove-blank-pages`; pages with a real text layer are hard-kept, only text-free pages are raster-classified; max 300 pages and aggregate render budgets stay enforced by backend. Reports removed count, page ranges and applied thresholds.
+- `Page Labels` reuses `POST /pdf/page-labels`; UI supports set/remove, up to 20 ordered rules, decimal/Roman/alpha/no-number styles, start values and optional prefixes. Backend verifies physical page count is unchanged and `/PageLabels` state matches the requested operation.
+- Both create new output PDFs and preserve the source.
 
 ## PDF sang ảnh parity boundary
 
@@ -97,7 +96,7 @@ That PASS covers the code present at that HEAD, including:
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the exact HEAD containing `Xóa chú thích` + `Mở khóa biểu mẫu`, then record the exact run/commit as PASS.
+1. Keep Windows Desktop CI green on exact HEAD containing `Xóa trang trắng + Page Labels`, then record exact run/commit as PASS.
 2. Continue low-risk existing backend tools whose semantics are already defined; do not duplicate backend APIs.
 3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
 4. D4: package OCR runtime and connect OCR/scan tools.
