@@ -14,6 +14,7 @@ from .active_content import router as active_content_router
 from .archive_proxy import router as archive_router
 from .attachments import router as attachments_router
 from .bloom_proxy import router as bloom_router
+from .cloud_storage import router as cloud_storage_router
 from .extract_images import router as extract_images_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
@@ -46,7 +47,7 @@ app = FastAPI(title="SolYan PDF API", version="0.1.9")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("SOLYAN_ALLOWED_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
     expose_headers=[
@@ -106,6 +107,7 @@ app.include_router(office_router)
 app.include_router(sign_router)
 app.include_router(archive_router)
 app.include_router(bloom_router)
+app.include_router(cloud_storage_router)
 app.include_router(extract_images_router)
 app.include_router(remove_images_router)
 app.include_router(remove_blank_pages_router)
