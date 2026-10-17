@@ -15,7 +15,17 @@ use std::{
 use tauri::{path::BaseDirectory, Manager, State};
 
 #[cfg(windows)]
-use std::os::windows::process::CommandExt;
+use std::os::windows::{io::AsRawHandle, process::CommandExt};
+
+#[cfg(windows)]
+use windows_sys::Win32::{
+    Foundation::{CloseHandle, HANDLE},
+    System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    },
+};
 
 #[derive(Clone)]
 struct CoreSession {
@@ -23,9 +33,71 @@ struct CoreSession {
     token: String,
 }
 
+#[cfg(windows)]
+struct WindowsJob(usize);
+
+#[cfg(windows)]
+impl WindowsJob {
+    fn attach(child: &Child) -> Result<Self, String> {
+        let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        if handle.is_null() {
+            return Err(format!(
+                "could not create Windows core job object: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        let job = Self(handle as usize);
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let configured = unsafe {
+            SetInformationJobObject(
+                handle,
+                JobObjectExtendedLimitInformation,
+                &limits as *const _ as *const _,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+        };
+        if configured == 0 {
+            return Err(format!(
+                "could not configure Windows core job object: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        let process_handle = child.as_raw_handle() as HANDLE;
+        if unsafe { AssignProcessToJobObject(handle, process_handle) } == 0 {
+            return Err(format!(
+                "could not assign local core to Windows job object: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        Ok(job)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WindowsJob {
+    fn drop(&mut self) {
+        if self.0 != 0 {
+            unsafe {
+                CloseHandle(self.0 as HANDLE);
+            }
+            self.0 = 0;
+        }
+    }
+}
+
+struct CoreProcess {
+    child: Child,
+    #[cfg(windows)]
+    _job: WindowsJob,
+}
+
 #[derive(Default)]
 struct CoreState {
-    child: Mutex<Option<Child>>,
+    process: Mutex<Option<CoreProcess>>,
     session: Mutex<Option<CoreSession>>,
     startup_error: Mutex<Option<String>>,
 }
@@ -123,7 +195,7 @@ fn prepend_path(directory: &Path) -> OsString {
     value
 }
 
-fn start_core(app: &tauri::AppHandle) -> Result<(Child, CoreSession), String> {
+fn start_core(app: &tauri::AppHandle) -> Result<(CoreProcess, CoreSession), String> {
     let core_exe = app
         .path()
         .resolve("core/solyan-core.exe", BaseDirectory::Resource)
@@ -162,6 +234,16 @@ fn start_core(app: &tauri::AppHandle) -> Result<(Child, CoreSession), String> {
         .spawn()
         .map_err(|error| format!("could not start local core: {error}"))?;
 
+    #[cfg(windows)]
+    let job = match WindowsJob::attach(&child) {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+
     if let Err(error) = wait_for_health(port, &token) {
         let _ = child.kill();
         let _ = child.wait();
@@ -169,7 +251,11 @@ fn start_core(app: &tauri::AppHandle) -> Result<(Child, CoreSession), String> {
     }
 
     Ok((
-        child,
+        CoreProcess {
+            child,
+            #[cfg(windows)]
+            _job: job,
+        },
         CoreSession {
             endpoint: format!("http://127.0.0.1:{port}"),
             token,
@@ -179,10 +265,10 @@ fn start_core(app: &tauri::AppHandle) -> Result<(Child, CoreSession), String> {
 
 fn stop_core(app: &tauri::AppHandle) {
     let state = app.state::<CoreState>();
-    if let Ok(mut child) = state.child.lock() {
-        if let Some(mut process) = child.take() {
-            let _ = process.kill();
-            let _ = process.wait();
+    if let Ok(mut process) = state.process.lock() {
+        if let Some(mut managed) = process.take() {
+            let _ = managed.child.kill();
+            let _ = managed.child.wait();
         }
     };
 }
@@ -193,8 +279,11 @@ fn main() {
         .setup(|app| {
             let state = app.state::<CoreState>();
             match start_core(app.handle()) {
-                Ok((child, session)) => {
-                    *state.child.lock().map_err(|_| "core process state poisoned")? = Some(child);
+                Ok((process, session)) => {
+                    *state
+                        .process
+                        .lock()
+                        .map_err(|_| "core process state poisoned")? = Some(process);
                     *state.session.lock().map_err(|_| "core session state poisoned")? = Some(session);
                 }
                 Err(error) => {
