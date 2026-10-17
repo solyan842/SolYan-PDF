@@ -1,0 +1,80 @@
+name: Windows OCR Structure Pack CI
+
+on:
+  pull_request:
+    paths:
+      - "desktop/backend/ocr-structure-models.json"
+      - "desktop/backend/stage-ocr-structure-models.ps1"
+      - ".github/workflows/windows-ocr-structure-pack-ci.yml"
+  push:
+    branches:
+      - "feat/windows-desktop-d4-structure-pack"
+    paths:
+      - "desktop/backend/ocr-structure-models.json"
+      - "desktop/backend/stage-ocr-structure-models.ps1"
+      - ".github/workflows/windows-ocr-structure-pack-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-structure-pack-contract:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate model manifest contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $path = "desktop/backend/ocr-structure-models.json"
+          $spec = Get-Content $path -Raw | ConvertFrom-Json
+          if ($spec.schema_version -ne 1) { throw "Unexpected schema_version" }
+          if ($spec.pack_id -ne "pp-structurev3-3.7") { throw "Unexpected pack_id" }
+          if ($spec.paddleocr_version -ne "3.7.0") { throw "Unexpected PaddleOCR version" }
+          if ($spec.paddlex_version -ne "3.7.2") { throw "Unexpected PaddleX version" }
+          if ($spec.paddlex_commit -ne "ffb64904d23708863ff5b8da312a5cbd52a7f462") { throw "Unexpected PaddleX commit" }
+          if ($spec.cache_layout -ne "official_models/<model>") { throw "Unexpected cache layout" }
+          if ($spec.source_base_url -ne "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0") { throw "Unexpected model source" }
+          if ($spec.models.Count -ne 10) { throw "Expected 10 PP-StructureV3 extra models" }
+          $expected = @(
+            "PP-DocLayout_plus-L",
+            "PP-DocBlockLayout",
+            "PP-OCRv5_server_det",
+            "PP-OCRv5_server_rec",
+            "PP-LCNet_x1_0_table_cls",
+            "SLANeXt_wired",
+            "SLANet_plus",
+            "RT-DETR-L_wired_table_cell_det",
+            "RT-DETR-L_wireless_table_cell_det",
+            "PP-FormulaNet_plus-L"
+          )
+          $names = @($spec.models | ForEach-Object { [string]$_.name })
+          if (@($names | Sort-Object -Unique).Count -ne 10) { throw "Model names are not unique" }
+          foreach ($name in $expected) {
+            if ($name -notin $names) { throw "Missing required model: $name" }
+          }
+          $sum = [int64](($spec.models | Measure-Object -Property size_bytes -Sum).Sum)
+          if ($sum -ne [int64]$spec.archive_total_bytes) { throw "Archive byte total mismatch: $sum" }
+          if ($sum -ne 1805516800) { throw "Pinned archive byte total changed unexpectedly: $sum" }
+          foreach ($model in $spec.models) {
+            if ([string]$model.sha256 -notmatch '^[0-9a-f]{64}$') { throw "Invalid SHA256 for $($model.name)" }
+            if ([int64]$model.size_bytes -le 0) { throw "Invalid size for $($model.name)" }
+          }
+          [pscustomobject]@{ Pack = $spec.pack_id; Models = $spec.models.Count; ArchiveBytes = $sum } | Format-List
+
+      - name: Parse PowerShell staging adapter
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $path = (Resolve-Path "desktop/backend/stage-ocr-structure-models.ps1").Path
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Host
+            throw "PowerShell parser reported $($errors.Count) error(s)"
+          }
+          Write-Host "PowerShell staging adapter parses cleanly."
