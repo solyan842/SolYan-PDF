@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - "feat/windows-desktop-v1"
+      - "feat/windows-desktop-d4-ocr"
     paths:
       - "desktop/**"
       - "backend/app/**"
@@ -28,7 +29,7 @@ concurrency:
 jobs:
   build-windows-x64:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,6 +109,28 @@ jobs:
           Get-ChildItem desktop/src-tauri/resources/core -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-core-resource-inventory.log
           Get-ChildItem desktop/src-tauri/resources/office -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-office-resource-inventory.log
 
+      - name: Stage and bundle pinned offline OCR runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m pip install -r desktop/backend/requirements-ocr-windows.txt 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pip-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install paddlepaddle==3.2.0 --index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/ 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-paddle-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip check 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pip-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./desktop/backend/stage-ocr-runtime.ps1 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-tesseract-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./desktop/backend/stage-ocr-models.ps1 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-model-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --recursive-copy-metadata paddlex --copy-metadata imagesize --copy-metadata opencv-contrib-python --copy-metadata pyclipper --copy-metadata pypdfium2 --copy-metadata python-bidi --copy-metadata shapely --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item dist/solyan-ocr.exe desktop/src-tauri/resources/ocr/solyan-ocr.exe
+          if (-not (Test-Path desktop/src-tauri/resources/ocr/solyan-ocr.exe)) { throw "solyan-ocr.exe was not staged" }
+          Get-ChildItem desktop/src-tauri/resources/ocr -Recurse -File |
+            Measure-Object -Property Length -Sum |
+            Format-List | Out-String | Set-Content artifacts/desktop-ocr-resource-inventory.log
+
       - name: Check pinned Tauri CLI
         shell: pwsh
         run: |
@@ -169,6 +192,9 @@ jobs:
           $installRoot = Split-Path $appExe -Parent
           $coreExe = Get-ChildItem $installRoot -Filter "solyan-core.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           $officeExe = Get-ChildItem $installRoot -Filter "solyan-office.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $ocrExe = Get-ChildItem $installRoot -Filter "solyan-ocr.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $tesseractExe = Get-ChildItem $installRoot -Filter "tesseract.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $paddleRecModel = Get-ChildItem $installRoot -Directory -Filter "PP-OCRv6_medium_rec" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           $sofficeExe = Get-ChildItem $installRoot -Filter "soffice.com" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $sofficeExe) { $sofficeExe = Get-ChildItem $installRoot -Filter "soffice.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
           $qpdfExe = Get-ChildItem $installRoot -Filter "qpdf.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -176,6 +202,9 @@ jobs:
           $pdfinfoExe = Get-ChildItem $installRoot -Filter "pdfinfo.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $coreExe) { throw "Installed solyan-core.exe resource was not found" }
           if (-not $officeExe) { throw "Installed solyan-office.exe resource was not found" }
+          if (-not $ocrExe) { throw "Installed solyan-ocr.exe resource was not found" }
+          if (-not $tesseractExe) { throw "Installed Tesseract resource was not found" }
+          if (-not $paddleRecModel) { throw "Installed offline PaddleOCR model was not found" }
           if (-not $sofficeExe) { throw "Installed LibreOffice soffice resource was not found" }
           if (-not $qpdfExe) { throw "Installed qpdf.exe resource was not found" }
           if (-not $pdftoppmExe) { throw "Installed pdftoppm.exe resource was not found" }
@@ -183,18 +212,22 @@ jobs:
 
           Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $appExe -PassThru
           $core = $null
           $office = $null
+          $ocr = $null
           for ($i = 0; $i -lt 120; $i++) {
             Start-Sleep -Milliseconds 500
             $core = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
             $office = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($core -and $office) { break }
+            $ocr = Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core -and $office -and $ocr) { break }
             if ($app.HasExited) { throw "SolYan PDF exited before local sidecars became ready" }
           }
           if (-not $office) { throw "SolYan PDF did not start solyan-office.exe" }
           if (-not $core) { throw "SolYan PDF did not start solyan-core.exe" }
+          if (-not $ocr) { throw "SolYan PDF did not start solyan-ocr.exe" }
 
           $closed = $app.CloseMainWindow()
           if ($closed) { $null = $app.WaitForExit(15000) }
@@ -205,11 +238,13 @@ jobs:
 
           $coreOrphan = $null
           $officeOrphan = $null
+          $ocrOrphan = $null
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep -Milliseconds 500
             $coreOrphan = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
             $officeOrphan = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $coreOrphan -and -not $officeOrphan) { break }
+            $ocrOrphan = Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $coreOrphan -and -not $officeOrphan -and -not $ocrOrphan) { break }
           }
           if ($coreOrphan) {
             $coreOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -219,20 +254,28 @@ jobs:
             $officeOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
             throw "solyan-office.exe remained after SolYan PDF exited"
           }
+          if ($ocrOrphan) {
+            $ocrOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
+            throw "solyan-ocr.exe remained after SolYan PDF exited"
+          }
 
           @(
             "installer=$($installer.Name)",
             "app=$appExe",
             "core=$($coreExe.FullName)",
             "office=$($officeExe.FullName)",
+            "ocr=$($ocrExe.FullName)",
+            "tesseract=$($tesseractExe.FullName)",
             "libreoffice=$($sofficeExe.FullName)",
             "qpdf=$($qpdfExe.FullName)",
             "pdftoppm=$($pdftoppmExe.FullName)",
             "pdfinfo=$($pdfinfoExe.FullName)",
             "runtime_core_started=true",
             "runtime_office_started=true",
+            "runtime_ocr_started=true",
             "runtime_core_stopped=true",
-            "runtime_office_stopped=true"
+            "runtime_office_stopped=true",
+            "runtime_ocr_stopped=true"
           ) | Set-Content "artifacts/desktop-installed-runtime-smoke.log"
 
       - name: Upload desktop diagnostics

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nhận dạng văn bản — SolYan PDF</title><link rel="stylesheet" href="./tool.css"></head>
+<body class="tool-shell"><div class="tool-layout"><aside class="tool-sidebar">
+<a class="back-link" href="./index.html">← Trang chủ</a><div class="desktop-brand">SolYan PDF</div><p class="desktop-subtitle">Windows Desktop</p>
+<hr class="tool-divider"><div class="sidebar-links">Sắp xếp PDF<br>Chuyển đổi<br>Chỉnh sửa<br>Bảo mật<br>OCR &amp; Scan<br>Cloud</div></aside>
+<main class="tool-main"><div class="tool-top"><a class="back-link" href="./index.html">Công cụ › OCR &amp; Scan</a><span class="muted-small">Xử lý local · Tiếng Việt + English</span></div>
+<div class="tool-title"><div class="big-icon info-icon">⌗</div><div><h1 id="toolName">OCR PDF</h1><p id="toolDesc">Nhận dạng chữ từ tài liệu và xuất văn bản.</p></div></div>
+<div class="repair-layout"><section class="surface">
+<div id="dropzone" class="dropzone"><div class="upload-icon">⇧</div><h2 id="pickTitle">Chọn tài liệu</h2><p>Kéo tệp vào đây hoặc chọn từ máy tính.</p><input id="fileInput" type="file" hidden><button id="pickFile" class="primary">＋ Chọn tệp</button><div class="upload-helper">Chạy ngay trên Windows · Không tải tệp lên máy chủ</div></div>
+<div id="selectedFile" class="selected-file" hidden><div class="selected-file-icon">OCR</div><div class="selected-file-body"><strong id="fileName"></strong><span id="fileMeta"></span></div><button id="removeFile" class="secondary-button">Xóa</button></div>
+<div id="result" class="active-report" hidden><h2>Kết quả nhận dạng</h2><p id="engineInfo" class="muted-small"></p><pre id="recognizedText" class="ocr-result-text"></pre><div class="ocr-result-actions"><button id="copyText" class="secondary-button">Sao chép</button><button id="saveText" class="primary">Lưu TXT</button><button id="saveJson" class="secondary-button">Lưu JSON</button></div></div>
+</section><aside class="surface options"><h2>Nhận dạng văn bản</h2><div class="option-group"><label>Cơ chế xử lý</label><p class="local-note">PaddleOCR chạy ngoại tuyến. Nếu cần, SolYan tự chuyển sang Tesseract tiếng Việt/Anh đã đóng gói.</p></div>
+<div class="option-group"><label>Đầu ra</label><p class="option-note">Văn bản có thể sao chép hoặc lưu TXT/JSON. Công cụ này chưa tạo PDF có lớp chữ tìm kiếm.</p></div>
+<button id="runBtn" class="primary merge-btn" disabled>Nhận dạng văn bản →</button><p id="status" class="status-text" role="status">Chọn một tệp để bắt đầu.</p></aside>
+</div></main></div><script src="./ocr-text.js"></script></body></html>

@@ -121,6 +121,14 @@ Recommended product direction when this decision is requested: keep base/text OC
 
 Do not silently disable formula/region/table models merely to shrink the installer; that changes OCR semantics and requires a product/quality decision plus new benchmarks.
 
+## D4 desktop integration — IMPLEMENTED, exact-head Windows installer CI pending
+
+- OCR text integration is being validated on the dedicated D4 branch.
+- Bundles pinned Tesseract + offline Paddle text models + PyInstaller OCR sidecar in NSIS.
+- Tauri supervises Office, OCR and Core with Windows Job Objects; core receives loopback `OCR_SERVICE_URL`.
+- `OCR PDF` and `OCR ảnh` open a simple single-file text extraction screen, reusing the existing `/ocr/text` API.
+- **Do not mark D4 installer PASS until exact-head NSIS, silent-install, OCR spawn and cleanup smoke pass.**
+
 ## D4 next work — continue automatically until the packaging decision blocks it
 
 1. Integrate D4A/D4B text OCR resources into the normal Windows installer: `solyan-ocr.exe`, Tesseract + `vie/eng/osd`, and the five pinned text models.

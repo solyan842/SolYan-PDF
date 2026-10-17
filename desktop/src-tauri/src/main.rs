@@ -99,10 +99,17 @@ struct OfficeProcess {
     _job: WindowsJob,
 }
 
+struct OcrProcess {
+    child: Child,
+    #[cfg(windows)]
+    _job: WindowsJob,
+}
+
 #[derive(Default)]
 struct CoreState {
     process: Mutex<Option<CoreProcess>>,
     office_process: Mutex<Option<OfficeProcess>>,
+    ocr_process: Mutex<Option<OcrProcess>>,
     session: Mutex<Option<CoreSession>>,
     startup_error: Mutex<Option<String>>,
 }
@@ -216,6 +223,31 @@ fn wait_for_office_health(port: u16) -> Result<(), String> {
     Err("local Office sidecar did not reach LibreOffice-backed health in time".to_string())
 }
 
+fn wait_for_ocr_health(port: u16) -> Result<(), String> {
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    for _ in 0..180 {
+        if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(500)) {
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+            let request = format!(
+                "GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+            );
+            if stream.write_all(request.as_bytes()).is_ok() {
+                let mut response = String::new();
+                if stream.read_to_string(&mut response).is_ok()
+                    && response.contains(" 200 ")
+                    && response.contains("\"status\":\"ok\"")
+                    && response.contains("\"models_loaded\"")
+                {
+                    return Ok(());
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    Err("local OCR sidecar did not reach health in time".to_string())
+}
+
 fn prepend_paths(directories: &[&Path]) -> Result<OsString, String> {
     let mut paths: Vec<PathBuf> = directories.iter().map(|path| path.to_path_buf()).collect();
     if let Some(existing) = std::env::var_os("PATH") {
@@ -288,7 +320,93 @@ fn start_office(app: &tauri::AppHandle) -> Result<(OfficeProcess, String), Strin
     ))
 }
 
-fn start_core(app: &tauri::AppHandle, office_endpoint: &str) -> Result<(CoreProcess, CoreSession), String> {
+fn start_ocr(app: &tauri::AppHandle) -> Result<(OcrProcess, String), String> {
+    let ocr_exe = app
+        .path()
+        .resolve("ocr/solyan-ocr.exe", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve local OCR sidecar: {error}"))?;
+    let tesseract_root = app
+        .path()
+        .resolve("ocr/tesseract", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve Tesseract resource: {error}"))?;
+    let cache_root = app
+        .path()
+        .resolve("ocr/paddlex-cache", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve PaddleX cache: {error}"))?;
+    if !ocr_exe.is_file() {
+        return Err(format!("local OCR sidecar missing: {}", ocr_exe.display()));
+    }
+    let tesseract_exe = find_file(&tesseract_root, "tesseract.exe")
+        .ok_or_else(|| format!("Tesseract binary missing under {}", tesseract_root.display()))?;
+    let tessdata = tesseract_root.join("tessdata");
+    for language in ["vie", "eng", "osd"] {
+        if !tessdata.join(format!("{language}.traineddata")).is_file() {
+            return Err(format!("Tesseract {language} traineddata missing"));
+        }
+    }
+    let official = cache_root.join("official_models");
+    for model in [
+        "PP-LCNet_x1_0_doc_ori",
+        "UVDoc",
+        "PP-LCNet_x1_0_textline_ori",
+        "PP-OCRv6_medium_det",
+        "PP-OCRv6_medium_rec",
+    ] {
+        if !official.join(model).is_dir() {
+            return Err(format!("offline OCR model missing: {model}"));
+        }
+    }
+    let tesseract_bin = tesseract_exe
+        .parent()
+        .ok_or_else(|| "Tesseract binary directory could not be resolved".to_string())?;
+    let port = free_loopback_port()?;
+    let mut command = Command::new(&ocr_exe);
+    command
+        .arg("--port")
+        .arg(port.to_string())
+        .env("PATH", prepend_paths(&[tesseract_bin])?)
+        .env("SOLYAN_TESSERACT_BINARY", &tesseract_exe)
+        .env("TESSDATA_PREFIX", &tessdata)
+        .env("TESSERACT_LANG", "vie+eng")
+        .env("OCR_LANG", "vi")
+        .env("PADDLE_PDX_CACHE_HOME", &cache_root)
+        .env("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("could not start local OCR sidecar: {error}"))?;
+
+    #[cfg(windows)]
+    let job = match WindowsJob::attach(&child) {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+    if let Err(error) = wait_for_ocr_health(port) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
+    Ok((
+        OcrProcess {
+            child,
+            #[cfg(windows)]
+            _job: job,
+        },
+        format!("http://127.0.0.1:{port}"),
+    ))
+}
+
+fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str) -> Result<(CoreProcess, CoreSession), String> {
     let core_exe = app
         .path()
         .resolve("core/solyan-core.exe", BaseDirectory::Resource)
@@ -326,6 +444,7 @@ fn start_core(app: &tauri::AppHandle, office_endpoint: &str) -> Result<(CoreProc
         .arg(&token)
         .env("PATH", prepend_paths(&[qpdf_bin, poppler_bin])?)
         .env("OFFICE_SERVICE_URL", office_endpoint)
+        .env("OCR_SERVICE_URL", ocr_endpoint)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -366,6 +485,38 @@ fn start_core(app: &tauri::AppHandle, office_endpoint: &str) -> Result<(CoreProc
     ))
 }
 
+fn start_services(app: &tauri::AppHandle) -> Result<(OfficeProcess, OcrProcess, CoreProcess, CoreSession), String> {
+    let (mut office, office_endpoint) = start_office(app)?;
+    let (mut ocr, ocr_endpoint) = match start_ocr(app) {
+        Ok(result) => result,
+        Err(error) => {
+            let _ = office.child.kill();
+            let _ = office.child.wait();
+            return Err(error);
+        }
+    };
+    match start_core(app, &office_endpoint, &ocr_endpoint) {
+        Ok((core, session)) => Ok((office, ocr, core, session)),
+        Err(error) => {
+            let _ = ocr.child.kill();
+            let _ = ocr.child.wait();
+            let _ = office.child.kill();
+            let _ = office.child.wait();
+            Err(error)
+        }
+    }
+}
+
+fn stop_ocr(app: &tauri::AppHandle) {
+    let state = app.state::<CoreState>();
+    if let Ok(mut process) = state.ocr_process.lock() {
+        if let Some(mut managed) = process.take() {
+            let _ = managed.child.kill();
+            let _ = managed.child.wait();
+        }
+    };
+}
+
 fn stop_core(app: &tauri::AppHandle) {
     let state = app.state::<CoreState>();
     if let Ok(mut process) = state.process.lock() {
@@ -391,33 +542,15 @@ fn main() {
         .manage(CoreState::default())
         .setup(|app| {
             let state = app.state::<CoreState>();
-            match start_office(app.handle()) {
-                Ok((mut office_process, office_endpoint)) => match start_core(app.handle(), &office_endpoint) {
-                    Ok((core_process, session)) => {
-                        *state
-                            .office_process
-                            .lock()
-                            .map_err(|_| "office process state poisoned")? = Some(office_process);
-                        *state
-                            .process
-                            .lock()
-                            .map_err(|_| "core process state poisoned")? = Some(core_process);
-                        *state.session.lock().map_err(|_| "core session state poisoned")? = Some(session);
-                    }
-                    Err(error) => {
-                        let _ = office_process.child.kill();
-                        let _ = office_process.child.wait();
-                        *state
-                            .startup_error
-                            .lock()
-                            .map_err(|_| "core error state poisoned")? = Some(error);
-                    }
-                },
+            match start_services(app.handle()) {
+                Ok((office, ocr, core, session)) => {
+                    *state.office_process.lock().map_err(|_| "office state poisoned")? = Some(office);
+                    *state.ocr_process.lock().map_err(|_| "OCR state poisoned")? = Some(ocr);
+                    *state.process.lock().map_err(|_| "core state poisoned")? = Some(core);
+                    *state.session.lock().map_err(|_| "session state poisoned")? = Some(session);
+                }
                 Err(error) => {
-                    *state
-                        .startup_error
-                        .lock()
-                        .map_err(|_| "office error state poisoned")? = Some(error);
+                    *state.startup_error.lock().map_err(|_| "startup state poisoned")? = Some(error);
                 }
             }
             Ok(())
@@ -429,6 +562,7 @@ fn main() {
     app.run(|app_handle, event| {
         if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
             stop_core(app_handle);
+            stop_ocr(app_handle);
             stop_office(app_handle);
         }
     });
