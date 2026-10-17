@@ -1,0 +1,79 @@
+name: Probe Windows Structure Model Hashes
+
+on:
+  push:
+    branches:
+      - probe/windows-ocr-model-hashes
+    paths:
+      - .github/workflows/probe-windows-structure-model-hashes.yml
+
+permissions:
+  contents: read
+
+jobs:
+  hash-structure-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download and hash pinned PP-StructureV3 inference models
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          base='https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0'
+          models=(
+            'PP-DocLayout_plus-L'
+            'PP-DocBlockLayout'
+            'PP-OCRv5_server_det'
+            'PP-OCRv5_server_rec'
+            'PP-LCNet_x1_0_table_cls'
+            'SLANeXt_wired'
+            'SLANet_plus'
+            'RT-DETR-L_wired_table_cell_det'
+            'RT-DETR-L_wireless_table_cell_det'
+            'PP-FormulaNet_plus-L'
+          )
+          : > artifacts/structure-model-hashes.tsv
+          for model in "${models[@]}"; do
+            file="artifacts/${model}_infer.tar"
+            url="$base/${model}_infer.tar"
+            echo "Downloading $model"
+            curl --fail --location --retry 3 --retry-delay 2 "$url" -o "$file"
+            sha="$(sha256sum "$file" | awk '{print $1}')"
+            bytes="$(stat -c '%s' "$file")"
+            printf '%s\t%s\t%s\t%s\n' "$model" "$sha" "$bytes" "$url" | tee -a artifacts/structure-model-hashes.tsv
+          done
+
+      - name: Emit JSON manifest
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          rows = []
+          for line in Path('artifacts/structure-model-hashes.tsv').read_text().splitlines():
+              model, sha256, size_bytes, url = line.split('\t')
+              rows.append({
+                  'model': model,
+                  'sha256': sha256,
+                  'size_bytes': int(size_bytes),
+                  'url': url,
+              })
+          Path('artifacts/structure-model-hashes.json').write_text(
+              json.dumps({'models': rows}, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps({'models': len(rows), 'bytes': sum(r['size_bytes'] for r in rows)}, indent=2))
+
+      - name: Upload hash evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-structure-model-hash-probe
+          path: |
+            artifacts/structure-model-hashes.tsv
+            artifacts/structure-model-hashes.json
+          if-no-files-found: error
+          retention-days: 7
