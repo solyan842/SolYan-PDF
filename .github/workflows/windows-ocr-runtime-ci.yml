@@ -56,12 +56,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip check 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pip-check.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python - <<'PY' 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-versions.log
-          import paddle, paddleocr, paddlex
-          print("paddle", paddle.__version__)
-          print("paddleocr", paddleocr.__version__)
-          print("paddlex", paddlex.__version__)
-          PY
+          python -c "import paddle,paddleocr,paddlex; print('paddle', paddle.__version__); print('paddleocr', paddleocr.__version__); print('paddlex', paddlex.__version__)" 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-versions.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Stage pinned Tesseract and tessdata
@@ -81,7 +76,7 @@ jobs:
           $root = (Resolve-Path desktop/src-tauri/resources/ocr/tesseract).Path
           $exe = Join-Path $root "tesseract.exe"
           $env:TESSDATA_PREFIX = Join-Path $root "tessdata"
-          python - <<'PY'
+          $smokeScript = @'
           from pathlib import Path
           from PIL import Image, ImageDraw, ImageFont
           image = Image.new("RGB", (1200, 240), "white")
@@ -89,7 +84,10 @@ jobs:
           font = ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", 72)
           draw.text((40, 70), "SolYan PDF 2026", fill="black", font=font)
           image.save(Path("artifacts") / "windows-ocr-smoke.png")
-          PY
+          '@
+          $smokeScript | Set-Content artifacts/make-windows-ocr-smoke.py -Encoding utf8
+          python artifacts/make-windows-ocr-smoke.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $exe artifacts/windows-ocr-smoke.png stdout -l eng --psm 7 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-tesseract-smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $text = Get-Content artifacts/windows-ocr-tesseract-smoke.log -Raw
