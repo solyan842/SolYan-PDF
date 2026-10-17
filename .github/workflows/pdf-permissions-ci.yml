@@ -134,8 +134,8 @@ jobs:
                   '/pdf/protect',
                   files={'file': ('base.pdf', source, 'application/pdf')},
                   data={
-                      'password': 'reader-pass',
-                      'owner_password': 'owner-pass',
+                      'password': '-reader-pass',
+                      'owner_password': '-owner-pass',
                       'print_mode': 'low',
                       'modify_mode': 'form',
                       'allow_extract': 'true',
@@ -144,7 +144,7 @@ jobs:
               assert intermediate.status_code == 200, intermediate.text
               intermediate_path = temp / 'intermediate.pdf'
               intermediate_path.write_bytes(intermediate.content)
-              intermediate_info = encryption_info(intermediate_path, 'reader-pass')
+              intermediate_info = encryption_info(intermediate_path, '-reader-pass')
               assert 'print low resolution: allowed' in intermediate_info, intermediate_info
               assert 'print high resolution: not allowed' in intermediate_info, intermediate_info
               assert 'extract for any purpose: allowed' in intermediate_info, intermediate_info
@@ -154,7 +154,7 @@ jobs:
               assert 'modify other: not allowed' in intermediate_info, intermediate_info
               assert 'modify anything: not allowed' in intermediate_info, intermediate_info
 
-              owner_info = encryption_info(intermediate_path, 'owner-pass')
+              owner_info = encryption_info(intermediate_path, '-owner-pass')
               assert 'Supplied password is owner password' in owner_info, owner_info
 
               bad_print = client.post(
@@ -171,5 +171,5 @@ jobs:
               )
               assert bad_modify.status_code == 422, bad_modify.text
 
-          print('qpdf AES-256 permissions and random-owner behavior ok')
+          print('qpdf AES-256 permissions, leading-dash passwords, and random-owner behavior ok')
           PY
