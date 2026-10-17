@@ -7,6 +7,13 @@
   "cache_layout": "official_models/<model>",
   "source_base_url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0",
   "archive_total_bytes": 1805516800,
+  "digest_evidence": {
+    "probe_branch": "probe/windows-ocr-model-hashes",
+    "probe_commit": "62b32180b548b31814fd8346702ef36eb74c4423",
+    "workflow_run_id": 39060999203,
+    "artifact_name": "windows-ppstructure-model-hash-probe",
+    "artifact_sha256": "62d3317de278e0893720f92abe6b27c2a2b4ab723a04c4b71c120b3bfba23796"
+  },
   "models": [
     {"name":"PP-DocLayout_plus-L","sha256":"80fff9c2fb598ca27380a48e733ac47ba022aaf06706ea9c39273ae63d7940dc","size_bytes":130396160},
     {"name":"PP-DocBlockLayout","sha256":"b31a30c65d289e4a550e46d69edf2d8bbb13263c5331289ab21f9af487205e1f","size_bytes":129935360},
