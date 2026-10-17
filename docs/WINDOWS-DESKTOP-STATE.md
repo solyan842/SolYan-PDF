@@ -70,12 +70,13 @@ That PASS covers the code present at that HEAD, including:
 - `Bảo vệ PDF` → `POST /pdf/protect`; AES-256 with user password, optional owner password, print/modify/extract permissions.
 - `Mở khóa PDF` → `POST /pdf/unlock`; requires legitimate access and never claims to bypass an unknown password.
 
-### Xóa chữ ký — WIRED / EXACT-HEAD GATE IN PROGRESS
+### Xóa chữ ký — PASS
 - Reuses existing `POST /pdf/remove-signatures`; no duplicate desktop API/runtime.
 - Always writes a new `solyan-unsigned.pdf`; source is never overwritten.
 - UX explicitly warns the generated copy loses digital-signature verification state.
 - Desktop reports five backend counters: signature fields, widgets, values, permission entries and DSS entries removed.
 - Central validator locks the route, local-core token, endpoint and all five result headers.
+- Windows Desktop CI run `39034640214` / #97 PASS on exact HEAD `dc25da7ea79871140a036d82174f07eb34f6d879`, including UI/CSP contract, packaged local core, Cargo, NSIS, silent install, installed app launch and core cleanup.
 
 ## PDF sang ảnh parity boundary
 
@@ -85,9 +86,8 @@ That PASS covers the code present at that HEAD, including:
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD containing `Xóa chữ ký` + centralized contract validator; record exact run/commit as PASS.
-2. Continue low-risk existing backend tools before new heavy runtimes; inspect `Quyền hạn PDF`, annotation/signature/form utilities and route only where semantics are already defined.
-3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
-4. D4: package OCR runtime and connect OCR/scan tools.
+1. Continue low-risk existing backend tools before new heavy runtimes; inspect `Quyền hạn PDF`, annotation/signature/form utilities and route only where semantics are already defined.
+2. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
+3. D4: package OCR runtime and connect OCR/scan tools.
 
 Stop only for a genuine user product decision, credentials/permissions, irreversible/destructive choice, or a hard tool boundary.
