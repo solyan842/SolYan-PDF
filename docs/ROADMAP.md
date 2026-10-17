@@ -95,7 +95,7 @@ PDF-to-Office has passed the versioned **V1 release gate**. The permanent policy
 - [x] PDF/A conversion
 - [x] Forms
 - [x] Local batch workflow builder
-- [ ] Cloud-storage connectors — requires provider/credential decision
+- [x] Cloud-storage connectors — Google Drive + OneDrive V1.7 provider-neutral lane implemented; operator OAuth credentials remain optional deployment configuration
 - [ ] AI document summarization — optional, requires model/provider decision
 - [x] PDF translation — Hybrid/local-first provider decision implemented and live-gated for EN -> VI with Argos
 
@@ -191,6 +191,21 @@ V1.5 is complete. Detailed research, boundaries and close-out are in `docs/V1.5-
 
 V1.6 translation is complete and released as v0.1.9 for the validated free/local English -> Vietnamese lane. Cloud providers remain optional operator configuration, not V1.6 release prerequisites. Detailed architecture, licensing/privacy boundaries and live evidence are in `docs/V1.6-PDF-TRANSLATION.md` and `docs/V1.6-CLOSEOUT.md`.
 
+## V1.7 — Cloud Storage Connectors
+
+- [x] Add provider-neutral cloud storage contract without coupling providers to PDF engines
+- [x] Add Google Drive OAuth with PKCE, server-side token storage and least-privilege `drive.file` scope
+- [x] Add OneDrive OAuth with PKCE, Microsoft Graph `Files.ReadWrite` + `offline_access`
+- [x] Add bounded PDF-only browse/download/upload/explicit-replace operations
+- [x] Add Google resumable upload and OneDrive `createUploadSession` support
+- [x] Keep refresh tokens/client secrets out of browser storage and sanitize provider error bodies
+- [x] Add Cloud Storage workspace with provider status, folder navigation, download, upload, replace confirmation and logout
+- [x] Add optional Google Picker token hook without widening the default Drive permission scope
+- [x] Pass deterministic no-real-credential Google Drive + OneDrive contract/frontend CI gate
+- [x] Preserve S3-compatible/WebDAV as later adapters behind the same provider contract
+
+V1.7 Cloud Storage implementation is feature-complete for the Google Drive + OneDrive connector lane on PR #130. The current server-side token vault is intentionally restart-ephemeral for the repository's single-worker backend; multi-replica deployment requires a shared encrypted session store. Real provider OAuth credentials remain operator-owned deployment inputs, not build/CI prerequisites. Detailed architecture and boundaries are in `docs/V1.7-CLOUD-STORAGE.md`.
+
 ## Tiện ích Việt Nam — V1
 
 ### Văn bản
@@ -274,6 +289,7 @@ V1.6 translation is complete and released as v0.1.9 for the validated free/local
 - [x] PDF translation contract/privacy CI gate
 - [x] Live Argos EN -> VI provider-boundary PDF translation gate
 - [x] Full-stack translation service integration gate with isolated runtimes and real bilingual PDF validation
+- [x] Cloud Storage provider contract/privacy/frontend gate with deterministic Google Drive + OneDrive mock OAuth and file-flow validation
 
 ## Release packaging
 
@@ -312,7 +328,7 @@ V1.6 translation is complete and released as v0.1.9 for the validated free/local
 
 - [x] Version the representative PDF → Office V1 release corpus and lock its target-specific fidelity/editability thresholds against the measured auto-routing baselines
 - [ ] Choose whether multi-party remote signing belongs in V1 or a later release
-- [ ] Choose cloud-storage providers and provide credentials if connectors are wanted
+- [x] Choose cloud-storage providers: Google Drive + OneDrive first; operator OAuth app credentials are only required to enable live provider access in deployment
 - [ ] Choose model/provider if AI summarization is wanted
 - [x] Choose translation/model provider for PDF translation: Hybrid/local-first with Argos EN -> VI as the validated free route; cloud providers remain optional operator configuration
 

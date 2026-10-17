@@ -6,14 +6,17 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from .active_content import router as active_content_router
 from .archive_proxy import router as archive_router
 from .attachments import router as attachments_router
 from .bloom_proxy import router as bloom_router
+from .cloud_storage import COOKIE_NAME as CLOUD_STORAGE_COOKIE_NAME
+from .cloud_storage import _VAULT as CLOUD_STORAGE_VAULT
+from .cloud_storage import router as cloud_storage_router
 from .extract_images import router as extract_images_router
 from .network import router as network_router
 from .ocr_proxy import router as ocr_router
@@ -46,7 +49,7 @@ app = FastAPI(title="SolYan PDF API", version="0.1.9")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("SOLYAN_ALLOWED_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
     expose_headers=[
@@ -100,12 +103,38 @@ app.add_middleware(
         "X-SolYan-Translation-Local",
     ],
 )
+
+
+@app.middleware("http")
+async def bind_cloud_oauth_callback_to_session(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/storage/") and path.endswith("/auth/callback"):
+        state = request.query_params.get("state")
+        session_id = request.cookies.get(CLOUD_STORAGE_COOKIE_NAME)
+        if not state or not session_id:
+            return JSONResponse(
+                {"detail": "OAuth callback session is missing or invalid"},
+                status_code=400,
+                headers={"Cache-Control": "no-store"},
+            )
+        with CLOUD_STORAGE_VAULT._lock:
+            attempt = CLOUD_STORAGE_VAULT._states.get(state)
+            if attempt is None or attempt.session_id != session_id:
+                return JSONResponse(
+                    {"detail": "OAuth callback session does not match the initiating browser session"},
+                    status_code=400,
+                    headers={"Cache-Control": "no-store"},
+                )
+    return await call_next(request)
+
+
 app.include_router(network_router)
 app.include_router(ocr_router)
 app.include_router(office_router)
 app.include_router(sign_router)
 app.include_router(archive_router)
 app.include_router(bloom_router)
+app.include_router(cloud_storage_router)
 app.include_router(extract_images_router)
 app.include_router(remove_images_router)
 app.include_router(remove_blank_pages_router)
