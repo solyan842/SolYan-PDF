@@ -57,17 +57,9 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - `Xóa hình ảnh` → `POST /pdf/remove-images`; covered by later exact-head gates.
 - `Làm sạch PDF` → `POST /pdf/sanitize`; run `39032719002` / #75 on `627a3a7d3295bd93a990b1d009dcc080cdd17119` PASS.
 
-### qpdf optimize/security batch — CODE-BEARING BASELINE PASS
+### qpdf optimize/security batch — PASS
 Windows Desktop CI run `39034173163` / #91 on exact code-bearing HEAD `b36c666681a488dc682b2d78358b38b37eb1100e` PASS end-to-end.
-
-Covers:
-- `Tối ưu xem web` → `POST /pdf/web-optimize`.
-- `Giải nén cấu trúc PDF` → `POST /pdf/decompress`.
-- `Nén PDF` → `POST /pdf/compress`.
-- `Flatten PDF` → `POST /pdf/flatten`.
-- `Tối ưu hình ảnh` → `POST /pdf/compress-images`.
-- `Bảo vệ PDF` → `POST /pdf/protect`.
-- `Mở khóa PDF` → `POST /pdf/unlock`.
+Covers `Tối ưu xem web`, `Giải nén cấu trúc PDF`, `Nén PDF`, `Flatten PDF`, `Tối ưu hình ảnh`, `Bảo vệ PDF`, `Mở khóa PDF`.
 
 ### Xóa chữ ký — PASS
 - Reuses `POST /pdf/remove-signatures`.
@@ -78,15 +70,24 @@ Covers:
 - Windows Desktop CI run `39047266679` / #99 PASS on exact HEAD `ace818bc42367c961828f5360785596d60745dcc`.
 
 ### Annotation / form utility batch — PASS
-- `Xóa chú thích` → `POST /pdf/remove-annotations`; default removes comments/markup, optional all non-widget annotations; Widget annotations are preserved.
-- `Mở khóa biểu mẫu` → `POST /pdf/unlock-forms`; clears read-only flags, removes `/Lock`, opens recognized XFA readOnly; does not decrypt or bypass PDF password protection.
-- `catalog-additions.js` extends the catalog without rewriting the large stable catalog file and narrows the Permissions card to inspection-only semantics.
-- Windows Desktop CI run `39047834628` / #100 PASS on exact HEAD `4e79f38f93f58bfdf9341437bda5ea6014f7a958`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+- `Xóa chú thích` → `POST /pdf/remove-annotations`.
+- `Mở khóa biểu mẫu` → `POST /pdf/unlock-forms`.
+- Windows Desktop CI run `39047834628` / #100 PASS on exact HEAD `4e79f38f93f58bfdf9341437bda5ea6014f7a958`.
 
-### Blank-page / Page Labels batch — WIRED / EXACT-HEAD GATE NEXT
-- `Xóa trang trắng` reuses `POST /pdf/remove-blank-pages`; pages with a real text layer are hard-kept, only text-free pages are raster-classified; max 300 pages and aggregate render budgets stay enforced by backend. Reports removed count, page ranges and applied thresholds.
-- `Page Labels` reuses `POST /pdf/page-labels`; UI supports set/remove, up to 20 ordered rules, decimal/Roman/alpha/no-number styles, start values and optional prefixes. Backend verifies physical page count is unchanged and `/PageLabels` state matches the requested operation.
-- Both create new output PDFs and preserve the source.
+### Blank-page / Page Labels batch — PASS
+- `Xóa trang trắng` → `POST /pdf/remove-blank-pages`; text-layer pages are hard-kept, only text-free pages are raster-classified; backend keeps 300-page/render budgets and refuses an empty all-removed result.
+- `Page Labels` → `POST /pdf/page-labels`; set/remove, up to 20 ordered rules, decimal/Roman/alpha/no-number styles, start values and optional prefixes; backend verifies physical page count and `/PageLabels` state.
+- Windows Desktop CI run `39048379715` / #101 PASS on exact HEAD `9b62c14da1e60abcc69e8755aeeb626c3a61abfe`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+
+### Poppler conversion batch — WIRED / EXACT-HEAD GATE NEXT
+Reusable Windows page `poppler-convert.html/js` routes existing backend conversions through the already-bundled Poppler runtime:
+- `PDF sang TXT` → `POST /pdf/to-text`: UTF-8, optional password/page range/layout/page-break handling.
+- `PDF sang HTML` → `POST /pdf/to-html`: single-file HTML, dangerous href schemes blocked, generated HTML receives CSP.
+- `PDF sang XML` → `POST /pdf/to-xml`: validated `pdf2xml`, optional precise coordinates/hidden text.
+- `PDF sang CBZ` → `POST /pdf/to-cbz`: PNG pages, 72–300 DPI, max 1000 selected pages, archive size budget.
+- `PDF sang SVG` → `POST /pdf/to-svg`: per-page SVG through `pdftocairo`; multi-page output ZIP, max 100 selected pages and size budgets.
+- Existing catalog cards `PDF sang PostScript` and `PDF sang EPS` now route to `POST /pdf/to-postscript`; PS supports Level 2/3, EPS is constrained to one selected page.
+- `Markdown` and `CSV` are deliberately deferred to D4 because their existing backends depend on structured OCR. `RTF` is deliberately deferred to D3 because it depends on the Office/LibreOffice service.
 
 ## PDF sang ảnh parity boundary
 
@@ -96,9 +97,9 @@ Covers:
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on exact HEAD containing `Xóa trang trắng + Page Labels`, then record exact run/commit as PASS.
-2. Continue low-risk existing backend tools whose semantics are already defined; do not duplicate backend APIs.
+1. Keep Windows Desktop CI green on exact HEAD containing the Poppler conversion batch, then record exact run/commit as PASS.
+2. Continue remaining no-new-runtime backend tools only when semantics are already defined; do not duplicate APIs.
 3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
-4. D4: package OCR runtime and connect OCR/scan tools.
+4. D4: package OCR runtime and connect OCR/scan plus Markdown/CSV tools.
 
 Stop only for a genuine user product decision, credentials/permissions, irreversible/destructive choice, or a hard tool boundary.
