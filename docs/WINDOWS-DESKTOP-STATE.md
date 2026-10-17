@@ -62,21 +62,32 @@ Windows Desktop CI run `39034173163` / #91 on exact code-bearing HEAD `b36c66668
 
 That PASS covers the code present at that HEAD, including:
 
-- `Tối ưu xem web` → `POST /pdf/web-optimize`; downloads `solyan-web-optimized.pdf`.
-- `Giải nén cấu trúc PDF` → `POST /pdf/decompress`; downloads `solyan-decompressed.pdf` and warns size may grow.
-- `Nén PDF` → `POST /pdf/compress`; structural qpdf compression, no image-downsampling claim.
-- `Flatten PDF` → `POST /pdf/flatten`; warns interaction/editability can be lost.
-- `Tối ưu hình ảnh` → `POST /pdf/compress-images`; uses qpdf image optimization/recompression.
-- `Bảo vệ PDF` → `POST /pdf/protect`; AES-256 with user password, optional owner password, print/modify/extract permissions.
-- `Mở khóa PDF` → `POST /pdf/unlock`; requires legitimate access and never claims to bypass an unknown password.
+- `Tối ưu xem web` → `POST /pdf/web-optimize`.
+- `Giải nén cấu trúc PDF` → `POST /pdf/decompress`.
+- `Nén PDF` → `POST /pdf/compress`.
+- `Flatten PDF` → `POST /pdf/flatten`.
+- `Tối ưu hình ảnh` → `POST /pdf/compress-images`.
+- `Bảo vệ PDF` → `POST /pdf/protect`.
+- `Mở khóa PDF` → `POST /pdf/unlock`.
 
 ### Xóa chữ ký — PASS
 - Reuses existing `POST /pdf/remove-signatures`; no duplicate desktop API/runtime.
 - Always writes a new `solyan-unsigned.pdf`; source is never overwritten.
 - UX explicitly warns the generated copy loses digital-signature verification state.
 - Desktop reports five backend counters: signature fields, widgets, values, permission entries and DSS entries removed.
-- Central validator locks the route, local-core token, endpoint and all five result headers.
-- Windows Desktop CI run `39034640214` / #97 PASS on exact HEAD `dc25da7ea79871140a036d82174f07eb34f6d879`, including UI/CSP contract, packaged local core, Cargo, NSIS, silent install, installed app launch and core cleanup.
+- Windows Desktop CI run `39034640214` / #97 PASS on exact HEAD `dc25da7ea79871140a036d82174f07eb34f6d879`.
+
+### Quyền hạn PDF — PASS
+- Reuses existing `POST /pdf/info`; no duplicate permission endpoint.
+- Read-only inspection of `encryption.encrypted`, qpdf permission map and encryption details.
+- Optional legitimate PDF password; does not change the source and does not claim password bypass.
+- Windows Desktop CI run `39047266679` / #99 PASS on exact HEAD `ace818bc42367c961828f5360785596d60745dcc`, including UI/CSP, packaged core, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+
+### Annotation / form utility batch — WIRED / EXACT-HEAD GATE NEXT
+- `Xóa chú thích` reuses `POST /pdf/remove-annotations`; default removes comments/markup, optional `remove_all_non_widget=true`; Widget annotations are preserved. Reports comments removed, other annotations removed and widgets preserved.
+- `Mở khóa biểu mẫu` reuses `POST /pdf/unlock-forms`; clears read-only field flags, removes `/Lock`, opens recognized XFA `access="readOnly"`, and never claims to decrypt or bypass PDF password protection. Reports fields visited, readonly flags cleared, locks removed, XFA streams modified and XFA attributes opened.
+- Both always save to new output PDFs and preserve the source.
+- `catalog-additions.js` extends the existing catalog without rewriting the large stable catalog file; it also narrows the `Quyền hạn PDF` description to inspection-only semantics.
 
 ## PDF sang ảnh parity boundary
 
@@ -86,8 +97,9 @@ That PASS covers the code present at that HEAD, including:
 
 ## Next work — continue automatically
 
-1. Continue low-risk existing backend tools before new heavy runtimes; inspect `Quyền hạn PDF`, annotation/signature/form utilities and route only where semantics are already defined.
-2. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
-3. D4: package OCR runtime and connect OCR/scan tools.
+1. Keep Windows Desktop CI green on the exact HEAD containing `Xóa chú thích` + `Mở khóa biểu mẫu`, then record the exact run/commit as PASS.
+2. Continue low-risk existing backend tools whose semantics are already defined; do not duplicate backend APIs.
+3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office 27-case / 68-page quality gate.
+4. D4: package OCR runtime and connect OCR/scan tools.
 
 Stop only for a genuine user product decision, credentials/permissions, irreversible/destructive choice, or a hard tool boundary.
