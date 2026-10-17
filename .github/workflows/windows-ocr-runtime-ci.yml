@@ -6,6 +6,7 @@ on:
       - "desktop/backend/ocr_runner.py"
       - "desktop/backend/requirements-ocr-windows.txt"
       - "desktop/backend/stage-ocr-runtime.ps1"
+      - "desktop/backend/stage-ocr-models.ps1"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
   push:
@@ -15,6 +16,7 @@ on:
       - "desktop/backend/ocr_runner.py"
       - "desktop/backend/requirements-ocr-windows.txt"
       - "desktop/backend/stage-ocr-runtime.ps1"
+      - "desktop/backend/stage-ocr-models.ps1"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
 
@@ -69,6 +71,22 @@ jobs:
             Select-Object FullName, Length | Format-Table | Out-String |
             Set-Content artifacts/windows-ocr-native-inventory.log
 
+      - name: Stage pinned Paddle text OCR models
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & ./desktop/backend/stage-ocr-models.ps1 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-model-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $cache = (Resolve-Path desktop/src-tauri/resources/ocr/paddlex-cache).Path
+          $manifest = Join-Path $cache "solyan-model-inventory.json"
+          if (-not (Test-Path $manifest)) { throw "Paddle model inventory was not staged" }
+          Copy-Item $manifest artifacts/windows-ocr-model-inventory.json
+          Get-ChildItem (Join-Path $cache "official_models") -Directory |
+            ForEach-Object {
+              $bytes = (Get-ChildItem $_.FullName -File -Recurse | Measure-Object Length -Sum).Sum
+              [pscustomobject]@{ Model = $_.Name; Files = @(Get-ChildItem $_.FullName -File -Recurse).Count; Bytes = $bytes }
+            } | Format-Table | Out-String | Set-Content artifacts/windows-ocr-model-cache.log
+
       - name: Smoke pinned Tesseract executable
         shell: pwsh
         run: |
@@ -79,19 +97,21 @@ jobs:
           $smokeScript = @'
           from pathlib import Path
           from PIL import Image, ImageDraw, ImageFont
-          image = Image.new("RGB", (1200, 240), "white")
+          image = Image.new("RGB", (1600, 360), "white")
           draw = ImageDraw.Draw(image)
-          font = ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", 72)
-          draw.text((40, 70), "SolYan PDF 2026", fill="black", font=font)
+          font = ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", 88)
+          draw.text((50, 55), "SOLYAN PDF 2026", fill="black", font=font)
+          small = ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", 56)
+          draw.text((50, 190), "Tieng Viet - van ban mau", fill="black", font=small)
           image.save(Path("artifacts") / "windows-ocr-smoke.png")
           '@
           $smokeScript | Set-Content artifacts/make-windows-ocr-smoke.py -Encoding utf8
           python artifacts/make-windows-ocr-smoke.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $exe artifacts/windows-ocr-smoke.png stdout -l eng --psm 7 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-tesseract-smoke.log
+          & $exe artifacts/windows-ocr-smoke.png stdout -l eng --psm 6 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-tesseract-smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $text = Get-Content artifacts/windows-ocr-tesseract-smoke.log -Raw
-          if ($text -notmatch "SolYan") { throw "Tesseract smoke output did not contain SolYan: $text" }
+          if ($text -notmatch "SOLYAN") { throw "Tesseract smoke output did not contain SOLYAN: $text" }
 
       - name: Build Windows OCR sidecar
         shell: pwsh
@@ -102,15 +122,26 @@ jobs:
           if (-not (Test-Path dist/solyan-ocr.exe)) { throw "solyan-ocr.exe was not produced" }
           Get-Item dist/solyan-ocr.exe | Select-Object Name, Length, FullName | Format-List | Out-String | Set-Content artifacts/windows-ocr-sidecar-inventory.log
 
-      - name: Smoke OCR sidecar health with lazy models
+      - name: Smoke OCR sidecar health and offline Paddle text OCR
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $root = (Resolve-Path desktop/src-tauri/resources/ocr/tesseract).Path
-          $env:SOLYAN_TESSERACT_BINARY = Join-Path $root "tesseract.exe"
-          $env:TESSDATA_PREFIX = Join-Path $root "tessdata"
+          $tesseractRoot = (Resolve-Path desktop/src-tauri/resources/ocr/tesseract).Path
+          $cacheRoot = (Resolve-Path desktop/src-tauri/resources/ocr/paddlex-cache).Path
+          $env:SOLYAN_TESSERACT_BINARY = Join-Path $tesseractRoot "tesseract.exe"
+          $env:TESSDATA_PREFIX = Join-Path $tesseractRoot "tessdata"
           $env:TESSERACT_LANG = "vie+eng"
+          $env:OCR_LANG = "vi"
+          $env:PADDLE_PDX_CACHE_HOME = $cacheRoot
           $env:PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK = "True"
+          $env:HTTP_PROXY = "http://127.0.0.1:9"
+          $env:HTTPS_PROXY = "http://127.0.0.1:9"
+          $env:ALL_PROXY = "http://127.0.0.1:9"
+          $env:http_proxy = "http://127.0.0.1:9"
+          $env:https_proxy = "http://127.0.0.1:9"
+          $env:all_proxy = "http://127.0.0.1:9"
+          $env:NO_PROXY = "127.0.0.1,localhost"
+          $env:no_proxy = "127.0.0.1,localhost"
           $port = 38191
           $stdout = Join-Path $PWD "artifacts/windows-ocr-sidecar.stdout.log"
           $stderr = Join-Path $PWD "artifacts/windows-ocr-sidecar.stderr.log"
@@ -129,7 +160,39 @@ jobs:
             if ($health.models_loaded.ocr -or $health.models_loaded.structure) { throw "OCR health unexpectedly loaded Paddle models" }
             if (-not $health.fallback.binary_available) { throw "OCR sidecar could not resolve staged Tesseract" }
             if ($health.fallback.language -ne "vie+eng") { throw "Unexpected Tesseract language contract" }
-            $health | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health.json -Encoding utf8
+            $health | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health-before.json -Encoding utf8
+
+            $paddleSmoke = @'
+            import json
+            from pathlib import Path
+            import httpx
+
+            image = Path("artifacts/windows-ocr-smoke.png")
+            with image.open("rb") as handle, httpx.Client(timeout=900.0, trust_env=False) as client:
+                response = client.post(
+                    "http://127.0.0.1:38191/ocr/text",
+                    files={"file": (image.name, handle, "image/png")},
+                )
+            response.raise_for_status()
+            payload = response.json()
+            Path("artifacts/windows-ocr-paddle-smoke.json").write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            assert payload.get("engine") == "PaddleOCR", payload
+            assert payload.get("fallback_used") is False, payload
+            text = str(payload.get("text") or "")
+            assert "SOLYAN" in text.upper(), text
+            print(text)
+            '@
+            $paddleSmoke | Set-Content artifacts/run-windows-ocr-paddle-smoke.py -Encoding utf8
+            python artifacts/run-windows-ocr-paddle-smoke.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-paddle-smoke.log
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            $after = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 5
+            if (-not $after.models_loaded.ocr) { throw "Paddle OCR model did not stay loaded after OCR request" }
+            if ($after.models_loaded.structure) { throw "Structured OCR model loaded during text-only smoke" }
+            $after | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health-after.json -Encoding utf8
           } finally {
             if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
           }
