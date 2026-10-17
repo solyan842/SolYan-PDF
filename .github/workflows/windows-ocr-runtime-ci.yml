@@ -7,6 +7,7 @@ on:
       - "desktop/backend/requirements-ocr-windows.txt"
       - "desktop/backend/stage-ocr-runtime.ps1"
       - "desktop/backend/stage-ocr-models.ps1"
+      - "desktop/backend/smoke-ocr-offline.py"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
   push:
@@ -17,6 +18,7 @@ on:
       - "desktop/backend/requirements-ocr-windows.txt"
       - "desktop/backend/stage-ocr-runtime.ps1"
       - "desktop/backend/stage-ocr-models.ps1"
+      - "desktop/backend/smoke-ocr-offline.py"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
 
@@ -162,31 +164,7 @@ jobs:
             if ($health.fallback.language -ne "vie+eng") { throw "Unexpected Tesseract language contract" }
             $health | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health-before.json -Encoding utf8
 
-            $paddleSmoke = @'
-          import json
-          from pathlib import Path
-          import httpx
-
-          image = Path("artifacts/windows-ocr-smoke.png")
-          with image.open("rb") as handle, httpx.Client(timeout=900.0, trust_env=False) as client:
-              response = client.post(
-                  "http://127.0.0.1:38191/ocr/text",
-                  files={"file": (image.name, handle, "image/png")},
-              )
-          response.raise_for_status()
-          payload = response.json()
-          Path("artifacts/windows-ocr-paddle-smoke.json").write_text(
-              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-              encoding="utf-8",
-          )
-          assert payload.get("engine") == "PaddleOCR", payload
-          assert payload.get("fallback_used") is False, payload
-          text = str(payload.get("text") or "")
-          assert "SOLYAN" in text.upper(), text
-          print(text)
-          '@
-            $paddleSmoke | Set-Content artifacts/run-windows-ocr-paddle-smoke.py -Encoding utf8
-            python artifacts/run-windows-ocr-paddle-smoke.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-paddle-smoke.log
+            python desktop/backend/smoke-ocr-offline.py --url "http://127.0.0.1:$port/ocr/text" --image artifacts/windows-ocr-smoke.png --output artifacts/windows-ocr-paddle-smoke.json 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-paddle-smoke.log
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
             $after = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 5
