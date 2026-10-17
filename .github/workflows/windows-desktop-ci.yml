@@ -80,6 +80,29 @@ jobs:
           }
           "Desktop UI contract and CSP hygiene OK" | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
 
+      - name: Stage pinned browser-local PDF engine
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Remove-Item desktop/ui/vendor -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item desktop/ui/.vendor-build -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force desktop/ui/vendor | Out-Null
+          New-Item -ItemType Directory -Force desktop/ui/.vendor-build | Out-Null
+          Push-Location desktop/ui/.vendor-build
+          try {
+            $archive = (npm pack pdf-lib@1.17.1 --silent).Trim()
+            if (-not $archive) { throw "npm pack did not return a pdf-lib archive" }
+            tar -xzf $archive
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Copy-Item package/dist/pdf-lib.min.js ../vendor/pdf-lib.min.js
+          } finally {
+            Pop-Location
+          }
+          Remove-Item desktop/ui/.vendor-build -Recurse -Force
+          if (-not (Test-Path desktop/ui/vendor/pdf-lib.min.js)) { throw "pdf-lib browser bundle was not staged" }
+          $bundleHash = (Get-FileHash desktop/ui/vendor/pdf-lib.min.js -Algorithm SHA256).Hash.ToLowerInvariant()
+          "pdf-lib 1.17.1 $bundleHash" | Tee-Object -FilePath artifacts/desktop-pdf-lib.log
+
       - name: Build local core resources
         shell: pwsh
         run: |
