@@ -6,6 +6,7 @@ on:
       - 'backend/app/cloud_storage.py'
       - 'backend/app/main.py'
       - 'scripts/cloud_storage_contract_smoke.py'
+      - 'scripts/cloud_storage_session_binding_smoke.py'
       - 'frontend/app/cloud-storage/**'
       - 'frontend/app/page.tsx'
       - '.env.example'
@@ -19,6 +20,7 @@ on:
       - 'backend/app/cloud_storage.py'
       - 'backend/app/main.py'
       - 'scripts/cloud_storage_contract_smoke.py'
+      - 'scripts/cloud_storage_session_binding_smoke.py'
       - 'frontend/app/cloud-storage/**'
       - 'frontend/app/page.tsx'
       - '.env.example'
@@ -47,10 +49,13 @@ jobs:
           python -m pip install --no-deps -r backend/requirements.txt
           python -m pip check
 
-      - name: Compile cloud storage backend and contract gate
+      - name: Compile cloud storage backend and contract gates
         run: |
           set -euo pipefail
-          python -m compileall backend/app/cloud_storage.py scripts/cloud_storage_contract_smoke.py
+          python -m compileall \
+            backend/app/cloud_storage.py \
+            scripts/cloud_storage_contract_smoke.py \
+            scripts/cloud_storage_session_binding_smoke.py
 
       - name: Run deterministic mock-provider contract gate
         env:
@@ -60,6 +65,13 @@ jobs:
           mkdir -p /tmp/solyan-cloud-storage
           python scripts/cloud_storage_contract_smoke.py 2>&1 | tee /tmp/solyan-cloud-storage/contract.log
 
+      - name: Run OAuth callback session-binding regression
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python scripts/cloud_storage_session_binding_smoke.py 2>&1 | tee -a /tmp/solyan-cloud-storage/contract.log
+
       - name: Gate product wiring and credential boundary
         run: |
           set -euo pipefail
@@ -67,6 +79,8 @@ jobs:
           grep -q 'from .cloud_storage import router as cloud_storage_router' backend/app/main.py
           grep -q 'app.include_router(cloud_storage_router)' backend/app/main.py
           grep -q 'allow_credentials=True' backend/app/main.py
+          grep -q 'bind_cloud_oauth_callback_to_session' backend/app/main.py
+          grep -q 'CLOUD_STORAGE_VAULT._states.get(state)' backend/app/main.py
           grep -q 'https://www.googleapis.com/auth/drive.file' backend/app/cloud_storage.py
           grep -q 'Files.ReadWrite' backend/app/cloud_storage.py
           grep -q 'offline_access' backend/app/cloud_storage.py
