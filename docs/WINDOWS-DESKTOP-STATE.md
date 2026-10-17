@@ -33,7 +33,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - System light/dark styling baseline.
 - `Nối PDF` is functional and processed browser-local with pinned `pdf-lib 1.17.1`; picker, drag/drop, ordering and local result download are implemented.
 - Document workspace shell with page thumbnails, canvas, contextual toolbar and right-side inspector.
-- Real desktop tool routes now include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, `Tệp đính kèm`, `Xóa hình ảnh`, `Làm sạch PDF`, `Tối ưu xem web`, and `Giải nén cấu trúc PDF`.
+- Real desktop tool routes now include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, `Tệp đính kèm`, `Xóa hình ảnh`, `Làm sạch PDF`, `Tối ưu xem web`, `Giải nén cấu trúc PDF`, `Nén PDF`, `Flatten PDF`, and `Tối ưu hình ảnh`.
 
 ### D1B — Tauri / installer gate — PASS
 
@@ -116,10 +116,24 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - Desktop makes the technical purpose explicit and warns that output size may grow substantially.
 - Source PDF is never overwritten; result downloads as `solyan-decompressed.pdf`.
 
+### Nén PDF / Flatten PDF / Tối ưu hình ảnh — WIRED / EXACT-HEAD GATE IN PROGRESS
+- Reuse existing `POST /pdf/compress`, `POST /pdf/flatten`, and `POST /pdf/compress-images` endpoints.
+- Share `desktop/ui/transform.html` + `transform.js` rather than duplicating three nearly identical desktop surfaces.
+- `Nén PDF` is structural qpdf compression and explicitly does not claim image downsampling.
+- `Flatten PDF` warns that interactive/editable annotation or form behavior can be lost in the generated copy.
+- `Tối ưu hình ảnh` uses qpdf image optimization/recompression and states that reduction depends on embedded codecs.
+- All three always download a new PDF and never overwrite the source.
+
+## PDF sang ảnh parity boundary
+
+- V1.5 web behavior is intentionally browser-local using PDF.js + Canvas + JSZip, with DPI/page/color/annotation/single-vs-multiple semantics.
+- Do not silently replace that behavior with a different Poppler-only desktop contract merely because Poppler is already bundled.
+- Reuse/package the web contract or document an explicit parity decision before changing semantics.
+
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD for `Tối ưu xem web` + `Giải nén cấu trúc PDF` and record the exact run/commit as PASS.
-2. Continue low-risk existing-engine tools. Best next candidate: `PDF sang ảnh` using the already bundled Poppler/runtime and existing backend contract if reusable without API fork.
+1. Keep Windows Desktop CI green on the final exact HEAD for `Tối ưu xem web`, `Giải nén cấu trúc PDF`, `Nén PDF`, `Flatten PDF`, and `Tối ưu hình ảnh`; then record the exact run/commit as PASS.
+2. Continue low-risk existing qpdf security tools next: `Bảo vệ PDF` and `Mở khóa PDF`, preserving current permissions/password backend semantics.
 3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
 4. D4: package OCR runtime and connect OCR/scan tools.
 
