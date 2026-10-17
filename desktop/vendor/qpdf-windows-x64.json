@@ -1,0 +1,10 @@
+{
+  "name": "qpdf",
+  "version": "12.4.2",
+  "platform": "windows-x64",
+  "source": "official-qpdf-github-release",
+  "asset": "qpdf-12.4.2-msvc64.zip",
+  "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-msvc64.zip",
+  "sha256": "db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d",
+  "notes": "Pinned official MSVC 64-bit upstream binary. Download during Windows packaging; do not commit third-party binary blobs to the repository."
+}
