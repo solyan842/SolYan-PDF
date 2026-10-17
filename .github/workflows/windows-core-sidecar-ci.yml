@@ -98,8 +98,11 @@ jobs:
             try { Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -TimeoutSec 2 | Out-Null } catch { if ($_.Exception.Response.StatusCode.value__ -eq 401) { $unauthorized = $true } }
             if (-not $unauthorized) { throw "Desktop sidecar accepted a request without the per-launch token" }
 
-            & (Join-Path $qpdfDir "qpdf.exe") --empty smoke-input.pdf
-            if ($LASTEXITCODE -ne 0) { throw "qpdf could not create smoke input" }
+            python desktop/backend/make_smoke_pdf.py
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path smoke-input.pdf)) { throw "Could not create one-page smoke input" }
+            & (Join-Path $qpdfDir "qpdf.exe") --check smoke-input.pdf 2>&1 | Tee-Object -FilePath artifacts/qpdf-input-smoke.log
+            if ($LASTEXITCODE -notin @(0,3)) { exit $LASTEXITCODE }
+
             $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/pdf/repair" -Method Post -Headers @{"X-SolYan-Desktop-Token"=$token} -Form @{file=Get-Item smoke-input.pdf} -OutFile smoke-output.pdf -PassThru
             if ($response.StatusCode -ne 200 -or -not (Test-Path smoke-output.pdf)) { throw "qpdf-backed repair smoke failed" }
             & (Join-Path $qpdfDir "qpdf.exe") --check smoke-output.pdf 2>&1 | Tee-Object -FilePath artifacts/qpdf-repair-smoke.log
