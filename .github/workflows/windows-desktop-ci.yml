@@ -61,6 +61,8 @@ jobs:
             "desktop/ui/app.js",
             "desktop/ui/merge.html",
             "desktop/ui/merge.js",
+            "desktop/ui/repair.html",
+            "desktop/ui/repair.js",
             "desktop/ui/workspace.html",
             "desktop/src-tauri/tauri.conf.json"
           )
@@ -69,13 +71,21 @@ jobs:
           }
           $html = Get-Content "desktop/ui/index.html" -Raw
           $catalog = Get-Content "desktop/ui/catalog.js" -Raw
+          $app = Get-Content "desktop/ui/app.js" -Raw
+          $repair = Get-Content "desktop/ui/repair.js" -Raw
           foreach ($text in @("Công cụ phổ biến", "Tất cả công cụ", "Ctrl K")) {
             if (-not $html.Contains($text)) { throw "Desktop UI contract missing: $text" }
           }
-          foreach ($text in @("Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam")) {
+          foreach ($text in @("Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam", "Sửa lỗi PDF")) {
             if (-not $catalog.Contains($text)) { throw "Desktop catalog missing: $text" }
           }
-          foreach ($page in @("desktop/ui/index.html", "desktop/ui/merge.html", "desktop/ui/workspace.html")) {
+          foreach ($text in @("repair: './repair.html'")) {
+            if (-not $app.Contains($text)) { throw "Desktop route contract missing: $text" }
+          }
+          foreach ($text in @("desktop_core_session", "/pdf/repair", "X-SolYan-Desktop-Token")) {
+            if (-not $repair.Contains($text)) { throw "Repair PDF local-core contract missing: $text" }
+          }
+          foreach ($page in @("desktop/ui/index.html", "desktop/ui/merge.html", "desktop/ui/repair.html", "desktop/ui/workspace.html")) {
             if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" }
           }
           "Desktop UI contract and CSP hygiene OK" | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
