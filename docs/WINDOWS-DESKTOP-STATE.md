@@ -33,7 +33,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - System light/dark styling baseline.
 - `Nối PDF` is functional and processed browser-local with pinned `pdf-lib 1.17.1`; picker, drag/drop, ordering and local result download are implemented.
 - Document workspace shell with page thumbnails, canvas, contextual toolbar and right-side inspector.
-- Real tool routes currently include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, `Tệp đính kèm`, and `Xóa hình ảnh`.
+- Real desktop tool routes now include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, `Tệp đính kèm`, `Xóa hình ảnh`, `Làm sạch PDF`, `Tối ưu xem web`, and `Giải nén cấu trúc PDF`.
 
 ### D1B — Tauri / installer gate — PASS
 
@@ -89,18 +89,37 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - Backend limits remain authoritative: PDF 100 MB, at most 20 attachments per add, 25 MB each, 50 MB combined, extracted payload bounded to 100 MB.
 - Exact Windows Desktop CI baseline: `39031676738` / #66 on `a0027f239ac16504d0b26590b1d3e4a12a68b8e2` PASS, including route + four endpoint contract, strict CSP, Cargo, NSIS, silent install, installed app launch and core cleanup.
 
-### Xóa hình ảnh — WIRED / EXACT-HEAD GATE IN PROGRESS
+### Xóa hình ảnh — PASS
 - Reuses existing `POST /pdf/remove-images`; no duplicate desktop endpoint or new runtime dependency.
 - qpdf JSON removes reachable Image XObject references from page/Form resources while preserving text/vector structure supported by the existing engine.
 - Backend validates output using `qpdf --check` and returns `X-SolYan-Images-Removed` with the number of Image XObjects removed.
 - Desktop always downloads `solyan-images-removed.pdf` as a new file; source PDF is never overwritten.
 - UX explicitly warns that visual layout may change when images are important page content.
-- Windows Desktop CI contract requires the page, route, token header, endpoint, result-count header and strict-CSP hygiene.
+- The route and installed runtime are covered by later exact-head Windows Desktop gates, including #75 below.
+
+### Làm sạch PDF — PASS
+- Reuses existing `POST /pdf/sanitize`; no duplicate desktop endpoint.
+- User can independently remove actions/active content, links, metadata, and embedded files.
+- Desktop presents removal counts from `X-SolYan-Sanitize-*` response headers and always creates a new PDF.
+- UX explicitly states structural sanitization is not antivirus and does not prove a file is completely safe.
+- Exact Windows Desktop CI baseline: run `39032719002` / #75 on `627a3a7d3295bd93a990b1d009dcc080cdd17119` PASS.
+
+### Tối ưu xem web — WIRED / EXACT-HEAD GATE IN PROGRESS
+- Reuses existing `POST /pdf/web-optimize` (`qpdf --linearize`).
+- No duplicate backend/API and no extra runtime dependency.
+- Desktop explains that linearization improves byte-range/page-first loading and is not image compression.
+- Source PDF is never overwritten; result downloads as `solyan-web-optimized.pdf`.
+
+### Giải nén cấu trúc PDF — WIRED / EXACT-HEAD GATE IN PROGRESS
+- Reuses existing `POST /pdf/decompress` (`--stream-data=uncompress`, `--object-streams=disable`).
+- No duplicate backend/API and no extra runtime dependency.
+- Desktop makes the technical purpose explicit and warns that output size may grow substantially.
+- Source PDF is never overwritten; result downloads as `solyan-decompressed.pdf`.
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD for `Xóa hình ảnh` and record its exact run/commit as PASS.
-2. Continue low-risk qpdf/Poppler-backed tools before adding heavy runtimes. Good next candidates: sanitization/security, linearize/decompress, and PDF-to-image where existing APIs are reusable.
+1. Keep Windows Desktop CI green on the final exact HEAD for `Tối ưu xem web` + `Giải nén cấu trúc PDF` and record the exact run/commit as PASS.
+2. Continue low-risk existing-engine tools. Best next candidate: `PDF sang ảnh` using the already bundled Poppler/runtime and existing backend contract if reusable without API fork.
 3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
 4. D4: package OCR runtime and connect OCR/scan tools.
 
