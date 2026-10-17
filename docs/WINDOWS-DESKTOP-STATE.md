@@ -33,7 +33,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - System light/dark styling baseline.
 - `Nối PDF` is functional and processed browser-local with pinned `pdf-lib 1.17.1`; picker, drag/drop, ordering and local result download are implemented.
 - Document workspace shell with page thumbnails, canvas, contextual toolbar and right-side inspector.
-- Real tool routes currently include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, and `Tệp đính kèm`.
+- Real tool routes currently include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, `Tệp đính kèm`, and `Xóa hình ảnh`.
 
 ### D1B — Tauri / installer gate — PASS
 
@@ -81,18 +81,26 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - Product language stays explicit: findings do not prove malware; this is structural inspection, not antivirus.
 - Exact Windows Desktop CI baseline: `39031147389` / #60 on `2bf8cf314deea8b07bf9bed964767fa25a25aec4` PASS, including UI/CSP contract, Cargo, NSIS, silent install, installed app launch and core cleanup.
 
-### Tệp đính kèm — WIRED / EXACT-HEAD GATE IN PROGRESS
-- Reuses all existing qpdf endpoints: `POST /pdf/attachments/list`, `/add`, `/extract`, `/remove`.
+### Tệp đính kèm — PASS
+- Reuses existing qpdf endpoints: `POST /pdf/attachments/list`, `/add`, `/extract`, `/remove`.
 - No duplicate engine/API and no new runtime dependency.
 - UI can list embedded files, extract one attachment, add multiple bounded attachments, or remove one attachment into a newly generated PDF.
 - Add/remove never overwrite the source PDF; result is downloaded as a new file.
 - Backend limits remain authoritative: PDF 100 MB, at most 20 attachments per add, 25 MB each, 50 MB combined, extracted payload bounded to 100 MB.
-- Windows Desktop CI contract requires all four endpoints, token header, route, page and strict-CSP hygiene.
+- Exact Windows Desktop CI baseline: `39031676738` / #66 on `a0027f239ac16504d0b26590b1d3e4a12a68b8e2` PASS, including route + four endpoint contract, strict CSP, Cargo, NSIS, silent install, installed app launch and core cleanup.
+
+### Xóa hình ảnh — WIRED / EXACT-HEAD GATE IN PROGRESS
+- Reuses existing `POST /pdf/remove-images`; no duplicate desktop endpoint or new runtime dependency.
+- qpdf JSON removes reachable Image XObject references from page/Form resources while preserving text/vector structure supported by the existing engine.
+- Backend validates output using `qpdf --check` and returns `X-SolYan-Images-Removed` with the number of Image XObjects removed.
+- Desktop always downloads `solyan-images-removed.pdf` as a new file; source PDF is never overwritten.
+- UX explicitly warns that visual layout may change when images are important page content.
+- Windows Desktop CI contract requires the page, route, token header, endpoint, result-count header and strict-CSP hygiene.
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD for `Tệp đính kèm` and record its exact run/commit as PASS.
-2. Continue low-risk qpdf/Poppler-backed tools before adding heavy runtimes. Good next candidates: remove images, sanitization/security, linearize/decompress, and PDF-to-image where existing APIs are reusable.
+1. Keep Windows Desktop CI green on the final exact HEAD for `Xóa hình ảnh` and record its exact run/commit as PASS.
+2. Continue low-risk qpdf/Poppler-backed tools before adding heavy runtimes. Good next candidates: sanitization/security, linearize/decompress, and PDF-to-image where existing APIs are reusable.
 3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
 4. D4: package OCR runtime and connect OCR/scan tools.
 
