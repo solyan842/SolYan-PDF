@@ -1,0 +1,117 @@
+name: Cloud Storage CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/cloud_storage.py'
+      - 'backend/app/main.py'
+      - 'scripts/cloud_storage_contract_smoke.py'
+      - 'frontend/app/cloud-storage/**'
+      - 'frontend/app/page.tsx'
+      - '.env.example'
+      - 'docs/V1.7-CLOUD-STORAGE.md'
+      - 'docs/ROADMAP.md'
+      - '.github/workflows/cloud-storage-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/cloud_storage.py'
+      - 'backend/app/main.py'
+      - 'scripts/cloud_storage_contract_smoke.py'
+      - 'frontend/app/cloud-storage/**'
+      - 'frontend/app/page.tsx'
+      - '.env.example'
+      - 'docs/V1.7-CLOUD-STORAGE.md'
+      - 'docs/ROADMAP.md'
+      - '.github/workflows/cloud-storage-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  cloud-storage-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.16'
+
+      - name: Install hash-verified backend dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r backend/requirements.hashed.lock
+          python -m pip install --no-deps -r backend/requirements.txt
+          python -m pip check
+
+      - name: Compile cloud storage backend and contract gate
+        run: |
+          set -euo pipefail
+          python -m compileall backend/app/cloud_storage.py scripts/cloud_storage_contract_smoke.py
+
+      - name: Run deterministic mock-provider contract gate
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-cloud-storage
+          python scripts/cloud_storage_contract_smoke.py 2>&1 | tee /tmp/solyan-cloud-storage/contract.log
+
+      - name: Gate product wiring and credential boundary
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/solyan-cloud-storage
+          grep -q 'from .cloud_storage import router as cloud_storage_router' backend/app/main.py
+          grep -q 'app.include_router(cloud_storage_router)' backend/app/main.py
+          grep -q 'allow_credentials=True' backend/app/main.py
+          grep -q 'https://www.googleapis.com/auth/drive.file' backend/app/cloud_storage.py
+          grep -q 'Files.ReadWrite' backend/app/cloud_storage.py
+          grep -q 'offline_access' backend/app/cloud_storage.py
+          grep -q 'createUploadSession' backend/app/cloud_storage.py
+          grep -q 'httponly=True' backend/app/cloud_storage.py
+          grep -q 'Cache-Control' backend/app/cloud_storage.py
+          grep -q "credentials: 'include'" frontend/app/cloud-storage/page.tsx
+          grep -q 'GOOGLE_DRIVE_CLIENT_SECRET=' .env.example
+          grep -q 'ONEDRIVE_CLIENT_SECRET=' .env.example
+          grep -q 'server-memory-ephemeral' backend/app/cloud_storage.py
+          grep -q 'Live OAuth with real Google/Microsoft accounts is a deployment diagnostic' docs/V1.7-CLOUD-STORAGE.md
+          if grep -Eiq '(GOOGLE_DRIVE_CLIENT_SECRET|ONEDRIVE_CLIENT_SECRET|refresh_token).*(localStorage|sessionStorage)' frontend/app/cloud-storage/page.tsx; then
+            echo 'Browser cloud UI appears to persist a provider secret/token' >&2
+            exit 1
+          fi
+          echo 'Cloud storage route/UI/OAuth/credential boundary: PASS' | tee -a /tmp/solyan-cloud-storage/contract.log
+
+      - name: Upload cloud storage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-storage-evidence
+          path: /tmp/solyan-cloud-storage/contract.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  cloud-storage-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.10.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
