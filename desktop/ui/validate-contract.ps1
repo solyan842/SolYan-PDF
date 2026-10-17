@@ -31,6 +31,8 @@ $required = @(
   "desktop/ui/security-transform.js",
   "desktop/ui/remove-signature.html",
   "desktop/ui/remove-signature.js",
+  "desktop/ui/permissions.html",
+  "desktop/ui/permissions.js",
   "desktop/ui/workspace.html",
   "desktop/backend/stage-native-runtimes.ps1",
   "desktop/vendor/qpdf-windows-x64.json",
@@ -56,6 +58,7 @@ $decompress = Get-Content "desktop/ui/decompress.js" -Raw
 $transform = Get-Content "desktop/ui/transform.js" -Raw
 $securityTransform = Get-Content "desktop/ui/security-transform.js" -Raw
 $removeSignature = Get-Content "desktop/ui/remove-signature.js" -Raw
+$permissions = Get-Content "desktop/ui/permissions.js" -Raw
 
 foreach ($text in @("Công cụ phổ biến", "Tất cả công cụ", "Ctrl K")) {
   if (-not $html.Contains($text)) { throw "Desktop UI contract missing: $text" }
@@ -64,7 +67,7 @@ foreach ($text in @(
   "Nối PDF", "PDF sang Word", "OCR PDF", "Tiện ích Việt Nam", "Sửa lỗi PDF",
   "Trích xuất hình ảnh", "Thông tin PDF", "Kiểm tra nội dung chủ động", "Tệp đính kèm",
   "Xóa hình ảnh", "Làm sạch PDF", "Tối ưu xem web", "Giải nén cấu trúc PDF",
-  "Nén PDF", "Flatten PDF", "Tối ưu hình ảnh", "Bảo vệ PDF", "Mở khóa PDF", "Xóa chữ ký"
+  "Nén PDF", "Flatten PDF", "Tối ưu hình ảnh", "Bảo vệ PDF", "Mở khóa PDF", "Xóa chữ ký", "Quyền hạn PDF"
 )) {
   if (-not $catalog.Contains($text)) { throw "Desktop catalog missing: $text" }
 }
@@ -83,7 +86,8 @@ foreach ($text in @(
   "'image-opt': './transform.html?tool=image-opt'",
   "protect: './security-transform.html?tool=protect'",
   "unlock: './security-transform.html?tool=unlock'",
-  "'remove-signature': './remove-signature.html'"
+  "'remove-signature': './remove-signature.html'",
+  "permissions: './permissions.html'"
 )) {
   if (-not $app.Contains($text)) { throw "Desktop route contract missing: $text" }
 }
@@ -131,13 +135,16 @@ foreach ($text in @(
 )) {
   if (-not $removeSignature.Contains($text)) { throw "Remove Signatures local-core contract missing: $text" }
 }
+foreach ($text in @("desktop_core_session", "/pdf/info", "X-SolYan-Desktop-Token", "password", "encryption", "permissions")) {
+  if (-not $permissions.Contains($text)) { throw "PDF Permissions local-core contract missing: $text" }
+}
 
 $strictCspPages = @(
   "desktop/ui/index.html", "desktop/ui/merge.html", "desktop/ui/repair.html",
   "desktop/ui/extract-images.html", "desktop/ui/info.html", "desktop/ui/active-content.html",
   "desktop/ui/attachments.html", "desktop/ui/remove-images.html", "desktop/ui/sanitize.html",
   "desktop/ui/linearize.html", "desktop/ui/decompress.html", "desktop/ui/transform.html",
-  "desktop/ui/security-transform.html", "desktop/ui/remove-signature.html", "desktop/ui/workspace.html"
+  "desktop/ui/security-transform.html", "desktop/ui/remove-signature.html", "desktop/ui/permissions.html", "desktop/ui/workspace.html"
 )
 foreach ($page in $strictCspPages) {
   if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" }
