@@ -33,7 +33,7 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 - System light/dark styling baseline.
 - `Nối PDF` is functional and processed browser-local with pinned `pdf-lib 1.17.1`; picker, drag/drop, ordering and local result download are implemented.
 - Document workspace shell with page thumbnails, canvas, contextual toolbar and right-side inspector.
-- Real tool routes currently include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, and `Kiểm tra nội dung chủ động`.
+- Real tool routes currently include `Sửa lỗi PDF`, `Trích xuất hình ảnh`, `Thông tin PDF`, `Kiểm tra nội dung chủ động`, and `Tệp đính kèm`.
 
 ### D1B — Tauri / installer gate — PASS
 
@@ -62,44 +62,38 @@ Do not restart the Windows-vs-web, Tauri-vs-Electron, or macOS-style discussion 
 ## Native tools wired
 
 ### Sửa lỗi PDF — PASS
-
 - Reuses `POST /pdf/repair`; no duplicate desktop endpoint.
-- UI obtains endpoint/token from `desktop_core_session`.
-- Multipart `file` + `X-SolYan-Desktop-Token`.
-- Result downloads locally; source file is never overwritten.
 - Exact Windows Desktop CI baseline: `39028459915` / #39 PASS.
 
 ### Trích xuất hình ảnh — PASS
-
-- Reuses existing `POST /pdf/extract-images`; no duplicate engine/API.
-- Backend uses Poppler `pdfimages`, preflights image count/dimensions and enforces image/pixel/output-size safety limits.
-- Windows UI obtains endpoint/token from `desktop_core_session`, sends multipart `file`, reads `X-SolYan-Extracted-Images`, and downloads the ZIP locally.
+- Reuses `POST /pdf/extract-images`; no duplicate engine/API.
 - Exact installed-runtime branch baseline: Windows Desktop CI run `39029525483` / #49 PASS.
 
 ### Thông tin PDF — PASS
+- Reuses `POST /pdf/info`; qpdf + Poppler provide structure, encryption, metadata, font and image inspection.
+- Optional PDF password; desktop presents summaries/details instead of raw JSON as primary UX.
+- Exact Windows Desktop CI baseline: `39030593053` / #54 on `6a448aefff88365bb57706346a92c5fd67dbcf8d` PASS.
 
-- Reuses existing `POST /pdf/info`; no duplicate desktop endpoint.
-- qpdf provides structure/encryption analysis; Poppler `pdfinfo`, `pdffonts`, and `pdfimages -list` provide document metadata, font and image tables.
-- Supports optional PDF password.
-- Desktop UI presents summaries, metadata, structural/security counts, font/image details and SHA-256 without dumping raw JSON as the primary UX.
-- No new runtime or dependency was added.
-- Exact Windows Desktop CI baseline: run `39030593053` / #54 on commit `6a448aefff88365bb57706346a92c5fd67dbcf8d` PASS, including UI contract, Cargo, NSIS, silent install, installed app launch and local-core cleanup.
+### Kiểm tra nội dung chủ động — PASS
+- Reuses `POST /pdf/inspect-active-content`; no duplicate desktop endpoint.
+- Searches reachable qpdf object graph for JavaScript, actions, triggers, active annotations and attachment references.
+- JavaScript is displayed as text only and never executed.
+- Product language stays explicit: findings do not prove malware; this is structural inspection, not antivirus.
+- Exact Windows Desktop CI baseline: `39031147389` / #60 on `2bf8cf314deea8b07bf9bed964767fa25a25aec4` PASS, including UI/CSP contract, Cargo, NSIS, silent install, installed app launch and core cleanup.
 
-### Kiểm tra nội dung chủ động — WIRED / EXACT-HEAD GATE IN PROGRESS
-
-- Reuses existing `POST /pdf/inspect-active-content`; no duplicate desktop endpoint.
-- qpdf JSON inspector searches reachable object graph for JavaScript, actions, triggers, active annotations and attachment references.
-- Optional PDF password supported.
-- JavaScript payload is displayed only as text and is never executed by the desktop UI.
-- UI preserves the web product safety language: a finding does not mean a PDF is certainly malicious; this structural inspector is not antivirus and cannot guarantee a PDF is completely safe.
-- Windows Desktop CI contract requires the page, route, token header, endpoint and strict-CSP hygiene.
+### Tệp đính kèm — WIRED / EXACT-HEAD GATE IN PROGRESS
+- Reuses all existing qpdf endpoints: `POST /pdf/attachments/list`, `/add`, `/extract`, `/remove`.
+- No duplicate engine/API and no new runtime dependency.
+- UI can list embedded files, extract one attachment, add multiple bounded attachments, or remove one attachment into a newly generated PDF.
+- Add/remove never overwrite the source PDF; result is downloaded as a new file.
+- Backend limits remain authoritative: PDF 100 MB, at most 20 attachments per add, 25 MB each, 50 MB combined, extracted payload bounded to 100 MB.
+- Windows Desktop CI contract requires all four endpoints, token header, route, page and strict-CSP hygiene.
 
 ## Next work — continue automatically
 
-1. Keep Windows Desktop CI green on the final exact HEAD for `Kiểm tra nội dung chủ động` and record its exact run/commit as PASS.
-2. Continue low-risk existing qpdf/Poppler-backed tools before adding new heavy runtimes. Prioritize existing APIs such as attachments/security inspection/optimization where UX can remain clear and local-first.
-3. Then connect PDF-to-image rendering if the existing Poppler-backed route can be reused cleanly.
-4. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
-5. D4: package OCR runtime and connect OCR/scan tools.
+1. Keep Windows Desktop CI green on the final exact HEAD for `Tệp đính kèm` and record its exact run/commit as PASS.
+2. Continue low-risk qpdf/Poppler-backed tools before adding heavy runtimes. Good next candidates: remove images, sanitization/security, linearize/decompress, and PDF-to-image where existing APIs are reusable.
+3. D3: package LibreOffice Windows runtime while preserving LibreOffice-first → Bloom fallback for DOCX/PPTX and the locked PDF→Office quality gate.
+4. D4: package OCR runtime and connect OCR/scan tools.
 
 Stop only for a genuine user product decision, credentials/permissions, irreversible/destructive choice, or a hard tool boundary.
