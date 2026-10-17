@@ -15,7 +15,7 @@
   const toolsSubtitle = document.getElementById('tools-subtitle');
   const toast = document.getElementById('toast');
   const byCategory = new Map(categories.map(c => [c.id, c]));
-  const routes = { merge: './merge.html', repair: './repair.html', 'extract-images': './extract-images.html', info: './info.html', 'active-content': './active-content.html', attachments: './attachments.html', 'remove-images': './remove-images.html', sanitize: './sanitize.html', linearize: './linearize.html', decompress: './decompress.html', compress: './transform.html?tool=compress', flatten: './transform.html?tool=flatten', 'image-opt': './transform.html?tool=image-opt', 'edit-pdf': './workspace.html' };
+  const routes = { merge: './merge.html', repair: './repair.html', 'extract-images': './extract-images.html', info: './info.html', 'active-content': './active-content.html', attachments: './attachments.html', 'remove-images': './remove-images.html', sanitize: './sanitize.html', linearize: './linearize.html', decompress: './decompress.html', compress: './transform.html?tool=compress', flatten: './transform.html?tool=flatten', 'image-opt': './transform.html?tool=image-opt', protect: './security-transform.html?tool=protect', unlock: './security-transform.html?tool=unlock', 'edit-pdf': './workspace.html' };
   let activeCategory = 'all';
 
   function card(tool) {
