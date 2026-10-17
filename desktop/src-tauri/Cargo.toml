@@ -13,5 +13,8 @@ tauri-build = { version = "2" }
 tauri = { version = "2" }
 rand = "0.9"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects"] }
+
 [features]
 default = []
