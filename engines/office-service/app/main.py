@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import zipfile
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -21,15 +22,30 @@ OOXML_MEDIA_TYPES = {
 app = FastAPI(title="SolYan Office Conversion Service", version="0.1.0")
 
 
-def _libreoffice_binary() -> str:
-    for binary in ("libreoffice", "soffice"):
+@lru_cache(maxsize=1)
+def _libreoffice_probe() -> tuple[str, str]:
+    configured = os.getenv("SOLYAN_LIBREOFFICE_BINARY", "").strip()
+    candidates = (configured,) if configured else ("libreoffice", "soffice")
+    last_error = "LibreOffice engine is unavailable"
+    for binary in candidates:
         try:
-            result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                return binary
-        except (OSError, subprocess.TimeoutExpired):
+            result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=15)
+        except OSError as exc:
+            last_error = f"LibreOffice could not start: {exc}"
             continue
-    raise HTTPException(status_code=503, detail="LibreOffice engine is unavailable")
+        except subprocess.TimeoutExpired:
+            last_error = f"LibreOffice version probe timed out: {binary}"
+            continue
+        if result.returncode == 0:
+            version = (result.stdout or result.stderr).strip() or "LibreOffice"
+            return binary, version
+        detail = (result.stderr or result.stdout or f"exit code {result.returncode}").strip()[-1000:]
+        last_error = f"LibreOffice version probe failed: {detail}"
+    raise HTTPException(status_code=503, detail=last_error)
+
+
+def _libreoffice_binary() -> str:
+    return _libreoffice_probe()[0]
 
 
 def _run_libreoffice_conversion(
@@ -187,9 +203,8 @@ def _pdf_to_rtf_with_libreoffice(data: bytes) -> bytes:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    binary = _libreoffice_binary()
-    result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10)
-    return {"status": "ok", "engine": result.stdout.strip() or "LibreOffice"}
+    _, version = _libreoffice_probe()
+    return {"status": "ok", "engine": version}
 
 
 @app.post("/convert/to-pdf")

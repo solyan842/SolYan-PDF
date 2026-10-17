@@ -74,6 +74,7 @@ jobs:
           if (-not $soffice) { $soffice = Get-ChildItem "desktop/src-tauri/resources/office/libreoffice" -Filter soffice.exe -File -Recurse | Select-Object -First 1 }
           if (-not $soffice) { throw "soffice executable was not found for smoke" }
           $env:PATH = "$($soffice.Directory.FullName);$env:PATH"
+          $env:SOLYAN_LIBREOFFICE_BINARY = $soffice.FullName
 
           $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
           $listener.Start()
@@ -90,9 +91,6 @@ jobs:
               Start-Sleep -Seconds 1
               if ($office.HasExited) { throw "solyan-office.exe exited before health became ready" }
               try {
-                # /health probes LibreOffice with a subprocess timeout of up to 10s.
-                # Keep the HTTP request longer and serial so abandoned requests cannot
-                # pile up soffice.bin processes on a slow Windows cold start.
                 $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 30
                 if ($health.status -eq "ok") { break }
               } catch {
