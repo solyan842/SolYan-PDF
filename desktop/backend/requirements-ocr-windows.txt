@@ -1,9 +1,0 @@
-# Windows-only OCR packaging dependencies.
-# Keep PaddlePaddle itself separate so CI uses Paddle's pinned CPU wheel index.
--r requirements-windows.txt
-paddleocr[doc-parser]==3.7.0
-pytesseract==0.3.13
-pypdfium2==5.14.0
-opencv-contrib-python==4.10.0.84
-openpyxl==3.1.5
-Pillow==12.1.0

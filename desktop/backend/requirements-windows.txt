@@ -1,7 +1,0 @@
-# Windows desktop packaging dependencies.
-# Keep this list Windows-safe; do not reuse backend/requirements.lock because that lock was generated on Linux and contains uvloop.
-fastapi==0.119.0
-uvicorn==0.37.0
-python-multipart==0.0.20
-httpx==0.28.1
-pyinstaller==6.22.3

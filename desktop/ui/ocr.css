@@ -1,7 +1,0 @@
-.ocr-icon{background:linear-gradient(145deg,#8162db,#5d46a4)!important}
-.ocr-result{margin:0 16px 16px;padding:18px;border-top:1px solid rgba(45,67,95,.14)}
-.ocr-result h2{font-size:17px;margin:0 0 12px}
-.ocr-result textarea{display:block;width:100%;box-sizing:border-box;min-height:270px;resize:vertical;padding:12px;border:1px solid #c5d5e7;border-radius:10px;background:#fbfdff;color:#1b2b43;font:13px/1.6 Consolas,"Segoe UI",monospace}
-.ocr-result button{margin-top:12px}
-.ocr-result p{margin:8px 0 0}
-@media(max-width:900px){.repair-layout{grid-template-columns:1fr}}
