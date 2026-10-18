@@ -118,7 +118,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --collect-all chardet --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path dist/solyan-ocr.exe)) { throw "solyan-ocr.exe was not produced" }
           Get-Item dist/solyan-ocr.exe | Select-Object Name, Length, FullName | Format-List | Out-String | Set-Content artifacts/windows-ocr-sidecar-inventory.log
@@ -205,7 +205,7 @@ jobs:
             python artifacts/run-windows-ocr-paddle-smoke.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-paddle-smoke.log
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-            $after = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 5
+            $after = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -Headers @{"X-SolYan-Desktop-Token"=$env:SOLYAN_OCR_TOKEN} -TimeoutSec 5
             if (-not $after.models_loaded.ocr) { throw "Paddle OCR model did not stay loaded after OCR request" }
             if ($after.models_loaded.structure) { throw "Structured OCR model loaded during text-only smoke" }
             $after | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health-after.json -Encoding utf8
