@@ -111,12 +111,19 @@ struct SignProcess {
     _job: WindowsJob,
 }
 
+struct ArchiveProcess {
+    child: Child,
+    #[cfg(windows)]
+    _job: WindowsJob,
+}
+
 #[derive(Default)]
 struct CoreState {
     process: Mutex<Option<CoreProcess>>,
     office_process: Mutex<Option<OfficeProcess>>,
     ocr_process: Mutex<Option<OcrProcess>>,
     sign_process: Mutex<Option<SignProcess>>,
+    archive_process: Mutex<Option<ArchiveProcess>>,
     session: Mutex<Option<CoreSession>>,
     startup_error: Mutex<Option<String>>,
 }
@@ -279,6 +286,31 @@ fn wait_for_sign_health(port: u16, token: &str) -> Result<(), String> {
         thread::sleep(Duration::from_millis(500));
     }
     Err("local signing sidecar did not reach pyHanko health".to_string())
+}
+
+fn wait_for_archive_health(port: u16, token: &str) -> Result<(), String> {
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    for _ in 0..120 {
+        if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(400)) {
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+            let request = format!(
+                "GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-SolYan-Desktop-Token: {token}\r\nConnection: close\r\n\r\n"
+            );
+            if stream.write_all(request.as_bytes()).is_ok() {
+                let mut response = String::new();
+                if stream.read_to_string(&mut response).is_ok()
+                    && response.contains(" 200 ")
+                    && response.contains("\"status\":\"ok\"")
+                    && response.contains("\"engine\":\"OCRmyPDF\"")
+                {
+                    return Ok(());
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    Err("local archive sidecar did not reach OCRmyPDF health".to_string())
 }
 
 fn prepend_paths(directories: &[&Path]) -> Result<OsString, String> {
@@ -488,7 +520,72 @@ fn start_sign(app: &tauri::AppHandle) -> Result<(SignProcess, String, String), S
     ))
 }
 
-fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str, ocr_token: &str, sign_endpoint: &str, sign_token: &str) -> Result<(CoreProcess, CoreSession), String> {
+fn start_archive(app: &tauri::AppHandle) -> Result<(ArchiveProcess, String, String), String> {
+    let exe = app
+        .path()
+        .resolve("archive/solyan-archive.exe", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve archive sidecar: {error}"))?;
+    let tesseract_exe = app
+        .path()
+        .resolve("ocr/tesseract/tesseract.exe", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve pinned Tesseract: {error}"))?;
+    if !exe.is_file() || !tesseract_exe.is_file() {
+        return Err("bundled PDF/A or Tesseract sidecar is missing".to_string());
+    }
+    let tesseract_dir = tesseract_exe
+        .parent()
+        .ok_or_else(|| "Tesseract binary directory is unavailable".to_string())?;
+    let tessdata = tesseract_dir.join("tessdata");
+    if !tessdata.is_dir() {
+        return Err("pinned Tesseract language resources missing for archive sidecar".to_string());
+    }
+    let port = free_loopback_port()?;
+    let token = random_token();
+    let mut command = Command::new(&exe);
+    command
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("--token")
+        .arg(&token)
+        .env("TESSDATA_PREFIX", &tessdata)
+        .env("PATH", prepend_paths(&[tesseract_dir])?)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("could not start PDF/A sidecar: {error}"))?;
+
+    #[cfg(windows)]
+    let job = match WindowsJob::attach(&child) {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+    if let Err(error) = wait_for_archive_health(port, &token) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
+    Ok((
+        ArchiveProcess {
+            child,
+            #[cfg(windows)]
+            _job: job,
+        },
+        format!("http://127.0.0.1:{port}"),
+        token,
+    ))
+}
+
+fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str, ocr_token: &str, sign_endpoint: &str, sign_token: &str, archive_endpoint: &str, archive_token: &str) -> Result<(CoreProcess, CoreSession), String> {
     let core_exe = app
         .path()
         .resolve("core/solyan-core.exe", BaseDirectory::Resource)
@@ -530,6 +627,8 @@ fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str,
         .env("SOLYAN_OCR_TOKEN", ocr_token)
         .env("SIGN_SERVICE_URL", sign_endpoint)
         .env("SOLYAN_SIGN_TOKEN", sign_token)
+        .env("ARCHIVE_SERVICE_URL", archive_endpoint)
+        .env("SOLYAN_ARCHIVE_TOKEN", archive_token)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -610,6 +709,16 @@ fn stop_sign(app: &tauri::AppHandle) {
     };
 }
 
+fn stop_archive(app: &tauri::AppHandle) {
+    let state = app.state::<CoreState>();
+    if let Ok(mut process) = state.archive_process.lock() {
+        if let Some(mut managed) = process.take() {
+            let _ = managed.child.kill();
+            let _ = managed.child.wait();
+        }
+    };
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .manage(CoreState::default())
@@ -621,13 +730,29 @@ fn main() {
                         Ok((mut ocr_process, ocr_endpoint, ocr_token)) => {
                             match start_sign(app.handle()) {
                                 Ok((mut sign_process, sign_endpoint, sign_token)) => {
-                                    match start_core(app.handle(), &office_endpoint, &ocr_endpoint, &ocr_token, &sign_endpoint, &sign_token) {
-                                        Ok((core_process, session)) => {
-                                            *state.office_process.lock().map_err(|_| "office process state poisoned")? = Some(office_process);
-                                            *state.ocr_process.lock().map_err(|_| "ocr process state poisoned")? = Some(ocr_process);
-                                            *state.sign_process.lock().map_err(|_| "sign process state poisoned")? = Some(sign_process);
-                                            *state.process.lock().map_err(|_| "core process state poisoned")? = Some(core_process);
-                                            *state.session.lock().map_err(|_| "core session state poisoned")? = Some(session);
+                                    match start_archive(app.handle()) {
+                                        Ok((mut archive_process, archive_endpoint, archive_token)) => {
+                                            match start_core(app.handle(), &office_endpoint, &ocr_endpoint, &ocr_token, &sign_endpoint, &sign_token, &archive_endpoint, &archive_token) {
+                                                Ok((core_process, session)) => {
+                                                    *state.office_process.lock().map_err(|_| "office process state poisoned")? = Some(office_process);
+                                                    *state.ocr_process.lock().map_err(|_| "ocr process state poisoned")? = Some(ocr_process);
+                                                    *state.sign_process.lock().map_err(|_| "sign process state poisoned")? = Some(sign_process);
+                                                    *state.archive_process.lock().map_err(|_| "archive process state poisoned")? = Some(archive_process);
+                                                    *state.process.lock().map_err(|_| "core process state poisoned")? = Some(core_process);
+                                                    *state.session.lock().map_err(|_| "core session state poisoned")? = Some(session);
+                                                }
+                                                Err(error) => {
+                                                    let _ = archive_process.child.kill();
+                                                    let _ = archive_process.child.wait();
+                                                    let _ = sign_process.child.kill();
+                                                    let _ = sign_process.child.wait();
+                                                    let _ = ocr_process.child.kill();
+                                                    let _ = ocr_process.child.wait();
+                                                    let _ = office_process.child.kill();
+                                                    let _ = office_process.child.wait();
+                                                    *state.startup_error.lock().map_err(|_| "core error state poisoned")? = Some(error);
+                                                }
+                                            }
                                         }
                                         Err(error) => {
                                             let _ = sign_process.child.kill();
@@ -636,7 +761,7 @@ fn main() {
                                             let _ = ocr_process.child.wait();
                                             let _ = office_process.child.kill();
                                             let _ = office_process.child.wait();
-                                            *state.startup_error.lock().map_err(|_| "core error state poisoned")? = Some(error);
+                                            *state.startup_error.lock().map_err(|_| "archive error state poisoned")? = Some(error);
                                         }
                                     }
                                 }
@@ -671,6 +796,7 @@ fn main() {
             stop_core(app_handle);
             stop_ocr(app_handle);
             stop_sign(app_handle);
+            stop_archive(app_handle);
             stop_office(app_handle);
         }
     });

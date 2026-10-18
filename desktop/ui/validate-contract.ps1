@@ -15,6 +15,7 @@ $required = @(
   "desktop/ui/portfolio.html", "desktop/ui/portfolio.js", "desktop/ui/workspace.html",
   "desktop/ui/ocr.html", "desktop/ui/ocr.js", "desktop/ui/ocr.css",
   "desktop/ui/sign.html", "desktop/ui/sign.js", "desktop/backend/sign_runner.py",
+  "desktop/ui/pdfa.html", "desktop/ui/pdfa.js", "desktop/backend/archive_runner.py",
   "desktop/backend/stage-native-runtimes.ps1", "desktop/backend/stage-office-runtime.ps1",
   "desktop/vendor/qpdf-windows-x64.json", "desktop/vendor/poppler-windows-x64.json", "desktop/vendor/libreoffice-windows-x64.json",
   "desktop/src-tauri/tauri.conf.json"
@@ -65,6 +66,15 @@ $signProxy = Get-Content "backend/app/sign_proxy.py" -Raw
 foreach ($value in @("SOLYAN_SIGN_TOKEN", "_sign_auth_headers")) {
   if (-not $signProxy.Contains($value)) { throw "Signing proxy token contract missing: $value" }
 }
+$pdfaUi = Get-Content "desktop/ui/pdfa.js" -Raw
+foreach ($value in @("desktop_core_session", "/archive/pdfa", "X-SolYan-Desktop-Token")) {
+  if (-not $pdfaUi.Contains($value)) { throw "PDF/A UI contract missing: $value" }
+}
+if (-not $app.Contains("pdfa: './pdfa.html'")) { throw "Desktop PDF/A route missing" }
+$archiveProxy = Get-Content "backend/app/archive_proxy.py" -Raw
+foreach ($value in @("SOLYAN_ARCHIVE_TOKEN", "_archive_auth_headers")) {
+  if (-not $archiveProxy.Contains($value)) { throw "Archive proxy auth contract missing: $value" }
+}
 $contracts = @(
   @{ n='Repair PDF'; s=$scripts.repair; t=@('desktop_core_session','/pdf/repair','X-SolYan-Desktop-Token') },
   @{ n='Extract Images'; s=$scripts.extractImages; t=@('desktop_core_session','/pdf/extract-images','X-SolYan-Desktop-Token','X-SolYan-Extracted-Images') },
@@ -90,7 +100,7 @@ $contracts = @(
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/sign.html","desktop/ui/workspace.html")
+$strictCspPages = @("desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"

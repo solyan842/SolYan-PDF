@@ -6,6 +6,7 @@ on:
       - "desktop/**"
       - "backend/app/**"
       - "engines/sign-service/**"
+      - "engines/archive-service/**"
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
@@ -18,10 +19,12 @@ on:
       - "feat/windows-desktop-v1"
       - "feat/windows-desktop-d4-text-integration"
       - "feat/windows-desktop-d5-signing"
+      - "feat/windows-desktop-d5-pdfa-integration"
     paths:
       - "desktop/**"
       - "backend/app/**"
       - "engines/sign-service/**"
+      - "engines/archive-service/**"
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
@@ -163,6 +166,25 @@ jobs:
           Get-ChildItem $root -File | Select-Object Name,Length,FullName |
             Format-List | Out-String | Set-Content artifacts/desktop-sign-resource-inventory.log
 
+      - name: Package PDF-A archive service in isolated Windows Python environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m venv .pdfa-venv
+          $py = ".pdfa-venv/Scripts/python.exe"
+          & $py -m pip install -r desktop/backend/requirements-pdfa-windows.txt 2>&1 | Tee-Object -FilePath artifacts/desktop-pdfa-pip.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $py -m pip check 2>&1 | Tee-Object -FilePath artifacts/desktop-pdfa-pip-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $py -m PyInstaller --noconfirm --clean --onefile --name solyan-archive --paths . --paths engines/archive-service --collect-submodules app desktop/backend/archive_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-pdfa-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $root = "desktop/src-tauri/resources/archive"
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Copy-Item dist/solyan-archive.exe "$root/solyan-archive.exe" -ErrorAction Stop
+          if (-not (Test-Path "$root/solyan-archive.exe" -PathType Leaf)) { throw "Native PDF/A resource missing" }
+          Get-ChildItem $root -File | Select-Object Name, Length, FullName |
+            Format-List | Out-String | Set-Content artifacts/desktop-pdfa-resource-inventory.log
+
       - name: Check pinned Tauri CLI
         shell: pwsh
         run: |
@@ -233,7 +255,7 @@ jobs:
           }
           $removed | Set-Content artifacts/desktop-excluded-source-assets.log -Encoding utf8
 
-          foreach ($component in @("core", "office", "ocr", "sign")) {
+          foreach ($component in @("core", "office", "ocr", "sign", "archive")) {
             $items = @(Get-ChildItem (Join-Path $root $component) -Recurse -File)
             [pscustomobject]@{
               Component = $component
@@ -258,6 +280,7 @@ jobs:
             "$root/office/solyan-office.exe",
             "$root/ocr/solyan-ocr.exe",
             "$root/sign/solyan-sign.exe",
+            "$root/archive/solyan-archive.exe",
             "$root/ocr/tesseract/tesseract.exe",
             "$root/ocr/tesseract/tessdata/vie.traineddata",
             "$root/ocr/tesseract/tessdata/eng.traineddata",
@@ -335,11 +358,14 @@ jobs:
           if (-not $modelInventory) { throw "Installed offline Paddle model inventory was not found" }
           $signExe = Get-ChildItem $installRoot -Filter "solyan-sign.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $signExe) { throw "Installed solyan-sign.exe was not found" }
+          $archiveExe = Get-ChildItem $installRoot -Filter "solyan-archive.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $archiveExe) { throw "Installed solyan-archive.exe was not found" }
 
           Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process -Name "solyan-sign" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name "solyan-archive" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $appExe -PassThru
           $core = $null
           $office = $null
@@ -349,13 +375,15 @@ jobs:
             $office = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
             $ocr = Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Select-Object -First 1
             $sign = Get-Process -Name "solyan-sign" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($core -and $office -and $ocr -and $sign) { break }
+            $archive = Get-Process -Name "solyan-archive" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core -and $office -and $ocr -and $sign -and $archive) { break }
             if ($app.HasExited) { throw "SolYan PDF exited before local sidecars became ready" }
           }
           if (-not $office) { throw "SolYan PDF did not start solyan-office.exe" }
           if (-not $core) { throw "SolYan PDF did not start solyan-core.exe" }
           if (-not $ocr) { throw "SolYan PDF did not start solyan-ocr.exe" }
           if (-not $sign) { throw "SolYan PDF did not start solyan-sign.exe" }
+          if (-not $archive) { throw "SolYan PDF did not start solyan-archive.exe" }
 
           $closed = $app.CloseMainWindow()
           if ($closed) { $null = $app.WaitForExit(15000) }
@@ -372,7 +400,8 @@ jobs:
             $officeOrphan = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
             $ocrOrphan = Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Select-Object -First 1
             $signOrphan = Get-Process -Name "solyan-sign" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $coreOrphan -and -not $officeOrphan -and -not $ocrOrphan -and -not $signOrphan) { break }
+            $archiveOrphan = Get-Process -Name "solyan-archive" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $coreOrphan -and -not $officeOrphan -and -not $ocrOrphan -and -not $signOrphan -and -not $archiveOrphan) { break }
           }
           if ($coreOrphan) {
             $coreOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -390,6 +419,10 @@ jobs:
             $signOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
             throw "solyan-sign.exe remained after SolYan PDF exited"
           }
+          if ($archiveOrphan) {
+            $archiveOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
+            throw "solyan-archive.exe remained after SolYan PDF exited"
+          }
 
           @(
             "installer=$($installer.Name)",
@@ -398,6 +431,7 @@ jobs:
             "office=$($officeExe.FullName)",
             "ocr=$($ocrExe.FullName)",
             "sign=$($signExe.FullName)",
+            "archive=$($archiveExe.FullName)",
             "tesseract=$($tesseractExe.FullName)",
             "paddle_model_inventory=$($modelInventory.FullName)",
             "libreoffice=$($sofficeExe.FullName)",
@@ -408,11 +442,22 @@ jobs:
             "runtime_office_started=true",
             "runtime_ocr_started=true",
             "runtime_sign_started=true",
+            "runtime_archive_started=true",
             "runtime_core_stopped=true",
             "runtime_office_stopped=true",
             "runtime_ocr_stopped=true",
-            "runtime_sign_stopped=true"
+            "runtime_sign_stopped=true",
+            "runtime_archive_stopped=true"
           ) | Set-Content "artifacts/desktop-installed-runtime-smoke.log"
+
+          # Verify two actual installed native capabilities, not merely process startup.
+          python desktop/backend/tests/sign_runtime_smoke.py --exe $signExe.FullName --output artifacts 2>&1 | Tee-Object -FilePath artifacts/desktop-installed-sign-smoke.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tesseractBin = Split-Path $tesseractExe.FullName -Parent
+          $env:PATH = "$tesseractBin;$env:PATH"
+          $env:TESSDATA_PREFIX = Join-Path $tesseractBin "tessdata"
+          & .pdfa-venv/Scripts/python.exe desktop/backend/tests/pdfa_frozen_smoke.py --exe $archiveExe.FullName --output artifacts 2>&1 | Tee-Object -FilePath artifacts/desktop-installed-pdfa-smoke.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload desktop diagnostics
         if: always()

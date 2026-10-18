@@ -16,6 +16,10 @@ app = FastAPI(title="SolYan PDF/A Service", version="0.1.0")
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    if os.getenv("SOLYAN_ARCHIVE_WORKER_EXE"):
+        # The frozen executable is not a Python interpreter (-m cannot work).
+        from importlib.metadata import version
+        return {"status": "ok", "engine": "OCRmyPDF", "version": version("ocrmypdf")}
     result = subprocess.run([sys.executable, "-m", "ocrmypdf", "--version"], capture_output=True, text=True, timeout=15)
     if result.returncode != 0:
         raise HTTPException(status_code=503, detail="OCRmyPDF engine is unavailable")
@@ -49,6 +53,11 @@ def convert_pdfa(file: UploadFile = File(...)) -> Response:
             str(input_path),
             str(output_path),
         ]
+        frozen_worker = os.getenv("SOLYAN_ARCHIVE_WORKER_EXE", "")
+        if frozen_worker:
+            # Preserve the CLI's 240-second timeout and isolation. Only a
+            # trusted bundled executable is configured by archive_runner.
+            command = [frozen_worker, "--pdfa-worker", str(input_path), str(output_path)]
         try:
             result = subprocess.run(command, capture_output=True, text=True, timeout=240)
         except subprocess.TimeoutExpired as exc:
