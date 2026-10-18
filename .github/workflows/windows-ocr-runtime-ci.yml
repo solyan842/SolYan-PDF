@@ -160,6 +160,17 @@ jobs:
               } catch {}
             }
             if (-not $health -or $health.status -ne "ok") { throw "OCR sidecar health did not become ready" }
+            # OCR sidecar must reject unauthenticated requests. Core API adds the
+            # per-launch token only for trusted local proxy calls.
+            $unauthorized = $false
+            try {
+              Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -TimeoutSec 3 | Out-Null
+            } catch {
+              $response = $_.Exception.Response
+              if ($response -and [int]$response.StatusCode -eq 401) { $unauthorized = $true }
+            }
+            if (-not $unauthorized) { throw "OCR sidecar accepted unauthenticated health request" }
+            "unauthenticated_health=401" | Set-Content artifacts/windows-ocr-auth-smoke.log
             if ($health.models_loaded.ocr -or $health.models_loaded.structure) { throw "OCR health unexpectedly loaded Paddle models" }
             if (-not $health.fallback.binary_available) { throw "OCR sidecar could not resolve staged Tesseract" }
             if ($health.fallback.language -ne "vie+eng") { throw "Unexpected Tesseract language contract" }
