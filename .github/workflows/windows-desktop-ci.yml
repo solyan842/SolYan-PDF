@@ -126,7 +126,7 @@ jobs:
           & ./desktop/backend/stage-ocr-models.ps1 2>&1 | Tee-Object -FilePath artifacts/desktop-paddle-models-stage.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pyinstaller.log
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --collect-all chardet --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $root = "desktop/src-tauri/resources/ocr"
           Copy-Item dist/solyan-ocr.exe "$root/solyan-ocr.exe"
@@ -147,6 +147,26 @@ jobs:
         run: |
           cargo check 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-cargo-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Measure NSIS payload footprint
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = "desktop/src-tauri/resources"
+          $files = @(Get-ChildItem $root -Recurse -File -ErrorAction Stop)
+          $total = ($files | Measure-Object Length -Sum).Sum
+          $summary = foreach ($category in @("core", "office", "ocr")) {
+            $items = @($files | Where-Object { $_.FullName -like "*\\resources\\$category\\*" })
+            [pscustomobject]@{
+              Component = $category
+              FileCount = $items.Count
+              Bytes = [int64](($items | Measure-Object Length -Sum).Sum)
+            }
+          }
+          $summary | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-payload-by-component.log
+          $files | Sort-Object Length -Descending | Select-Object -First 20 FullName, Length |
+            Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-largest-payload-files.log
+          "Total resource payload bytes: $total" | Tee-Object -FilePath artifacts/desktop-payload-total.log
 
       - name: Build NSIS installer with local sidecars
         shell: pwsh
