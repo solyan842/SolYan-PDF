@@ -50,3 +50,14 @@ missed webhook deliveries. Neither cron nor webhook consumes any AI tokens.
 - `AGENTS.md` remains the policy source of truth. No loosening CI gates.
 
 Local tests: `node --test tests/*.test.mjs`.
+
+## Cloudflare dashboard build configuration
+
+For the `solyan-pdf-autopilot` Worker connected to `solyan842/SolYan-PDF`, set
+**Production branch** to `feat/autopilot-cloudflare`, **Root directory** to
+`/cloudflare-autopilot`, and **Deploy command** to `npx wrangler deploy`.
+Use a dedicated Workers Builds token; avoid reusing credentials from other
+applications. After changing the production branch, the next push to that
+branch initiates the new production build; retrying an old `main` commit is
+not an equivalent trigger. A green build only verifies the Worker deployment,
+not GitHub webhook delivery or unattended AI execution.
