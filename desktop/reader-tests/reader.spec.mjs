@@ -3,6 +3,8 @@ import { PDFDocument,degrees,PDFName,PDFString } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { readFile,writeFile } from 'node:fs/promises';
 import os from 'node:os';
+for(const deviceScaleFactor of [1,1.25])test.describe(`zoom at ${deviceScaleFactor*100}% DPI`,()=>{
+  test.use({deviceScaleFactor});
 test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen preserve text',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const pdf=await PDFDocument.create();for(let i=0;i<3;i++){const p=pdf.addPage([600,800]);p.drawText('SOLYAN Reader search text',{x:60,y:650});if(i===1)p.setRotation(degrees(90));}
@@ -29,10 +31,13 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
     PDFPageView.prototype.draw=async function(...args){await pending;const result=await originalDraw.apply(this,args);if(this.id===window.zoomSignaturePage)window.zoomRenderDone=true;return result;};
     window.releaseZoomDraw=()=>{PDFPageView.prototype.draw=originalDraw;release();};
     const signature=document.querySelector('.signature.selected'),pdfPage=signature.closest('.page');window.zoomSignaturePage=Number(pdfPage.dataset.pageNumber);
-    const relative=()=>{const node=document.querySelector('.signature.selected');if(!node)return null;const r=node.getBoundingClientRect(),p=pdfPage.getBoundingClientRect();return{x:(r.x-p.x)/p.width,y:(r.y-p.y)/p.height,w:r.width/p.width,h:r.height/p.height,width:r.width,height:r.height,pageWidth:p.width,pageHeight:p.height,pageNumber:pdfPage.dataset.pageNumber,id:node.dataset.signature};};
+    const relative=()=>{const node=document.querySelector('.signature.selected');if(!node)return null;const r=node.getBoundingClientRect(),p=pdfPage.getBoundingClientRect(),scale=Number.parseFloat(getComputedStyle(pdfPage).getPropertyValue('--scale-factor'));return{x:(r.x-p.x)/(600*scale),y:(r.y-p.y)/(800*scale),w:r.width/(600*scale),h:r.height/(800*scale),width:r.width,height:r.height,scale:Number.parseFloat(getComputedStyle(pdfPage).getPropertyValue('--scale-factor')),pageWidth:p.width,pageHeight:p.height,pageNumber:pdfPage.dataset.pageNumber,id:node.dataset.signature};};
     const before=relative();const zoom=document.getElementById('zoom');zoom.value='1.5';zoom.dispatchEvent(new Event('change',{bubbles:true}));
     return{before,during:relative()};
   });
+  // PDF.js rounds raster/CSS page bounds down at fractional DPI. Compare
+  // in the fixture's 600x800 PDF viewport, retaining the existing precision.
+  console.log('Zoom geometry '+JSON.stringify(zoomState));
   try {
     expect(zoomState.during,'signature survives page reset while raster rendering is pending').not.toBeNull();
     await expect(stamp).toBeVisible();
@@ -47,7 +52,7 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
   await expect.poll(()=>page.evaluate(()=>window.zoomRenderDone)).toBe(true);
   await expect(page.locator(`.page[data-page-number="${zoomState.before.pageNumber}"]`)).toHaveAttribute('data-loaded','true');
   await expect(stamp).toBeVisible();await expect(stamp).toHaveAttribute('data-signature',zoomState.before.id);
-  const after=await stamp.evaluate(node=>{const r=node.getBoundingClientRect(),p=node.closest('.page').getBoundingClientRect();return{x:(r.x-p.x)/p.width,y:(r.y-p.y)/p.height,w:r.width/p.width,h:r.height/p.height,width:r.width,height:r.height};});
+  const after=await stamp.evaluate(node=>{const pdfPage=node.closest('.page'),r=node.getBoundingClientRect(),p=pdfPage.getBoundingClientRect(),scale=Number.parseFloat(getComputedStyle(pdfPage).getPropertyValue('--scale-factor'));return{x:(r.x-p.x)/(600*scale),y:(r.y-p.y)/(800*scale),w:r.width/(600*scale),h:r.height/(800*scale),width:r.width,height:r.height};});
   for(const axis of ['x','y','w','h'])expect(after[axis]).toBeCloseTo(zoomState.before[axis],3);
   expect(after.width).toBeCloseTo(zoomState.during.width,1);expect(after.height).toBeCloseTo(zoomState.during.height,1);
   await page.locator('#applyScope').selectOption('all');await page.locator('#apply').click();await expect(page.locator('.signature')).toHaveCount(3);
@@ -56,6 +61,8 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
   await page.locator('#pdfFiles').setInputFiles({name:'Saved.pdf',mimeType:'application/pdf',buffer:Buffer.from(saved)});await expect(page.locator('#tabs .tab')).toHaveCount(2);await expect(page.locator('.readerContainer:not([hidden]) .page canvas').first()).toBeVisible();
   await page.locator('#tabs .title').first().click();await expect(page.locator('.signature')).toHaveCount(3);
   await page.locator('.signature.selected').scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/reader-signed.png'});expect(errors).toEqual([]);
+});
+
 });
 
 test('100-page document uses lazy canvases and remains navigable offline',async({page})=>{
