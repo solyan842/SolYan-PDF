@@ -6,6 +6,8 @@ on:
     paths:
       - "desktop/backend/requirements-pdfa-windows.txt"
       - "desktop/backend/tests/pdfa_windows_probe.py"
+      - "desktop/backend/tests/pdfa_frozen_smoke.py"
+      - "desktop/backend/archive_runner.py"
       - ".github/workflows/windows-pdfa-probe-ci.yml"
       - "engines/archive-service/**"
   push:
@@ -14,6 +16,8 @@ on:
     paths:
       - "desktop/backend/requirements-pdfa-windows.txt"
       - "desktop/backend/tests/pdfa_windows_probe.py"
+      - "desktop/backend/tests/pdfa_frozen_smoke.py"
+      - "desktop/backend/archive_runner.py"
       - ".github/workflows/windows-pdfa-probe-ci.yml"
       - "engines/archive-service/**"
 
@@ -59,6 +63,17 @@ jobs:
         shell: pwsh
         run: |
           python desktop/backend/tests/pdfa_windows_probe.py 2>&1 | Tee-Object artifacts/pdfa-probe.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Freeze local archive service with upstream OCRmyPDF PyInstaller hook
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-archive --paths . --paths engines/archive-service --collect-submodules app desktop/backend/archive_runner.py 2>&1 | Tee-Object artifacts/pdfa-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path dist/solyan-archive.exe)) { throw "Frozen archive sidecar missing" }
+      - name: Prove authenticated frozen archive converts PDF-A offline
+        shell: pwsh
+        run: |
+          python desktop/backend/tests/pdfa_frozen_smoke.py --exe dist/solyan-archive.exe --output artifacts 2>&1 | Tee-Object artifacts/pdfa-frozen-smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve real failure evidence
         if: always()
