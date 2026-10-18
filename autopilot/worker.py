@@ -168,6 +168,8 @@ def run_agent(prompt, heartbeat, output_file):
     env = dict(os.environ)
     env.pop("OPENAI_API_KEY", None)
     env.pop("OPENAI_BASE_URL", None)
+    env.pop("CODEX_API_KEY", None)
+    env.pop("CODEX_ACCESS_TOKEN", None)
     with open(output_file, "w", encoding="utf-8") as out:
         proc = subprocess.Popen(
             ["codex", "exec", "-C", str(WORK),

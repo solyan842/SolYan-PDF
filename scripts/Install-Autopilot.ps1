@@ -17,8 +17,10 @@ foreach ($tool in @('git', 'gh', 'codex', 'python', 'pwsh')) {
 }
 & gh auth status
 if ($LASTEXITCODE -ne 0) { throw 'Sign in first: gh auth login' }
-& codex login status
-if ($LASTEXITCODE -ne 0) { throw 'Sign in first: codex login (ChatGPT account)' }
+$codexLogin = (& codex login status 2>&1 | Out-String)
+if ($LASTEXITCODE -ne 0 -or $codexLogin -notmatch '(?i)ChatGPT') {
+    throw 'Use codex login with your ChatGPT account, not a paid API key'
+}
 & gh auth setup-git
 if ($LASTEXITCODE -ne 0) { throw 'gh auth setup-git failed' }
 New-Item -ItemType Directory -Force $root | Out-Null
