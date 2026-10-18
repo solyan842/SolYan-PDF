@@ -43,12 +43,18 @@ def _bootstrap_ocr_service() -> object:
 def main() -> None:
     parser = argparse.ArgumentParser(description="SolYan PDF local OCR sidecar")
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--token", required=True)
     args = parser.parse_args()
     if args.port < 1 or args.port > 65535:
         raise SystemExit("invalid --port")
 
+    if len(args.token) < 32:
+        raise SystemExit("--token must contain at least 32 characters")
+
     _configure_native_runtime()
-    app = _bootstrap_ocr_service()
+    from desktop.backend.runner import DesktopTokenMiddleware
+
+    app = DesktopTokenMiddleware(_bootstrap_ocr_service(), args.token)
     uvicorn.run(
         app,
         host="127.0.0.1",
