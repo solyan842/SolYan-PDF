@@ -1,0 +1,56 @@
+name: Windows PDF-A Native Runtime Probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "desktop/backend/requirements-pdfa-windows.txt"
+      - "desktop/backend/tests/pdfa_windows_probe.py"
+      - ".github/workflows/windows-pdfa-probe-ci.yml"
+      - "engines/archive-service/**"
+  push:
+    branches:
+      - "feat/windows-desktop-d5-pdfa-probe"
+    paths:
+      - "desktop/backend/requirements-pdfa-windows.txt"
+      - "desktop/backend/tests/pdfa_windows_probe.py"
+      - ".github/workflows/windows-pdfa-probe-ci.yml"
+      - "engines/archive-service/**"
+
+permissions:
+  contents: read
+
+jobs:
+  native-windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: desktop/backend/requirements-pdfa-windows.txt
+      - name: Make diagnostic artifact folder
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force artifacts | Out-Null
+      - name: Install Windows-safe archive dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r desktop/backend/requirements-pdfa-windows.txt 2>&1 | Tee-Object artifacts/pdfa-pip.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip check 2>&1 | Tee-Object artifacts/pdfa-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prove native offline PDF-A conversion via existing service
+        shell: pwsh
+        run: |
+          python desktop/backend/tests/pdfa_windows_probe.py 2>&1 | Tee-Object artifacts/pdfa-probe.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve real failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-pdfa-native-diagnostics
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn
