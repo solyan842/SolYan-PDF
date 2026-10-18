@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - "feat/windows-desktop-d4-ocr"
+      - "feat/windows-desktop-d4-text-integration"
     paths:
       - "desktop/backend/ocr_runner.py"
       - "desktop/backend/requirements-ocr-windows.txt"
@@ -117,7 +118,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path dist/solyan-ocr.exe)) { throw "solyan-ocr.exe was not produced" }
           Get-Item dist/solyan-ocr.exe | Select-Object Name, Length, FullName | Format-List | Out-String | Set-Content artifacts/windows-ocr-sidecar-inventory.log
@@ -143,16 +144,17 @@ jobs:
           $env:NO_PROXY = "127.0.0.1,localhost"
           $env:no_proxy = "127.0.0.1,localhost"
           $port = 38191
+          $env:SOLYAN_OCR_TOKEN = "desktop-ocr-smoke-token-0123456789abcdef"
           $stdout = Join-Path $PWD "artifacts/windows-ocr-sidecar.stdout.log"
           $stderr = Join-Path $PWD "artifacts/windows-ocr-sidecar.stderr.log"
-          $process = Start-Process -FilePath (Resolve-Path dist/solyan-ocr.exe) -ArgumentList "--port", "$port" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $process = Start-Process -FilePath (Resolve-Path dist/solyan-ocr.exe) -ArgumentList "--port", "$port", "--token", "$env:SOLYAN_OCR_TOKEN" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           try {
             $health = $null
             for ($i = 0; $i -lt 120; $i++) {
               Start-Sleep -Milliseconds 500
               if ($process.HasExited) { throw "solyan-ocr.exe exited before health became ready" }
               try {
-                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 3
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -Headers @{"X-SolYan-Desktop-Token"=$env:SOLYAN_OCR_TOKEN} -TimeoutSec 3
                 if ($health.status -eq "ok") { break }
               } catch {}
             }
@@ -164,6 +166,7 @@ jobs:
 
             $paddleSmoke = @'
           import json
+          import os
           from pathlib import Path
           import httpx
 
@@ -172,6 +175,7 @@ jobs:
               response = client.post(
                   "http://127.0.0.1:38191/ocr/text",
                   files={"file": (image.name, handle, "image/png")},
+                  headers={"X-SolYan-Desktop-Token": os.environ["SOLYAN_OCR_TOKEN"]},
               )
           response.raise_for_status()
           payload = response.json()
