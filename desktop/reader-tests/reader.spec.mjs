@@ -121,3 +121,25 @@ test('selected text creates a native highlight with Unicode note editing',async(
  await page.locator('#annot-note').click();const b=await page.locator('.page').first().boundingBox();page.once('dialog',d=>d.accept('Ghi chú ban đầu'));await page.mouse.click(b.x+100,b.y+100);await expect(page.locator('#annotationNote')).toBeVisible();await page.locator('#annotationNote').fill('Đã sửa ghi chú');await page.locator('#annotationNote').press('Tab');
  const pending=page.waitForEvent('download');await page.locator('#save').click();const output=await pending;const reopened=await getDocument({data:new Uint8Array(await readFile(await output.path()))}).promise;const annots=await(await reopened.getPage(1)).getAnnotations();expect(annots.some(a=>a.subtype==='Highlight'&&a.quadPoints?.length)).toBeTruthy();expect(annots.some(a=>a.contentsObj.str==='Đã sửa ghi chú')).toBeTruthy();await reopened.loadingTask.destroy();
 });
+
+test('Fill & Sign text date check and cross roundtrip without rasterizing page',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const pdf=await PDFDocument.create();pdf.addPage([595,842]).drawText('ORIGINAL SEARCHABLE CONTENT',{x:45,y:740});
+ await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+ await page.locator('#pdfFiles').setInputFiles({name:'Form.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+ await expect(page.locator('.page canvas').first()).toBeVisible();await page.locator('[data-ribbon=sign]').click();
+ await page.locator('#fillText').click();await page.locator('#fillTextInput').fill('Nguyễn Văn An');
+ await page.getByRole('button',{name:'Đặt vào trang',exact:true}).click();
+ await expect(page.locator('.signature img[alt="Văn bản"]')).toHaveCount(1);
+ for(const id of ['fillDate','fillCheck','fillCross'])await page.locator('#'+id).click();
+ await expect(page.locator('.signature')).toHaveCount(4);
+ const stamp=page.locator('.signature').first(),b=await stamp.boundingBox();
+ await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();
+ await page.mouse.move(b.x+b.width/2+15,b.y+b.height/2+9,{steps:4});await page.mouse.up();
+ const download=page.waitForEvent('download');await page.locator('#save').click();const saved=await download;
+ expect(saved.suggestedFilename()).toBe('Form-da-dien.pdf');
+ const opened=await getDocument({data:new Uint8Array(await readFile(await saved.path()))}).promise;
+ const page1=await opened.getPage(1);expect((await page1.getTextContent()).items.map(x=>x.str).join(' ')).toContain('ORIGINAL SEARCHABLE CONTENT');
+ const ops=await page1.getOperatorList();expect(ops.fnArray.filter(x=>x===85).length).toBeGreaterThanOrEqual(4);
+ await opened.loadingTask.destroy();expect(errors).toEqual([]);
+});

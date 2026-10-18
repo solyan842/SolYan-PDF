@@ -20,6 +20,37 @@ export function installR2(api){
     const b=button('comment',`annot-${kind}`,label,icon,async()=>{if(['highlight','underline','strike'].includes(kind)&&await markSelection(kind))return;setMode(kind);});b.dataset.mode=kind;
   }
   button('sign','createSignature','Tạo chữ ký','note-pencil',()=>$('sign').click());
+
+  // Fill & Sign uses transparent locally rendered artwork; source PDF pages are not rasterized.
+  const fillDialog=element('dialog','',{id:'fillTextDialog'}),fillInput=element('textarea','',{id:'fillTextInput',maxLength:200,rows:3,placeholder:'Nhập chữ…',ariaLabel:'Văn bản chèn vào PDF'});
+  const fillButtons=element('div','',{className:'dialogActions'}),fillCancel=element('button','Hủy',{type:'button'}),fillPlace=element('button','Đặt vào trang',{type:'button',className:'primary'});
+  fillCancel.onclick=()=>fillDialog.close();fillButtons.append(fillCancel,fillPlace);fillDialog.append(element('h2','Nhập chữ vào PDF'),element('p','Tối đa 200 ký tự, 3 dòng. Sau khi đặt, kéo và chỉnh kích thước trực tiếp.'),fillInput,fillButtons);document.body.append(fillDialog);
+  function textArt(text){
+    const lines=text.replace(/\r\n?/g,'\n').split('\n');
+    if(!text.trim()||text.length>200||lines.length>3)throw Error('Nhập 1–200 ký tự, tối đa 3 dòng.');
+    const sample=document.createElement('canvas').getContext('2d');sample.font='44px "Segoe UI",Arial,sans-serif';
+    const width=Math.ceil(Math.max(60,...lines.map(line=>sample.measureText(line).width))+32);
+    if(width>1600)throw Error('Dòng chữ quá dài; hãy ngắt dòng.');
+    const c=document.createElement('canvas');c.width=width;c.height=lines.length*60+20;
+    const ctx=c.getContext('2d');ctx.font=sample.font;ctx.fillStyle='#182d46';ctx.textBaseline='top';
+    lines.forEach((line,i)=>ctx.fillText(line,16,10+60*i));return c;
+  }
+  function markArt(cross){
+    const c=document.createElement('canvas');c.width=c.height=144;const ctx=c.getContext('2d');
+    ctx.strokeStyle='#182d46';ctx.lineWidth=13;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    if(cross){ctx.moveTo(24,24);ctx.lineTo(120,120);ctx.moveTo(120,24);ctx.lineTo(24,120);}
+    else{ctx.moveTo(18,76);ctx.lineTo(57,110);ctx.lineTo(126,29);}ctx.stroke();return c;
+  }
+  async function placeFill(art,label,width){
+    await api.placeAsset(art.toDataURL('image/png'),{role:'fill',label,width});
+    api.message('Đã đặt '+label.toLowerCase()+'. Kéo để điều chỉnh trước khi Lưu thành.');
+  }
+  button('sign','fillText','Nhập chữ','cursor-text',()=>{doc();fillDialog.showModal();fillInput.focus();});
+  fillPlace.onclick=api.attempt(async()=>{const c=textArt(fillInput.value);await placeFill(c,'Văn bản',Math.max(.12,Math.min(.55,c.width/850)));fillDialog.close();fillInput.value='';});
+  button('sign','fillDate','Ngày tháng','note-pencil',async()=>{doc();const date=new Intl.DateTimeFormat('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date());await placeFill(textArt(date),'Ngày tháng',.19);});
+  button('sign','fillCheck','Dấu ✓','circle',async()=>{doc();await placeFill(markArt(false),'Dấu tích',.075);});
+  button('sign','fillCross','Dấu ×','circle',async()=>{doc();await placeFill(markArt(true),'Dấu X',.075);});
+
   const libraryButton=button('sign','signatureLibrary','Chữ ký đã lưu','note-pencil',()=>showLibrary());
   const library=element('dialog','',{id:'signatureLibraryDialog'}),libraryList=element('div','',{id:'signatureLibraryList'});library.append(element('h2','Chữ ký của bạn'),element('p','Lưu tại hồ sơ ứng dụng trên máy này. Xóa chữ ký không xóa bản đã ký trong PDF.'),libraryList);const close=element('button','Đóng');close.onclick=()=>library.close();library.append(close);document.body.append(library);
   const storeKey='sreader.signatures.v1';
@@ -45,7 +76,7 @@ export function installR2(api){
   function viewport(d,index){const v=d.view.getPageView(index).viewport;return{width:v.width/v.scale,height:v.height/v.scale,transform:v.transform.map((n,i)=>i<6?n/v.scale:n),rotation:v.rotation};}
   // Viewport transforms are stored at scale 1, independently of zoom/view rotation.
   function itemAt(d,index,rect,kind,points){return{id:crypto.randomUUID(),group:crypto.randomUUID(),kind,page:index,rect,viewport:viewport(d,index),points,color:kind==='highlight'?[1,.72,.1]:[.12,.35,.85]};}
-  function selection(item){$('signOptions').querySelector('h2').textContent=item?.kind?'Chú thích đang chọn':'Chữ ký đang chọn';for(const id of ['applyScope','range','apply'])$(id).hidden=Boolean(item?.kind);notes.hidden=item?.kind!=='note';notes.value=item?.text||'';$('removeSign').textContent=item?.kind?'Xóa chú thích':'Xóa chữ ký';$('signOptions').querySelectorAll('p').forEach(p=>p.hidden=Boolean(item?.kind));$('applyScope').closest('label').hidden=Boolean(item?.kind);}
+  function selection(item){$('signOptions').querySelector('h2').textContent=item?.kind?'Chú thích đang chọn':item?.role==='fill'?(item.label||'Đối tượng')+' đang chọn':'Chữ ký đang chọn';for(const id of ['applyScope','range','apply'])$(id).hidden=Boolean(item?.kind);notes.hidden=item?.kind!=='note';notes.value=item?.text||'';$('removeSign').textContent=item?.kind?'Xóa chú thích':'Xóa chữ ký';$('signOptions').querySelectorAll('p').forEach(p=>p.hidden=Boolean(item?.kind)||item?.role==='fill');$('applyScope').closest('label').hidden=Boolean(item?.kind);}
   function add(d,item){selection(item);checkpoint(d);d.placements.push(item);api.select(item.id);api.changed(d);api.render(d);$('signOptions').hidden=false;}
   async function markSelection(kind){const selection=window.getSelection();if(!selection?.rangeCount||!selection.toString())return false;const d=doc(),rects=[...selection.getRangeAt(0).getClientRects()];const items=[];
     for(const box of rects){for(let index=0;index<d.pdf.numPages;index++){const page=d.view.getPageView(index)?.div;if(!page)continue;const b=page.getBoundingClientRect();if(box.width>1&&box.height>1&&box.height<b.height/3&&box.left>=b.left-1&&box.right<=b.right+1&&box.top>=b.top-1&&box.bottom<=b.bottom+1){items.push(itemAt(d,index,{x:(box.left-b.left)/b.width,y:(box.top-b.top)/b.height,w:box.width/b.width,h:box.height/b.height},kind));break;}}}

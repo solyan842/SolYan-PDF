@@ -104,13 +104,13 @@ function renderSignatures(doc = current()) {
     const page = doc.view.getPageView(item.page); if (!page?.div) continue;
     let layer = page.div.querySelector('.signatureLayer');
     if (!layer) { layer = document.createElement('div'); layer.className = 'signatureLayer'; page.div.append(layer); }
-    const node = document.createElement('div'); node.className = `signature${item.id === selected ? ' selected' : ''}`; node.dataset.signature = item.id; node.tabIndex = 0; node.setAttribute('aria-label', 'Chữ ký: kéo di chuyển hoặc dùng phím mũi tên');
+    const node = document.createElement('div'); node.className = `signature${item.id === selected ? ' selected' : ''}`; node.dataset.signature = item.id; node.tabIndex = 0; node.setAttribute('aria-label', `${item.label||'Chữ ký'}: kéo di chuyển hoặc dùng phím mũi tên`);
     const position = () => {
       if(item.viewport){const frame=window.ReaderEdits.frame(item,page.viewport);Object.assign(node.style,{left:`${frame.left}px`,top:`${frame.top}px`,width:`${frame.width}px`,height:`${frame.height}px`,transform:frame.transform,transformOrigin:'0 0'});}
       else Object.assign(node.style, { left: `${item.rect.x*100}%`, top: `${item.rect.y*100}%`, width: `${item.rect.w*100}%`, height: `${item.rect.h*100}%` });
     }; position();
     if(item.kind){node.classList.add('annotation');node.dataset.kind=item.kind;node.append(r2.visual(item));}
-    else { const img = document.createElement('img'); img.src = item.image; img.alt = 'Chữ ký'; img.draggable = false; node.append(img); }
+    else { const img = document.createElement('img'); img.src = item.image; img.alt = item.label||'Chữ ký'; img.draggable = false; node.append(img); }
     for (const handle of ['nw','n','ne','e','se','s','sw','w']) {
       const button = document.createElement('button'); button.className = 'handle'; button.dataset.h = handle; button.setAttribute('aria-label', `Đổi kích thước ${handle}`); button.hidden = item.id !== selected; node.append(button);
     }
@@ -165,12 +165,12 @@ function croppedInk() {
   if(x1<x0) throw Error('Vẽ, nhập tên hoặc chọn ảnh chữ ký.');
   const canvas=document.createElement('canvas'); canvas.width=x1-x0+1;canvas.height=y1-y0+1;canvas.getContext('2d').drawImage(ink,x0,y0,canvas.width,canvas.height,0,0,canvas.width,canvas.height);return canvas;
 }
-async function placeAsset(image) {
+async function placeAsset(image,options={}) {
   const doc=current();if(!doc||busy)throw Error('Mở PDF trước khi ký.');
   const canvas=new Image();canvas.src=image;await canvas.decode();asset=image; const pageIndex=doc.view.currentPageNumber-1;
   const sourcePage=await doc.pdf.getPage(pageIndex+1);const viewport=sourcePage.getViewport({scale:1,rotation:(sourcePage.rotate+doc.view.pagesRotation)%360});
-  const w=.24,h=Math.min(.2,w*viewport.width/viewport.height*canvas.height/canvas.width);
-  const item={id:crypto.randomUUID(),group:crypto.randomUUID(),page:pageIndex,image:asset,viewport:{width:viewport.width,height:viewport.height,transform:viewport.transform,rotation:viewport.rotation},rect:{x:.38,y:.7,w,h}};
+  const w=options.width??.24,h=Math.min(.2,w*viewport.width/viewport.height*canvas.height/canvas.width);
+  const item={id:crypto.randomUUID(),group:crypto.randomUUID(),page:pageIndex,image:asset,role:options.role||'signature',label:options.label||'Chữ ký',viewport:{width:viewport.width,height:viewport.height,transform:viewport.transform,rotation:viewport.rotation},rect:{x:.38,y:.7,w,h}};
   checkpoint(doc);doc.placements.push(item);selected=doc.selectedId=item.id;r2.selection(item); changed(doc);$('signOptions').hidden=false; renderSignatures();
 }
 $('useSign').onclick=attempt(async()=>{
@@ -193,13 +193,14 @@ $('save').onclick=attempt(async()=>{
   const doc=current(); if(!doc||busy)return;busy=true;$('save').disabled=true;
   try {
     const bytes=await r2.exportDocument(doc);
-    const name=doc.name.replace(/\.pdf$/i,'')+'-da-ky.pdf';
+    const suffix=doc.placements.some(p=>p.role==='fill')&&!doc.placements.some(p=>!p.kind&&p.role!=='fill')?'-da-dien.pdf':'-da-ky.pdf';
+     const name=doc.name.replace(/\.pdf$/i,'')+suffix;
     if(window.__TAURI__?.core){
       const path=await window.__TAURI__.core.invoke('reader_save_as',{bytes:Array.from(bytes),name});
       if(path){doc.dirty=false;r2.saved(doc);renderTabs();message(`Đã lưu bản PDF mới: ${path}`);}else message('Đã hủy lưu. Chữ ký vẫn ở bản làm việc.');
       return;
     }
-    const blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=doc.name.replace(/\.pdf$/i,'')+'-da-ky.pdf';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    const blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
     // Keep the source and unsaved marker: a download request cannot prove that
     // the user completed the native Save As dialog.
     message('Đã tạo bản PDF mới để Lưu thành. PDF nguồn không thay đổi.');
