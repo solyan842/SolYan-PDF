@@ -719,10 +719,88 @@ fn stop_archive(app: &tauri::AppHandle) {
     };
 }
 
+#[tauri::command]
+async fn desktop_open_reader(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("reader") {
+        return window.set_focus().map_err(|e| e.to_string());
+    }
+    tauri::WebviewWindowBuilder::new(&app, "reader", tauri::WebviewUrl::App("reader.html".into()))
+        .title("SolYan PDF Reader").inner_size(1440.0, 920.0).disable_drag_drop_handler().build().map(|_| ()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn reader_save_as(window: tauri::WebviewWindow, bytes: Vec<u8>, name: String) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::Controls::Dialogs::{GetSaveFileNameW, CommDlgExtendedError, OPENFILENAMEW, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR};
+        use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH};
+        if bytes.len() > 250 * 1024 * 1024 || !bytes.starts_with(b"%PDF-") { return Err("Invalid or oversized PDF output".into()); }
+        let safe_name: String = name.chars().filter(|c| !"<>:\"/\\|?*".contains(*c) && !c.is_control()).take(180).collect();
+        let mut file = vec![0u16; 32768];
+        let initial: Vec<u16> = safe_name.encode_utf16().collect();
+        file[..initial.len()].copy_from_slice(&initial);
+        let filter: Vec<u16> = "PDF document\0*.pdf\0\0".encode_utf16().collect();
+        let extension: Vec<u16> = "pdf\0".encode_utf16().collect();
+        let title: Vec<u16> = "SolYan Reader — Lưu thành\0".encode_utf16().collect();
+        let mut dialog: OPENFILENAMEW = unsafe { std::mem::zeroed() };
+        dialog.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+        dialog.hwndOwner = window.hwnd().map_err(|e| e.to_string())?.0;
+        dialog.lpstrFilter = filter.as_ptr(); dialog.lpstrFile = file.as_mut_ptr(); dialog.nMaxFile = file.len() as u32;
+        dialog.lpstrDefExt = extension.as_ptr(); dialog.lpstrTitle = title.as_ptr();
+        dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+        if unsafe { GetSaveFileNameW(&mut dialog) } == 0 {
+            let code = unsafe { CommDlgExtendedError() };
+            return if code == 0 { Ok(None) } else { Err(format!("Save As dialog failed: {code}")) };
+        }
+        let path = PathBuf::from(String::from_utf16_lossy(&file[..file.iter().position(|&c| c == 0).unwrap_or(file.len())]));
+        let temporary = path.with_file_name(format!(".solyan-{}.tmp", random_token()));
+        let mut output = fs::OpenOptions::new().write(true).create_new(true).open(&temporary).map_err(|e| e.to_string())?;
+        if let Err(error) = output.write_all(&bytes).and_then(|_| output.sync_all()) { drop(output); let _ = fs::remove_file(&temporary); return Err(error.to_string()); }
+        drop(output);
+        use std::os::windows::ffi::OsStrExt;
+        let from: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+        let to: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) } == 0 {
+            let error = std::io::Error::last_os_error(); let _ = fs::remove_file(&temporary); return Err(error.to_string());
+        }
+        Ok(Some(path.to_string_lossy().to_string()))
+    }
+    #[cfg(not(windows))]
+    { let _ = (window, bytes, name); Err("Native Save As is available on Windows".into()) }
+}
+
+#[tauri::command]
+async fn reader_initial_file() -> Result<Option<(String, Vec<u8>)>, String> {
+    // Only the file supplied by Windows at launch; this command accepts no path
+    // from web content and does not expose arbitrary filesystem access.
+    let path = match std::env::args_os().skip(1).map(PathBuf::from).find(|path| path.extension().map(|e| e.to_string_lossy().eq_ignore_ascii_case("pdf")).unwrap_or(false)) {
+        Some(path) => path, None => return Ok(None),
+    };
+    if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 200 * 1024 * 1024 { return Err("Reader R1 PDF size limit is 200 MB".into()); }
+    let name = path.file_name().ok_or("Missing PDF filename")?.to_string_lossy().to_string();
+    fs::read(path).map(|bytes| Some((name, bytes))).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn desktop_switch_tools(app: tauri::AppHandle) -> Result<(), String> {
+    if !cfg!(feature = "reader-only") {
+        if let Some(window) = app.get_webview_window("main") { return window.set_focus().map_err(|e| e.to_string()); }
+        return tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::App("index.html".into()))
+            .title("SolYan PDF").inner_size(1440.0, 920.0).build().map(|_| ()).map_err(|e| e.to_string());
+    }
+    let path = app.path().local_data_dir().map_err(|e| e.to_string())?.join("SolYan PDF").join("solyan-pdf-desktop.exe");
+    if !path.is_file() { return Err("Chưa cài PDF Tools. Hãy cài SolYan PDF Tools để chuyển ứng dụng.".into()); }
+    let mut command = Command::new(path);
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+    command.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .manage(CoreState::default())
         .setup(|app| {
+            if cfg!(feature = "reader-only") { return Ok(()); }
             let state = app.state::<CoreState>();
             match start_office(app.handle()) {
                 Ok((mut office_process, office_endpoint)) => {
@@ -787,7 +865,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_initial_file])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

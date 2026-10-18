@@ -22,6 +22,7 @@ on:
       - "feat/windows-desktop-d5-pdfa-integration"
       - "feat/windows-desktop-d6-release-gate"
       - "feat/windows-desktop-phosphor-icons"
+      - "feat/windows-reader-r1"
     paths:
       - "desktop/**"
       - "backend/app/**"
@@ -122,6 +123,32 @@ jobs:
           if (-not (Test-Path desktop/ui/vendor/pdf-lib.min.js)) { throw "pdf-lib browser bundle was not staged" }
           $bundleHash = (Get-FileHash desktop/ui/vendor/pdf-lib.min.js -Algorithm SHA256).Hash.ToLowerInvariant()
           "pdf-lib 1.17.1 $bundleHash" | Tee-Object -FilePath artifacts/desktop-pdf-lib.log
+
+      - name: Set up Node for the pinned Reader tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/reader-tests/package-lock.json
+
+      - name: Stage and test Reader R1 and Quick Sign offline
+        shell: pwsh
+        run: |
+          npm ci --prefix desktop/reader-tests 2>&1 | Tee-Object -FilePath artifacts/reader-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/reader-tests/stage.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test --prefix desktop/reader-tests 2>&1 | Tee-Object -FilePath artifacts/reader-sign-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location desktop/reader-tests
+          try {
+            npx playwright install chromium
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            npm run e2e 2>&1 | Tee-Object -FilePath ../../artifacts/reader-browser-tests.log
+            $testExit = $LASTEXITCODE
+            if (Test-Path test-results) { Copy-Item test-results ../../artifacts/reader-browser-results -Recurse -Force }
+            if ($testExit -ne 0) { exit $testExit }
+          } finally { Pop-Location }
 
       - name: Build local core and Office resources
         shell: pwsh
@@ -533,6 +560,63 @@ jobs:
             artifacts/SolYan-PDF-Windows-x64.sha256
             artifacts/desktop-windows-release-gate.json
           if-no-files-found: error
+
+      - name: Build independent lightweight Reader installer
+        shell: pwsh
+        working-directory: desktop/src-tauri
+        run: |
+          npx --yes @tauri-apps/cli@2.12.3 build --config tauri.reader.conf.json --features reader-only --bundles nsis 2>&1 | Tee-Object -FilePath ../../artifacts/reader-tauri-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = Get-ChildItem target/release/bundle/nsis -Filter "*Reader*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Independent Reader installer was not produced" }
+          New-Item -ItemType Directory -Force ../../artifacts/reader-installer | Out-Null
+          Copy-Item $installer.FullName ../../artifacts/reader-installer/
+          Get-FileHash $installer.FullName -Algorithm SHA256 | Format-List | Out-String | Set-Content ../../artifacts/reader-installer.sha256
+
+      - name: Smoke standalone Reader without Tools engines
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-ChildItem artifacts/reader-installer -Filter "*.exe" | Select-Object -First 1
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -ne 0) { throw "Reader install failed: $($install.ExitCode)" }
+          $root = Join-Path $env:LOCALAPPDATA "SolYan PDF Reader"
+          $exe = @((Join-Path $root "solyan-pdf-reader.exe"), (Join-Path $root "solyan-pdf-desktop.exe"), (Join-Path $root "SolYan PDF Reader.exe")) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $exe) { throw "Standalone Reader executable was not installed" }
+          foreach ($engine in @("core", "office", "ocr", "sign", "archive")) {
+            if (Test-Path (Join-Path $root $engine)) { throw "Reader installer unexpectedly contains Tools engine resources: $engine" }
+          }
+          $app = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+          try {
+            Start-Sleep -Seconds 5
+            if ($app.HasExited) { throw "Reader exited before startup smoke" }
+            $engines = @(Get-Process -Name solyan-core,solyan-office,solyan-ocr,solyan-sign,solyan-archive -ErrorAction SilentlyContinue)
+            if ($engines.Count) { throw "Standalone Reader unexpectedly started a Tools engine" }
+            "reader_running=true; tools_engines=0" | Set-Content artifacts/reader-installed-smoke.log
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
+
+      - name: Upload independent Reader installer
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolYan-PDF-Reader-Windows-x64
+          path: |
+            artifacts/reader-installer/*.exe
+            artifacts/reader-installer.sha256
+            artifacts/reader-installed-smoke.log
+          if-no-files-found: error
+
+      - name: Preserve Reader diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-reader-diagnostics
+          path: |
+            artifacts/reader-*.log
+            artifacts/reader-browser-results/
+          if-no-files-found: warn
 
   ci-result:
     needs: build-windows-x64

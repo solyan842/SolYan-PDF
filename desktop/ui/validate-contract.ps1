@@ -103,6 +103,7 @@ $contracts = @(
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
 $strictCspPages = @("desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html")
+$strictCspPages += "desktop/ui/reader.html"
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"
