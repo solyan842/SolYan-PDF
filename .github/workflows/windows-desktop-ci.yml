@@ -8,9 +8,11 @@ on:
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
+  workflow_dispatch:
   push:
     branches:
       - "feat/windows-desktop-v1"
+      - "feat/windows-desktop-d4-text-integration"
     paths:
       - "desktop/**"
       - "backend/app/**"
