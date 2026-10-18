@@ -13,6 +13,7 @@ $required = @(
   "desktop/ui/remove-blank.html", "desktop/ui/remove-blank.js", "desktop/ui/page-labels.html", "desktop/ui/page-labels.js",
   "desktop/ui/poppler-convert.html", "desktop/ui/poppler-convert.js", "desktop/ui/office-convert.html", "desktop/ui/office-convert.js",
   "desktop/ui/portfolio.html", "desktop/ui/portfolio.js", "desktop/ui/workspace.html",
+  "desktop/ui/ocr.html", "desktop/ui/ocr.js", "desktop/ui/ocr.css",
   "desktop/backend/stage-native-runtimes.ps1", "desktop/backend/stage-office-runtime.ps1",
   "desktop/vendor/qpdf-windows-x64.json", "desktop/vendor/poppler-windows-x64.json", "desktop/vendor/libreoffice-windows-x64.json",
   "desktop/src-tauri/tauri.conf.json"
@@ -43,11 +44,14 @@ $scripts = @{
   popplerConvert = Get-Content "desktop/ui/poppler-convert.js" -Raw
   officeConvert = Get-Content "desktop/ui/office-convert.js" -Raw
   portfolio = Get-Content "desktop/ui/portfolio.js" -Raw
+  ocr = Get-Content "desktop/ui/ocr.js" -Raw
 }
 
 foreach ($text in @("Công cụ phổ biến", "Tất cả công cụ", "Ctrl K", "catalog-additions.js")) { if (-not $html.Contains($text)) { throw "Desktop UI contract missing: $text" } }
 foreach ($text in @("Nối PDF","PDF sang Word","PDF sang PowerPoint","Word sang PDF","Excel sang PDF","PowerPoint sang PDF","OpenDocument sang PDF","RTF sang PDF","OCR PDF","Tiện ích Việt Nam","Sửa lỗi PDF","Trích xuất hình ảnh","Thông tin PDF","Kiểm tra nội dung chủ động","Tệp đính kèm","Xóa hình ảnh","Làm sạch PDF","Tối ưu xem web","Giải nén cấu trúc PDF","Nén PDF","Flatten PDF","Tối ưu hình ảnh","Bảo vệ PDF","Mở khóa PDF","Xóa chữ ký","Quyền hạn PDF","Xóa chú thích","Mở khóa biểu mẫu","Xóa trang trắng","Page Labels","PDF sang TXT","PDF sang HTML","PDF sang XML","PDF sang CBZ","PDF sang SVG","PDF sang PostScript","PDF sang EPS","PDF Portfolio")) { if (-not $catalog.Contains($text)) { throw "Desktop catalog missing: $text" } }
 foreach ($text in @("repair: './repair.html'","'extract-images': './extract-images.html'","info: './info.html'","'active-content': './active-content.html'","attachments: './attachments.html'","'remove-images': './remove-images.html'","sanitize: './sanitize.html'","linearize: './linearize.html'","decompress: './decompress.html'","compress: './transform.html?tool=compress'","flatten: './transform.html?tool=flatten'","'image-opt': './transform.html?tool=image-opt'","protect: './security-transform.html?tool=protect'","unlock: './security-transform.html?tool=unlock'","'remove-signature': './remove-signature.html'","permissions: './permissions.html'","'remove-annotations': './remove-annotations.html'","'unlock-forms': './unlock-forms.html'","'remove-blank': './remove-blank.html'","'page-labels': './page-labels.html'","'pdf-text': './poppler-convert.html?tool=text'","'pdf-html': './poppler-convert.html?tool=html'","'pdf-xml': './poppler-convert.html?tool=xml'","'pdf-cbz': './poppler-convert.html?tool=cbz'","'pdf-svg': './poppler-convert.html?tool=svg'","'pdf-ps': './poppler-convert.html?tool=ps'","'pdf-eps': './poppler-convert.html?tool=eps'","portfolio: './portfolio.html'","'word-pdf': './office-convert.html?tool=word-pdf'","'excel-pdf': './office-convert.html?tool=excel-pdf'","'ppt-pdf': './office-convert.html?tool=ppt-pdf'","'odf-pdf': './office-convert.html?tool=odf-pdf'","'rtf-pdf': './office-convert.html?tool=rtf-pdf'","'pdf-word': './office-convert.html?tool=pdf-word'","'pdf-ppt': './office-convert.html?tool=pdf-ppt'")) { if (-not $app.Contains($text)) { throw "Desktop route contract missing: $text" } }
+
+foreach ($text in @("'ocr-pdf': './ocr.html'","'ocr-image': './ocr.html'")) { if (-not $app.Contains($text)) { throw "Desktop OCR route contract missing: $text" } }
 
 $contracts = @(
   @{ n='Repair PDF'; s=$scripts.repair; t=@('desktop_core_session','/pdf/repair','X-SolYan-Desktop-Token') },
@@ -69,11 +73,12 @@ $contracts = @(
   @{ n='Page Labels'; s=$scripts.pageLabels; t=@('desktop_core_session','/pdf/page-labels','X-SolYan-Desktop-Token','mode','rules_json','X-SolYan-Page-Labels') },
   @{ n='Poppler converters'; s=$scripts.popplerConvert; t=@('desktop_core_session','/pdf/to-text','/pdf/to-html','/pdf/to-xml','/pdf/to-cbz','/pdf/to-svg','/pdf/to-postscript','X-SolYan-Desktop-Token','password','first_page','last_page','preserve_page_breaks','precise_coordinates','include_hidden_text','raster_dpi','output_format','level') },
   @{ n='Office converters'; s=$scripts.officeConvert; t=@('desktop_core_session','/office/to-pdf','/experimental/pdf-to-office','X-SolYan-Desktop-Token','target','mode','auto','X-SolYan-Conversion-Engine','LibreOffice-first') },
+  @{ n='OCR PDF/Image'; s=$scripts.ocr; t=@('desktop_core_session','/ocr/text','X-SolYan-Desktop-Token','payload.text') },
   @{ n='PDF Portfolio'; s=$scripts.portfolio; t=@('desktop_core_session','/pdf/portfolio','X-SolYan-Desktop-Token','X-SolYan-Portfolio-Files') }
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/workspace.html")
+$strictCspPages = @("desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/workspace.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"
