@@ -361,6 +361,7 @@ fn start_ocr(app: &tauri::AppHandle) -> Result<(OcrProcess, String, String), Str
         .env("TESSERACT_LANG", "vie+eng")
         .env("OCR_LANG", "vi")
         .env("PADDLE_PDX_CACHE_HOME", &model_cache)
+        .env("SOLYAN_OCR_MODEL_ROOT", model_cache.join("official_models"))
         .env("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
         .env("PATH", prepend_paths(&[tesseract_bin])?)
         .stdin(Stdio::null())
