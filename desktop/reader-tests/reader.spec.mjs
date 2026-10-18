@@ -143,3 +143,30 @@ test('Fill & Sign text date check and cross roundtrip without rasterizing page',
  const ops=await page1.getOperatorList();expect(ops.fnArray.filter(x=>x===85).length).toBeGreaterThanOrEqual(4);
  await opened.loadingTask.destroy();expect(errors).toEqual([]);
 });
+
+test('local per-PDF bookmarks and last reading position survive document reopen',async({page})=>{
+  const pdf=await PDFDocument.create();for(let i=0;i<4;i++)pdf.addPage([595,842]).drawText('Bookmark test page '+(i+1));
+  const buffer=Buffer.from(await pdf.save()),fixture={name:'Bookmark.pdf',mimeType:'application/pdf',buffer};
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles(fixture);
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  await page.locator('#pageNumber').fill('3');await page.locator('#pageNumber').press('Tab');
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await page.locator('[data-ribbon=view]').click();await page.locator('#bookmarkAdd').click();
+  await expect(page.locator('#bookmarks .bookmark-row')).toHaveCount(1);
+  await expect(page.locator('#bookmarks .bookmark-link')).toHaveText('Trang 3');
+  await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
+  await expect.poll(()=>page.evaluate(()=>Object.entries(localStorage)
+    .filter(([key])=>key.startsWith('sreader.bookmarks.v1:'))
+    .some(([,value])=>{try{return JSON.parse(value).lastPage===2;}catch{return false;}}))).toBe(true);
+  await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles(fixture);
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
+  await page.locator('#showBookmarks').click();
+  await expect(page.locator('#bookmarks .bookmark-row')).toHaveCount(1);
+  await page.locator('#bookmarks .bookmark-link').click();
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await page.locator('#bookmarks .bookmark-remove').click();
+  await expect(page.locator('#bookmarks .bookmark-row')).toHaveCount(0);
+});

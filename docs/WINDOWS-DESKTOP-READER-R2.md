@@ -56,3 +56,7 @@ The original lifecycle fix remains. The entire open/drag/eight-handle/zoom/apply
 ## Incremental R2 Fill & Sign batch — CI pending
 
 Adds offline text (Unicode, up to 200 characters / three lines), local Vietnamese date, checkmark and cross. Reuses Quick Sign placement and eight resize handles, Save As and page-content embedding; original PDF pages are not rasterized and source text remains searchable. Inserted typed text is a flattened image, **not selectable PDF text**. Fill-only output uses `-da-dien.pdf`; mixed signature documents retain `-da-ky.pdf`. Existing annotation and signing paths stay unchanged. Includes Playwright save/reopen test. Native FreeText, AcroForm and Print remain outstanding.
+
+## Reader R2 bookmark / resume follow-up (isolated staging branch)
+
+Introduces **local PDF bookmarks** and automatic last-page restoration keyed by the PDF.js document fingerprint, without storing document bytes, filenames or filesystem paths. Users can save a page in View, jump to it from the sidebar, remove it, reopen the same PDF and resume reading. Save pages are capped at 100 per document; storage errors do not block reading. A browser end-to-end regression checks persistence, page restoration, navigation and deletion. No actual PDF content or bookmark PDF catalog is modified; this is a viewer-local navigation feature. This follow-up remains on a **CI-isolated branch** until the prior Windows #137 build finishes and is verified.

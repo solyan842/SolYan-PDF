@@ -69,6 +69,56 @@ export function installR2(api){
   button('view','fullscreen','Toàn màn hình','rectangle',async()=>{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();});
   button('view','theme','Sáng / tối','moon',()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;localStorage.setItem('sreader.theme',theme);});
   document.documentElement.dataset.theme=localStorage.getItem('sreader.theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+
+  // Per-document bookmarks and resume position. Only a PDF.js fingerprint and
+  // page numbers/short local labels are stored: never PDF contents or filesystem paths.
+  const bookmarkBtn=element('button','Dấu trang',{id:'showBookmarks'});
+  const bookmarkList=element('div','',{id:'bookmarks',hidden:true});
+  $('sidebar').querySelector('.sideTabs').append(bookmarkBtn);$('sidebar').append(bookmarkList);
+  function readBook(d){
+    if(!d.bookmarkKey)return {pages:[],lastPage:1};
+    try{
+      const raw=JSON.parse(localStorage.getItem(d.bookmarkKey)||'null');
+      if(!raw||!Array.isArray(raw.pages))return {pages:[],lastPage:1};
+      const pages=raw.pages.filter(x=>Number.isInteger(x.page)&&x.page>=1&&x.page<=d.pdf.numPages)
+        .slice(0,100).map(x=>({page:x.page,name:typeof x.name==='string'?x.name.slice(0,80):'Trang '+x.page}));
+      const lastPage=Number.isInteger(raw.lastPage)?Math.min(d.pdf.numPages,Math.max(1,raw.lastPage)):1;
+      return {pages,lastPage};
+    }catch{return {pages:[],lastPage:1};}
+  }
+  function persistBook(d){
+    if(!d.bookmarkKey)return;
+    try{localStorage.setItem(d.bookmarkKey,JSON.stringify(d.bookmarkRecord));}
+    catch{api.message('Không ghi được dấu trang trong hồ sơ ứng dụng.');}
+  }
+  function renderBookmarks(d){
+    if(bookmarkList.hidden)return;
+    bookmarkList.replaceChildren();
+    if(!d){bookmarkList.append(element('p','Mở PDF để xem dấu trang.'));return;}
+    if(!d.bookmarkRecord?.pages.length){bookmarkList.append(element('p','Chưa có dấu trang. Nhấn “Đánh dấu trang” trong mục Xem.'));return;}
+    for(const saved of d.bookmarkRecord.pages){
+      const row=element('div','',{className:'bookmark-row'});
+      const go=element('button',saved.name,{className:'bookmark-link'});
+      go.title='Đến trang '+saved.page;go.onclick=()=>{d.view.currentPageNumber=saved.page;};
+      const remove=element('button','×',{className:'bookmark-remove'});
+      remove.setAttribute('aria-label','Xóa dấu trang '+saved.name);
+      remove.onclick=()=>{d.bookmarkRecord.pages=d.bookmarkRecord.pages.filter(x=>x.page!==saved.page);persistBook(d);renderBookmarks(d);};
+      row.append(go,remove);bookmarkList.append(row);
+    }
+  }
+  function showBookmarks(){
+    $('thumbs').hidden=true;$('outline').hidden=true;bookmarkList.hidden=false;renderBookmarks(api.current());
+  }
+  bookmarkBtn.onclick=showBookmarks;
+  button('view','bookmarkAdd','Đánh dấu trang','note-pencil',()=>{
+    const d=doc(),page=d.view.currentPageNumber,items=d.bookmarkRecord.pages;
+    if(items.some(x=>x.page===page)){showBookmarks();api.message('Trang này đã được đánh dấu.');return;}
+    if(items.length>=100)throw Error('Tối đa 100 dấu trang cho mỗi PDF.');
+    items.push({page,name:'Trang '+page});items.sort((a,b)=>a.page-b.page);
+    persistBook(d);showBookmarks();api.message('Đã đánh dấu trang '+page+'.');
+  });
+  button('view','bookmarkShow','Danh sách dấu trang','note-pencil',()=>{doc();showBookmarks();});
+
   const notes=element('textarea','',{id:'annotationNote',placeholder:'Nội dung ghi chú',ariaLabel:'Nội dung ghi chú'});$('signOptions').append(notes);
   notes.onchange=()=>{const d=doc(),item=d.placements.find(p=>p.id===d.selectedId);if(item?.kind==='note'){checkpoint(d);item.text=notes.value;api.changed(d);api.render(d);}};
   function checkpoint(d){const state=snapshot(d);d.undo??=[];d.redo??=[];if(d.undo.at(-1)!==state)d.undo.push(state);if(d.undo.length>30)d.undo.shift();d.redo=[];}
@@ -90,6 +140,14 @@ export function installR2(api){
     if(!['highlight','note'].includes(item.kind)){node.setAttribute('stroke','#2459c3');node.setAttribute('stroke-width','1.5');node.setAttribute('vector-effect','non-scaling-stroke');}svg.append(node);return svg;
   }
   function opened(d){d.savedState=snapshot(d);d.undo=[];d.redo=[];d.r2Abort=new AbortController();const signal=d.r2Abort.signal;
+    d.bookmarkKey=d.pdf.fingerprints?.[0]?'sreader.bookmarks.v1:'+d.pdf.fingerprints[0]:null;
+    d.bookmarkRecord=readBook(d);
+    d.bus.on('pagesinit',()=>{const saved=d.bookmarkRecord.lastPage;if(saved>1&&saved<=d.pdf.numPages)d.view.currentPageNumber=saved;});
+    d.bus.on('pagechanging',({pageNumber})=>{if(!Number.isInteger(pageNumber)||pageNumber<1)return;
+      clearTimeout(d.bookmarkTimer);d.bookmarkTimer=setTimeout(()=>{
+        if(d.bookmarkRecord.lastPage!==pageNumber){d.bookmarkRecord.lastPage=pageNumber;persistBook(d);}
+      },500);
+    });
     d.container.addEventListener('pointerdown',event=>{
       if(event.button!==0||api.busy||event.target.closest('.signature'))return;
       api.select(null);$('signOptions').hidden=true;api.render(d);
@@ -110,5 +168,5 @@ export function installR2(api){
     const check=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});if(check.getPageCount()!==d.pdf.numPages)throw Error('Kiểm tra lưu: số trang bị thay đổi.');return bytes;
   }
   document.addEventListener('keydown',event=>{if(!event.ctrlKey||!api.current()||event.target.closest('input,textarea,[contenteditable=true]'))return;if(event.key.toLowerCase()==='z'||event.key.toLowerCase()==='y'){event.preventDefault();undo(event.key.toLowerCase()==='y'||event.shiftKey);}});
-  return{get mode(){return mode;},selection,opened,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
+  return{get mode(){return mode;},selection,opened,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
 }
