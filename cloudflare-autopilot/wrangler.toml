@@ -1,0 +1,15 @@
+name = "solyan-pdf-autopilot"
+main = "src/index.mjs"
+compatibility_date = "2026-10-18"
+workers_dev = true
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[durable_objects.bindings]]
+name = "CONTROLLER"
+class_name = "Controller"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Controller"]

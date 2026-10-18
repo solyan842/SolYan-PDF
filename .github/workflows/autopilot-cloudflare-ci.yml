@@ -1,0 +1,32 @@
+name: Cloudflare Autopilot Control Tests
+
+on:
+  push:
+    branches: [feat/autopilot-cloudflare]
+    paths: ["cloudflare-autopilot/**", ".github/workflows/autopilot-cloudflare-ci.yml"]
+  pull_request:
+    paths: ["cloudflare-autopilot/**", ".github/workflows/autopilot-cloudflare-ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests and syntax
+        working-directory: cloudflare-autopilot
+        run: |
+          node --check src/index.mjs
+          node --check src/planner.mjs
+          node --test tests/*.test.mjs
+      - name: Wrangler bundle dry-run
+        working-directory: cloudflare-autopilot
+        run: |
+          npm install --no-audit --no-fund
+          npx wrangler deploy --dry-run
