@@ -1,6 +1,7 @@
 name: Windows OCR Runtime CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "desktop/backend/ocr_runner.py"
@@ -147,10 +148,22 @@ jobs:
           $port = 38191
           $env:SOLYAN_OCR_TOKEN = "desktop-ocr-smoke-token-0123456789abcdef"
           $env:SOLYAN_OCR_DEBUG_ERRORS = "1"
+          # A passing smoke must use Paddle even if the bundled fallback exists.
+          $env:OCR_TESSERACT_FALLBACK = "0"
           $stdout = Join-Path $PWD "artifacts/windows-ocr-sidecar.stdout.log"
           $stderr = Join-Path $PWD "artifacts/windows-ocr-sidecar.stderr.log"
-          $process = Start-Process -FilePath (Resolve-Path dist/solyan-ocr.exe) -ArgumentList "--port", "$port", "--token", "$env:SOLYAN_OCR_TOKEN" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $ocrExe = (Resolve-Path dist/solyan-ocr.exe).Path
+          $ruleName = "SolYan-OCR-offline-$([guid]::NewGuid().ToString('N'))"
+          $firewallProfiles = @(Get-NetFirewallProfile | Select-Object Name, Enabled)
+          $process = $null
           try {
+            # Proxies alone do not stop clients that bypass proxy settings.
+            # Windows loopback remains available for the local HTTP smoke.
+            Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True
+            $rule = New-NetFirewallRule -Name $ruleName -DisplayName $ruleName -Direction Outbound -Program $ocrExe -Action Block -Profile Any -Enabled True
+            $rule | Select-Object Name, Enabled, Direction, Action | ConvertTo-Json | Set-Content artifacts/windows-ocr-offline-firewall.json
+            if (@(Get-NetFirewallProfile | Where-Object { -not $_.Enabled }).Count) { throw "Offline smoke requires enabled firewall profiles" }
+            $process = Start-Process -FilePath $ocrExe -ArgumentList "--port", "$port", "--token", "$env:SOLYAN_OCR_TOKEN" -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
             $health = $null
             for ($i = 0; $i -lt 120; $i++) {
               Start-Sleep -Milliseconds 500
@@ -173,6 +186,7 @@ jobs:
             if (-not $unauthorized) { throw "OCR sidecar accepted unauthenticated health request" }
             "unauthenticated_health=401" | Set-Content artifacts/windows-ocr-auth-smoke.log
             if ($health.models_loaded.ocr -or $health.models_loaded.structure) { throw "OCR health unexpectedly loaded Paddle models" }
+            if ($health.fallback.enabled) { throw "Paddle-only smoke must disable Tesseract fallback" }
             if (-not $health.fallback.binary_available) { throw "OCR sidecar could not resolve staged Tesseract" }
             if ($health.fallback.language -ne "vie+eng") { throw "Unexpected Tesseract language contract" }
             $health | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health-before.json -Encoding utf8
@@ -211,7 +225,11 @@ jobs:
             if ($after.models_loaded.structure) { throw "Structured OCR model loaded during text-only smoke" }
             $after | ConvertTo-Json -Depth 6 | Set-Content artifacts/windows-ocr-health-after.json -Encoding utf8
           } finally {
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+            if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+            Remove-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
+            foreach ($profile in $firewallProfiles) {
+              Set-NetFirewallProfile -Profile $profile.Name -Enabled $profile.Enabled
+            }
           }
 
       - name: Upload Windows OCR diagnostics
