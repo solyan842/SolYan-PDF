@@ -192,3 +192,7 @@ SolYan PDF source code is licensed under the **Apache License 2.0**. See `LICENS
 Third-party components retain their respective licenses and attribution requirements. See `docs/DEPENDENCIES.md` and `NOTICE`.
 
 See `docs/ROADMAP.md` for the exact implementation status and remaining work.
+
+## Windows Reader R2 milestone
+
+The separate sReader PDF application adds offline reusable signatures and native PDF annotations while preserving sTool PDF. See [implemented scope, tests and limitations](docs/WINDOWS-DESKTOP-READER-R2.md). Full R2 release acceptance remains subject to its documented remaining work and exact-commit Windows CI.

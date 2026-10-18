@@ -51,7 +51,7 @@
     for (const item of placements) {
       if (item.page < 0 || item.page >= doc.getPageCount()) throw Error('Invalid signature page');
       if (!images.has(item.image)) images.set(item.image, await doc.embedPng(item.image));
-      const page = doc.getPage(item.page), matrix = imageMatrix(await viewportForPage(item.page), item.rect);
+      const page = doc.getPage(item.page), matrix = imageMatrix(item.viewport || await viewportForPage(item.page, item), item.rect);
       page.pushOperators(PDFLib.pushGraphicsState(), PDFLib.concatTransformationMatrix(...matrix));
       page.drawImage(images.get(item.image), { x: 0, y: 0, width: 1, height: 1 });
       page.pushOperators(PDFLib.popGraphicsState());

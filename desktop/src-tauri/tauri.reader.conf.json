@@ -1,7 +1,28 @@
 {
-  "productName": "SolYan PDF Reader",
+  "productName": "sReader PDF",
   "mainBinaryName": "solyan-pdf-reader",
   "identifier": "vn.solyan.pdf.reader",
-  "app": {"windows": [{"label":"main","title":"SolYan PDF Reader","url":"reader.html","width":1440,"height":920,"minWidth":1024,"minHeight":700,"center":true,"dragDropEnabled":false}]},
-  "bundle": {"resources": null,"shortDescription":"Đọc và ký PDF offline","longDescription":"SolYan PDF Reader R1: đọc tài liệu và ký nhanh offline, cài đặt độc lập với PDF Tools."}
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "sReader PDF",
+        "url": "reader.html",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ]
+  },
+  "bundle": {
+    "resources": null,
+    "shortDescription": "Đọc và ký PDF offline",
+    "longDescription": "sReader PDF: đọc, chú thích và ký nhanh PDF offline.",
+    "icon": [
+      "../branding/sReader_PDF/app.ico"
+    ]
+  }
 }

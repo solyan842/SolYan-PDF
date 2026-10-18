@@ -1,5 +1,6 @@
 import * as pdfjs from './vendor/pdfjs/build/pdf.mjs';
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor/pdfjs/web/pdf_viewer.mjs';
+import { installR2 } from './reader-r2.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
@@ -8,6 +9,8 @@ let active = null, selected = null, asset = null, busy = false, drawing = false,
 const message = text => { $('status').textContent = text; };
 const attempt = fn => async (...args) => { try { await fn(...args); } catch (e) { message(`Không thể thực hiện: ${typeof e === 'string' ? e : e.message}`); } };
 const current = () => documents.get(active);
+let r2;
+const checkpoint = doc => r2?.checkpoint(doc);
 function changed(doc) { if (!doc.dirty) { doc.dirty = true; renderTabs(); } }
 function renderTabs() {
   $('tabs').replaceChildren();
@@ -18,7 +21,7 @@ function renderTabs() {
     close.onclick = attempt(async () => {
       if (busy || (doc.dirty && !confirm('Đóng tài liệu và bỏ chữ ký chưa lưu?'))) return;
       if (active === doc.id) { selected = null; active = null; }
-      doc.thumbnails?.disconnect(); doc.container.remove(); documents.delete(doc.id); await doc.pdf.loadingTask.destroy();
+      doc.thumbnails?.disconnect(); doc.r2Abort?.abort(); doc.view.setDocument(null); doc.container.remove(); documents.delete(doc.id); await doc.pdf.loadingTask.destroy();
       if (!active && documents.size) activate(documents.keys().next().value);
       else if (!documents.size) { $('welcome').hidden = false; $('thumbs').replaceChildren(); $('outline').replaceChildren(); $('signOptions').hidden = true; $('save').disabled = true; }
       renderTabs();
@@ -43,6 +46,7 @@ async function openFile(file) {
   const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE, maxCanvasPixels: 12_000_000, enableScripting: false });
   const doc = { id: crypto.randomUUID(), name: file.name, bytes, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
+  r2?.opened(doc);
   bus.on('pagesinit', () => { view.currentScaleValue = 'page-width'; });
   bus.on('pagerendered', () => { if (doc.id === active) renderSignatures(doc); });
   bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) $('pageNumber').value = pageNumber; });
@@ -54,22 +58,25 @@ function activate(id) {
   for (const other of documents.values()) other.container.hidden = other.id !== id;
   $('welcome').hidden = true; $('pageCount').textContent = `/ ${doc.pdf.numPages}`; $('pageNumber').max = doc.pdf.numPages; $('pageNumber').value = doc.view.currentPageNumber;
   $('save').disabled = false; $('query').value = doc.query; $('matches').textContent = doc.matches; $('signOptions').hidden = !selected;
-  renderTabs(); doc.view.update(); thumbnails(doc); outline(doc); renderSignatures(doc);
+  renderTabs(); doc.view.update(); thumbnails(doc); outline(doc); renderSignatures(doc); r2?.activated(doc);
 }
 async function thumbnails(doc) {
   doc.thumbnails?.disconnect(); $('thumbs').replaceChildren();
   let queue = Promise.resolve();
   const observer = new IntersectionObserver(entries => {
-    for (const entry of entries) if (entry.isIntersecting) {
-      observer.unobserve(entry.target);
+    for (const entry of entries) {
+      entry.target.dataset.visible=String(entry.isIntersecting);
+      if(!entry.isIntersecting){entry.target.querySelector('canvas')?.remove();continue;}
+      if(entry.target.dataset.pending==='true'||entry.target.querySelector('canvas'))continue;
+      entry.target.dataset.pending='true';
       queue = queue.then(async () => {
-        if (current() !== doc || !entry.target.isConnected) return;
+        if (current() !== doc || !entry.target.isConnected || entry.target.dataset.visible!=='true') return;
         const page = await doc.pdf.getPage(Number(entry.target.dataset.page));
         const viewport = page.getViewport({ scale: 120 / page.getViewport({ scale: 1 }).width });
         const canvas = document.createElement('canvas'); canvas.width = viewport.width; canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        if (entry.target.isConnected) entry.target.prepend(canvas);
-      }).catch(e => message(`Thumbnail: ${e.message}`));
+        if (entry.target.isConnected&&entry.target.dataset.visible==='true') entry.target.prepend(canvas);
+      }).catch(e => message(`Thumbnail: ${e.message}`)).finally(()=>{entry.target.dataset.pending='false';});
     }
   }, { root: $('sidebar'), rootMargin: '200px' });
   doc.thumbnails = observer;
@@ -95,19 +102,26 @@ function renderSignatures(doc = current()) {
     let layer = page.div.querySelector('.signatureLayer');
     if (!layer) { layer = document.createElement('div'); layer.className = 'signatureLayer'; page.div.append(layer); }
     const node = document.createElement('div'); node.className = `signature${item.id === selected ? ' selected' : ''}`; node.dataset.signature = item.id; node.tabIndex = 0; node.setAttribute('aria-label', 'Chữ ký: kéo di chuyển hoặc dùng phím mũi tên');
-    const position = () => Object.assign(node.style, { left: `${item.rect.x*100}%`, top: `${item.rect.y*100}%`, width: `${item.rect.w*100}%`, height: `${item.rect.h*100}%` }); position();
-    const img = document.createElement('img'); img.src = item.image; img.alt = 'Chữ ký'; img.draggable = false; node.append(img);
+    const position = () => {
+      if(item.viewport){const frame=window.ReaderEdits.frame(item,page.viewport);Object.assign(node.style,{left:`${frame.left}px`,top:`${frame.top}px`,width:`${frame.width}px`,height:`${frame.height}px`,transform:frame.transform,transformOrigin:'0 0'});}
+      else Object.assign(node.style, { left: `${item.rect.x*100}%`, top: `${item.rect.y*100}%`, width: `${item.rect.w*100}%`, height: `${item.rect.h*100}%` });
+    }; position();
+    if(item.kind){node.classList.add('annotation');node.dataset.kind=item.kind;node.append(r2.visual(item));}
+    else { const img = document.createElement('img'); img.src = item.image; img.alt = 'Chữ ký'; img.draggable = false; node.append(img); }
     for (const handle of ['nw','n','ne','e','se','s','sw','w']) {
       const button = document.createElement('button'); button.className = 'handle'; button.dataset.h = handle; button.setAttribute('aria-label', `Đổi kích thước ${handle}`); button.hidden = item.id !== selected; node.append(button);
     }
     node.onpointerdown = e => {
       if (busy || e.button !== 0) return; e.preventDefault(); e.stopPropagation();
-      selected = doc.selectedId = item.id; $('signOptions').hidden = false;
+      if(r2?.mode==='erase'){selected=doc.selectedId=item.id;removeSignature();return;}
+      checkpoint(doc);
+      selected = doc.selectedId = item.id; $('signOptions').hidden = false;r2.selection(item);
       doc.container.querySelectorAll('.signature').forEach(el => { el.classList.toggle('selected', el === node); el.querySelectorAll('.handle').forEach(h => h.hidden = el !== node); });
       const start = { ...item.rect }, x = e.clientX, y = e.clientY, bounds = layer.getBoundingClientRect(), handle = e.target.dataset.h;
       node.setPointerCapture(e.pointerId);
       node.onpointermove = move => {
-        const dx = (move.clientX-x)/bounds.width, dy = (move.clientY-y)/bounds.height;
+        let dx = (move.clientX-x)/bounds.width, dy = (move.clientY-y)/bounds.height;
+        if(item.viewport){const A=window.ReaderEdits;const p0=A.project(item.viewport,A.point(page.viewport,x-bounds.left,y-bounds.top));const p1=A.project(item.viewport,A.point(page.viewport,move.clientX-bounds.left,move.clientY-bounds.top));dx=(p1[0]-p0[0])/item.viewport.width;dy=(p1[1]-p0[1])/item.viewport.height;}
         item.rect = handle ? Q.resize(start, handle, dx, dy) : Q.move(start, dx, dy); position(); changed(doc);
       };
       const end = () => { node.onpointermove = null; node.onpointerup = null; node.onpointercancel = null; node.onlostpointercapture = null; };
@@ -116,12 +130,12 @@ function renderSignatures(doc = current()) {
     node.onkeydown = e => {
       if (e.key === 'Delete') { selected = doc.selectedId = item.id; removeSignature(); return; }
       const delta = { ArrowLeft: [-.002,0], ArrowRight: [.002,0], ArrowUp: [0,-.002], ArrowDown: [0,.002] }[e.key];
-      if (delta) { e.preventDefault(); item.rect = Q.move(item.rect, ...delta); position(); changed(doc); }
+      if (delta) { e.preventDefault(); checkpoint(doc);item.rect = Q.move(item.rect, ...delta); position(); changed(doc); }
     };
     layer.append(node);
   }
 }
-function removeSignature() { const doc = current(); if (!doc || busy) return; doc.placements = doc.placements.filter(p => p.id !== selected); selected = doc.selectedId = null; $('signOptions').hidden = true; changed(doc); renderSignatures(); }
+function removeSignature() { const doc = current(); if (!doc || busy) return; checkpoint(doc);doc.placements = doc.placements.filter(p => p.id !== selected); selected = doc.selectedId = null; $('signOptions').hidden = true; changed(doc); renderSignatures(); }
 const ink = $('ink'), ctx = ink.getContext('2d');
 function clearInk() { ctx.clearRect(0,0,ink.width,ink.height); inked = false; }
 function inkPoint(e) { const r = ink.getBoundingClientRect(); return [(e.clientX-r.left)*ink.width/r.width, (e.clientY-r.top)*ink.height/r.height]; }
@@ -148,31 +162,38 @@ function croppedInk() {
   if(x1<x0) throw Error('Vẽ, nhập tên hoặc chọn ảnh chữ ký.');
   const canvas=document.createElement('canvas'); canvas.width=x1-x0+1;canvas.height=y1-y0+1;canvas.getContext('2d').drawImage(ink,x0,y0,canvas.width,canvas.height,0,0,canvas.width,canvas.height);return canvas;
 }
-$('useSign').onclick = attempt(async () => {
-  if (!inked) throw Error('Chữ ký đang trống.'); const doc=current(); if(!doc) return;
-  const canvas=croppedInk(); asset=canvas.toDataURL('image/png'); const pageIndex=doc.view.currentPageNumber-1;
-  const viewport=(await doc.pdf.getPage(pageIndex+1)).getViewport({scale:1});
+async function placeAsset(image) {
+  const doc=current();if(!doc||busy)throw Error('Mở PDF trước khi ký.');
+  const canvas=new Image();canvas.src=image;await canvas.decode();asset=image; const pageIndex=doc.view.currentPageNumber-1;
+  const sourcePage=await doc.pdf.getPage(pageIndex+1);const viewport=sourcePage.getViewport({scale:1,rotation:(sourcePage.rotate+doc.view.pagesRotation)%360});
   const w=.24,h=Math.min(.2,w*viewport.width/viewport.height*canvas.height/canvas.width);
-  const item={id:crypto.randomUUID(),group:crypto.randomUUID(),page:pageIndex,image:asset,rect:{x:.38,y:.7,w,h}};
-  doc.placements.push(item);selected=doc.selectedId=item.id; changed(doc);$('signatureDialog').close();$('signOptions').hidden=false; renderSignatures();
+  const item={id:crypto.randomUUID(),group:crypto.randomUUID(),page:pageIndex,image:asset,viewport:{width:viewport.width,height:viewport.height,transform:viewport.transform,rotation:viewport.rotation},rect:{x:.38,y:.7,w,h}};
+  checkpoint(doc);doc.placements.push(item);selected=doc.selectedId=item.id;r2.selection(item); changed(doc);$('signOptions').hidden=false; renderSignatures();
+}
+$('useSign').onclick=attempt(async()=>{
+ if(!inked)throw Error('Chữ ký đang trống.');
+ const image=croppedInk().toDataURL('image/png');await placeAsset(image);$('signatureDialog').close();
+ try{r2.rememberSignature(image);message('Đã lưu chữ ký trên máy để dùng lại cho PDF khác.');}
+ catch(error){message('Đã đặt chữ ký, nhưng chưa lưu vào thư viện: '+error.message);}
 });
 $('apply').onclick = attempt(async () => {
   const doc=current(); if(!doc||busy)return; const item=doc.placements.find(p=>p.id===selected);if(!item)throw Error('Chọn chữ ký mẫu.');
+  if(item.kind)throw Error('Chọn chữ ký hình ảnh để áp dụng nhiều trang.');
   const indexes=Q.pages($('applyScope').value==='range'?$('range').value:$('applyScope').value,doc.pdf.numPages,doc.view.currentPageNumber-1);
-  const source=(await doc.pdf.getPage(item.page+1)).getViewport({scale:1});
+  const source=item.viewport||(await doc.pdf.getPage(item.page+1)).getViewport({scale:1});
   const replacements=[];
-  for(const page of indexes) {const target=(await doc.pdf.getPage(page+1)).getViewport({scale:1});replacements.push({...item,id:crypto.randomUUID(),page,rect:Q.copyRect(item.rect,source,target)});}
-  doc.placements=doc.placements.filter(p=>p.group!==item.group).concat(replacements);selected=doc.selectedId=replacements[0]?.id;changed(doc);renderSignatures();message(`Đã áp dụng trên ${indexes.length} trang; lưu thành PDF mới để hoàn tất.`);
+  for(const page of indexes) {const p=await doc.pdf.getPage(page+1);const target=p.getViewport({scale:1,rotation:(p.rotate+doc.view.pagesRotation)%360});replacements.push({...item,id:crypto.randomUUID(),page,viewport:{width:target.width,height:target.height,transform:target.transform,rotation:target.rotation},rect:Q.copyRect(item.rect,source,target)});}
+  checkpoint(doc);doc.placements=doc.placements.filter(p=>p.group!==item.group).concat(replacements);selected=doc.selectedId=replacements[0]?.id;changed(doc);renderSignatures();message(`Đã áp dụng trên ${indexes.length} trang; lưu thành PDF mới để hoàn tất.`);
 });
 $('removeSign').onclick=removeSignature;
 $('save').onclick=attempt(async()=>{
   const doc=current(); if(!doc||busy)return;busy=true;$('save').disabled=true;
   try {
-    const bytes=doc.placements.length?await Q.save(doc.bytes,doc.placements,async page=>(await doc.pdf.getPage(page+1)).getViewport({scale:1}),window.PDFLib):doc.bytes.slice();
+    const bytes=await r2.exportDocument(doc);
     const name=doc.name.replace(/\.pdf$/i,'')+'-da-ky.pdf';
     if(window.__TAURI__?.core){
       const path=await window.__TAURI__.core.invoke('reader_save_as',{bytes:Array.from(bytes),name});
-      if(path){doc.dirty=false;renderTabs();message(`Đã lưu bản PDF mới: ${path}`);}else message('Đã hủy lưu. Chữ ký vẫn ở bản làm việc.');
+      if(path){doc.dirty=false;r2.saved(doc);renderTabs();message(`Đã lưu bản PDF mới: ${path}`);}else message('Đã hủy lưu. Chữ ký vẫn ở bản làm việc.');
       return;
     }
     const blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=doc.name.replace(/\.pdf$/i,'')+'-da-ky.pdf';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
@@ -194,6 +215,7 @@ document.addEventListener('dragover',e=>{e.preventDefault();});document.addEvent
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}});
 window.addEventListener('beforeunload',e=>{if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
 $('tools').onclick=attempt(async e=>{if(window.__TAURI__?.core){e.preventDefault();await window.__TAURI__.core.invoke('desktop_switch_tools');}});
+r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},get busy(){return busy;}});
 $('open').disabled=false;
 document.body.dataset.ready='true';
 if(window.__TAURI__?.core) attempt(async()=>{

@@ -23,6 +23,7 @@ on:
       - "feat/windows-desktop-d6-release-gate"
       - "feat/windows-desktop-phosphor-icons"
       - "feat/windows-reader-r1"
+      - "feat/windows-reader-r2"
     paths:
       - "desktop/**"
       - "backend/app/**"
@@ -131,7 +132,7 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/reader-tests/package-lock.json
 
-      - name: Stage and test Reader R1 and Quick Sign offline
+      - name: Stage and test Reader R2 and Quick Sign offline
         shell: pwsh
         run: |
           npm ci --prefix desktop/reader-tests 2>&1 | Tee-Object -FilePath artifacts/reader-install.log
@@ -370,7 +371,7 @@ jobs:
           $install = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)" }
 
-          $expectedRoot = Join-Path $env:LOCALAPPDATA "SolYan PDF"
+          $expectedRoot = Join-Path $env:LOCALAPPDATA "sTool PDF"
           $candidatePaths = @(
             (Join-Path $expectedRoot "solyan-pdf-desktop.exe"),
             (Join-Path $expectedRoot "SolYan PDF.exe")
@@ -580,7 +581,7 @@ jobs:
           $installer = Get-ChildItem artifacts/reader-installer -Filter "*.exe" | Select-Object -First 1
           $install = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru -WindowStyle Hidden
           if ($install.ExitCode -ne 0) { throw "Reader install failed: $($install.ExitCode)" }
-          $root = Join-Path $env:LOCALAPPDATA "SolYan PDF Reader"
+          $root = Join-Path $env:LOCALAPPDATA "sReader PDF"
           $exe = @((Join-Path $root "solyan-pdf-reader.exe"), (Join-Path $root "solyan-pdf-desktop.exe"), (Join-Path $root "SolYan PDF Reader.exe")) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           if (-not $exe) { throw "Standalone Reader executable was not installed" }
           foreach ($engine in @("core", "office", "ocr", "sign", "archive")) {

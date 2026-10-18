@@ -15,3 +15,4 @@
 .mini-status{font-size:10px;color:#7e8da4;font-weight:500}
 .tool-card.is-pending .tool-icon{filter:saturate(.73)}
 @media(prefers-color-scheme:dark){.nav-svg{filter:brightness(0) invert(1);opacity:.8}.tool-status,.mini-status{color:#a1adbf}}
+.brand img.brand-mark{background:transparent;object-fit:contain}

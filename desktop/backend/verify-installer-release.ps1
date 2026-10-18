@@ -34,7 +34,7 @@ $versionMatch = [regex]::Match($cargo, '(?m)^version\s*=\s*"([^"]+)"')
 if (-not $versionMatch.Success -or $config.version -ne $versionMatch.Groups[1].Value) {
   throw "D6 release gate: Cargo and Tauri desktop versions differ"
 }
-if ($config.productName -ne "SolYan PDF" -or $config.bundle.windows.nsis.installMode -ne "currentUser") {
+if ($config.productName -ne "sTool PDF" -or $config.bundle.windows.nsis.installMode -ne "currentUser") {
   throw "D6 release gate: installer identity or scope drifted"
 }
 

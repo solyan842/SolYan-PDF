@@ -35,3 +35,19 @@ test('flatten signature as an image, reopen all rotations/crop origins and prese
   const output=await PDFLib.PDFDocument.load(saved);assert.equal(output.getPageCount(),4);assert.equal(output.getForm().getFields().length,0);
   await writeFile(new URL('./test-results-signed.pdf',import.meta.url),saved);await pdf.loadingTask.destroy();await reopened.loadingTask.destroy();
 });
+const A=require('../ui/reader-edits.js');
+test('native annotations reopen at every page rotation and preserve text and source',async()=>{
+ const bytes=await fixture(),original=bytes.slice();const input=await getDocument({data:bytes.slice()}).promise;const items=[];
+ for(let page=0;page<4;page++){const viewport=(await input.getPage(page+1)).getViewport({scale:1});for(const [i,kind]of Object.keys(A.subtype).entries())items.push({id:`${page}-${kind}`,page,kind,text:'Ghi chú tiếng Việt',viewport,rect:{x:.12+(i%3)*.25,y:.15+Math.floor(i/3)*.2,w:.18,h:.09},points:[[0,.8],[.5,.1],[1,.7]]});}
+ const saved=await A.save(bytes,items,async page=>(await input.getPage(page+1)).getViewport({scale:1}),PDFLib);
+ assert.deepEqual(bytes,original);const output=await getDocument({data:saved.slice()}).promise;
+ for(let page=1;page<=4;page++){const p=await output.getPage(page),annots=await p.getAnnotations();assert.equal(annots.length,9);assert.ok(annots.every(a=>a.hasAppearance));assert.ok(annots.some(a=>a.contentsObj.str==='Ghi chú tiếng Việt'));assert.match((await p.getTextContent()).items.map(i=>i.str).join(' '),/original searchable text/);for(const a of annots)assert.ok(a.rect.every(Number.isFinite));}
+ const reopened=await PDFLib.PDFDocument.load(saved);for(const page of reopened.getPages())assert.equal(page.node.Annots().size(),9);
+ await input.loadingTask.destroy();await output.loadingTask.destroy();
+});
+test('annotation frame preserves physical placement under zoom and view rotation',()=>{
+ const source={width:600,height:800,transform:[1,0,0,-1,0,800]},item={viewport:source,rect:{x:.2,y:.3,w:.2,h:.1}};
+ for(const target of [{width:1200,height:1600,transform:[2,0,0,-2,0,1600]},{width:800,height:600,transform:[0,1,1,0,0,0]}]){
+ const frame=A.frame(item,target);assert.ok(frame.width>0&&frame.height>0);const pdf=A.point(source,120,240),expected=A.project(target,pdf);assert.deepEqual([frame.left,frame.top],expected);assert.deepEqual(A.point(target,A.project(target,pdf)[0],A.project(target,pdf)[1]),pdf);
+ }
+});

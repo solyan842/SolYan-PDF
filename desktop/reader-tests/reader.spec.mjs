@@ -1,7 +1,8 @@
 import { test,expect } from '@playwright/test';
 import { PDFDocument,degrees,PDFName,PDFString } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { readFile } from 'node:fs/promises';
+import { readFile,writeFile } from 'node:fs/promises';
+import os from 'node:os';
 test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen preserve text',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const pdf=await PDFDocument.create();for(let i=0;i<3;i++){const p=pdf.addPage([600,800]);p.drawText('SOLYAN Reader search text',{x:60,y:650});if(i===1)p.setRotation(degrees(90));}
@@ -28,9 +29,10 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
 test('100-page document uses lazy canvases and remains navigable offline',async({page})=>{
   const external=[];page.on('request',request=>{if(/^https?:/.test(request.url())&&!request.url().startsWith('http://127.0.0.1:4179/'))external.push(request.url());});
   const pdf=await PDFDocument.create();for(let i=0;i<100;i++)pdf.addPage([600,800]).drawText(`Reader page ${i+1}`);
-  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'100-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.pdfViewer .page canvas').first()).toBeVisible();
-  expect(await page.locator('.pdfViewer .page canvas').count()).toBeLessThan(30);
-  await page.locator('#pageNumber').fill('100');await page.locator('#pageNumber').press('Tab');await expect(page.locator('.page[data-page-number="100"] canvas').first()).toBeVisible();expect(await page.locator('.pdfViewer .page canvas').count()).toBeLessThan(30);expect(external).toEqual([]);
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');const started=Date.now();await page.locator('#pdfFiles').setInputFiles({name:'100-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.pdfViewer .page canvas').first()).toBeVisible();
+  const firstPageMs=Date.now()-started;expect(await page.locator('.pdfViewer .page canvas').count()).toBeLessThan(30);
+  const jumpStarted=Date.now();await page.locator('#pageNumber').fill('100');await page.locator('#pageNumber').press('Tab');await expect(page.locator('.page[data-page-number="100"] canvas').first()).toBeVisible();expect(await page.locator('.pdfViewer .page canvas').count()).toBeLessThan(30);expect(external).toEqual([]);
+  const measured={fixture:'100 generated text pages; synthetic, not a real corpus',os:os.platform()+' '+os.release(),cpu:os.cpus()[0]?.model,ramBytes:os.totalmem(),firstPageMs,jumpToPage100Ms:Date.now()-jumpStarted,pageCanvasCount:await page.locator('.pdfViewer .page canvas').count(),memoryScope:'No native process/peak RAM measurement',browser:await page.context().browser().version()};await writeFile('test-results/reader-performance.json',JSON.stringify(measured,null,2));console.log('Reader measurements '+JSON.stringify(measured));
 });
 
 test('mouse and image signatures, selected range, native Save As cancel/success bridge',async({page})=>{
@@ -43,4 +45,40 @@ test('mouse and image signatures, selected range, native Save As cancel/success 
   await page.locator('#save').click();await expect(page.locator('#status')).toContainText('Đã hủy lưu');await expect(page.locator('#tabs .title')).toContainText('●');
   await page.evaluate(()=>{window.__savePath='C:/Saved/Mouse-da-ky.pdf';});await page.locator('#save').click();await expect(page.locator('#status')).toContainText('Đã lưu bản PDF mới');await expect(page.locator('#tabs .title')).not.toContainText('●');
   const saved=await page.evaluate(()=>window.__saveCalls.at(-1));expect(saved.name).toBe('Mouse-da-ky.pdf');const reopened=await PDFDocument.load(Uint8Array.from(saved.bytes));expect(reopened.getPageCount()).toBe(3);
+});
+test('signature library survives reload and reuses artwork across PDFs',async({page})=>{
+ const pdf=await PDFDocument.create();pdf.addPage([500,700]).drawText('Reusable signature source');const buffer=Buffer.from(await pdf.save());
+ await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+ await page.locator('#pdfFiles').setInputFiles({name:'First.pdf',mimeType:'application/pdf',buffer});await expect(page.locator('.page canvas').first()).toBeVisible();
+ await page.locator('#sign').click();await page.locator('#signatureName').fill('Reusable');await page.locator('#typeName').click();await page.locator('#useSign').click();
+ await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('sreader.signatures.v1')).length)).toBe(1);
+ await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+ await page.locator('#pdfFiles').setInputFiles({name:'Second.pdf',mimeType:'application/pdf',buffer});await expect(page.locator('.page canvas').first()).toBeVisible();
+ await page.locator('[data-ribbon=sign]').click();await page.locator('#signatureLibrary').click();await expect(page.locator('.signature-library-row img')).toBeVisible();
+ page.once('dialog',d=>d.accept('My signature'));await page.getByRole('button',{name:'Đổi tên',exact:true}).click();
+ await page.getByRole('button',{name:'My signature',exact:true}).click();await expect(page.locator('.signature')).toHaveCount(1);
+ const downloadPromise=page.waitForEvent('download');await page.locator('#save').click();const download=await downloadPromise;
+ const reopened=await getDocument({data:new Uint8Array(await readFile(await download.path()))}).promise;expect(reopened.numPages).toBe(1);expect((await(await reopened.getPage(1)).getTextContent()).items.map(x=>x.str).join(' ')).toContain('Reusable signature source');await reopened.loadingTask.destroy();
+ await page.locator('#signatureLibrary').click();page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Xóa',exact:true}).click();await expect(page.locator('.signature-library-row')).toHaveCount(0);expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('sreader.signatures.v1')))).toEqual([]);
+});
+test('annotation tools, undo/redo and native PDF save roundtrip',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));const pdf=await PDFDocument.create();pdf.addPage([600,800]).drawText('Annotation source stays searchable',{x:50,y:700});
+ await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'Annotated.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.page canvas').first()).toBeVisible();
+ await page.locator('[data-ribbon=comment]').click();
+ for(const [index,kind]of ['highlight','underline','strike','note','ink','rectangle','ellipse','line','arrow'].entries()){
+  await page.locator(`#annot-${kind}`).click();const box=await page.locator('.page').first().boundingBox(),x=box.x+box.width*(.15+(index%3)*.23),y=box.y+box.height*(.12+Math.floor(index/3)*.08);
+  if(kind==='note')page.once('dialog',d=>d.accept('Ghi chú tiếng Việt'));
+  await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+70,y+25,{steps:5});await page.mouse.up();await expect(page.locator('.signature.annotation')).toHaveCount(index+1);
+ }
+ await page.locator('[data-ribbon=home]').click();await page.locator('#undo').click();await expect(page.locator('.signature.annotation')).toHaveCount(8);await page.locator('#redo').click();await expect(page.locator('.signature.annotation')).toHaveCount(9);
+ await page.locator('[data-ribbon=view]').click();await page.locator('#rotateView').click();await expect(page.locator('.signature.annotation')).toHaveCount(9);await page.locator('#theme').click();
+ const pending=page.waitForEvent('download');await page.locator('#save').click();const output=await pending;const bytes=new Uint8Array(await readFile(await output.path())),reopened=await getDocument({data:bytes}).promise;
+ expect((await(await reopened.getPage(1)).getAnnotations()).length).toBe(9);expect((await(await reopened.getPage(1)).getTextContent()).items.map(x=>x.str).join(' ')).toContain('Annotation source stays searchable');await reopened.loadingTask.destroy();await page.screenshot({path:'test-results/reader-r2-annotations.png'});expect(errors).toEqual([]);
+});
+test('selected text creates a native highlight with Unicode note editing',async({page})=>{
+ const pdf=await PDFDocument.create();pdf.addPage([500,700]).drawText('Select this searchable text',{x:50,y:600});
+ await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'Selection.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.textLayer span').first()).toBeVisible();await page.locator('[data-ribbon=comment]').click();
+ await page.locator('.textLayer span').first().evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(range);});await page.locator('#annot-highlight').click();await expect(page.locator('.signature.annotation[data-kind=highlight]')).toHaveCount(1);
+ await page.locator('#annot-note').click();const b=await page.locator('.page').first().boundingBox();page.once('dialog',d=>d.accept('Ghi chú ban đầu'));await page.mouse.click(b.x+100,b.y+100);await expect(page.locator('#annotationNote')).toBeVisible();await page.locator('#annotationNote').fill('Đã sửa ghi chú');await page.locator('#annotationNote').press('Tab');
+ const pending=page.waitForEvent('download');await page.locator('#save').click();const output=await pending;const reopened=await getDocument({data:new Uint8Array(await readFile(await output.path()))}).promise;const annots=await(await reopened.getPage(1)).getAnnotations();expect(annots.some(a=>a.subtype==='Highlight'&&a.quadPoints?.length)).toBeTruthy();expect(annots.some(a=>a.contentsObj.str==='Đã sửa ghi chú')).toBeTruthy();await reopened.loadingTask.destroy();
 });

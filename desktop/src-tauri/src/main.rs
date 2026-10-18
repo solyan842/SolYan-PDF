@@ -721,11 +721,18 @@ fn stop_archive(app: &tauri::AppHandle) {
 
 #[tauri::command]
 async fn desktop_open_reader(app: tauri::AppHandle) -> Result<(), String> {
+    let installed = app.path().local_data_dir().map_err(|e| e.to_string())?.join("sReader PDF").join("solyan-pdf-reader.exe");
+    if installed.is_file() {
+        let mut command = Command::new(installed);
+        #[cfg(windows)]
+        command.creation_flags(0x08000000);
+        return command.spawn().map(|_| ()).map_err(|e| e.to_string());
+    }
     if let Some(window) = app.get_webview_window("reader") {
         return window.set_focus().map_err(|e| e.to_string());
     }
     tauri::WebviewWindowBuilder::new(&app, "reader", tauri::WebviewUrl::App("reader.html".into()))
-        .title("SolYan PDF Reader").inner_size(1440.0, 920.0).disable_drag_drop_handler().build().map(|_| ()).map_err(|e| e.to_string())
+        .title("sReader PDF").inner_size(1440.0, 920.0).disable_drag_drop_handler().build().map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -786,10 +793,10 @@ async fn desktop_switch_tools(app: tauri::AppHandle) -> Result<(), String> {
     if !cfg!(feature = "reader-only") {
         if let Some(window) = app.get_webview_window("main") { return window.set_focus().map_err(|e| e.to_string()); }
         return tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::App("index.html".into()))
-            .title("SolYan PDF").inner_size(1440.0, 920.0).build().map(|_| ()).map_err(|e| e.to_string());
+            .title("sTool PDF").inner_size(1440.0, 920.0).build().map(|_| ()).map_err(|e| e.to_string());
     }
-    let path = app.path().local_data_dir().map_err(|e| e.to_string())?.join("SolYan PDF").join("solyan-pdf-desktop.exe");
-    if !path.is_file() { return Err("Chưa cài PDF Tools. Hãy cài SolYan PDF Tools để chuyển ứng dụng.".into()); }
+    let base = app.path().local_data_dir().map_err(|e| e.to_string())?;
+    let path = [base.join("sTool PDF").join("solyan-pdf-desktop.exe"), base.join("SolYan PDF").join("solyan-pdf-desktop.exe")].into_iter().find(|p| p.is_file()).ok_or("Chưa cài sTool PDF")?;
     let mut command = Command::new(path);
     #[cfg(windows)]
     command.creation_flags(0x08000000);

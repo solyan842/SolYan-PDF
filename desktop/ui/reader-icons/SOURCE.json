@@ -1,0 +1,21 @@
+{
+  "upstream": "https://github.com/phosphor-icons/core",
+  "commit": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+  "license": "MIT",
+  "assets": {
+    "hand-duotone.svg": "a76cfa2e9b0723899d4922f589f70868d468e2a668723731914e8de7f82d5a10",
+    "cursor-text-duotone.svg": "8ba3564a52adb05351effcfa5b33a500a6c888f256f764bdefead3135c167444",
+    "copy-duotone.svg": "587be2bbc922a32b5cbd06d39b04129fae4bd01d9ee240ba86f635f6285902a2",
+    "highlighter-duotone.svg": "ff3dca58418048962ea779471be94d3f3fcdbd8cdd0d6b2c1eb8319638efcdb9",
+    "text-underline-duotone.svg": "abf7618d23ff143769fcbd1d85d07c49b68c89d5b75dbb0f1234bfbf4416c1c2",
+    "text-strikethrough-duotone.svg": "347bc189d9ceae102b9b26034df7b0117a62c749ca818417cdd185fa40daa854",
+    "note-pencil-duotone.svg": "42e4e6d15c523016812041aa4e692c8ab9b6d6488c7b8864adb537fefc083fee",
+    "rectangle-duotone.svg": "6998113a7868008c817547c1bbe335e14e860139fcc5d9627b39f1cb29d3153a",
+    "circle-duotone.svg": "c78bff5d21eaa8b6979e7d9b5449a30bed5a1fa31daa1087c354b4c0e8b2f335",
+    "line-segment-duotone.svg": "0cde9b79f30ef1cf360b9239ca6aef491ffc9505c70db3b75767cab62cf5ca95",
+    "arrow-up-right-duotone.svg": "3708498f6654b58f0d0f5a6cd8004c42f9a977fe7773529239bebb37b2a56883",
+    "arrow-counter-clockwise-duotone.svg": "7f8253410467897776eff66017822f3b9b44f15a317d9d19b9a0ba07e277118e",
+    "moon-duotone.svg": "64c8f8b7ba1ad4ae1e892a34ba895744747d9bcd8daaf1d924051c69c4c64650",
+    "sun-duotone.svg": "6a180204ea92f2501de811908395e6dad15ddf2ca0a577f420fad8bef0b4c5ca"
+  }
+}
