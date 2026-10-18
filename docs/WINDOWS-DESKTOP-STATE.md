@@ -121,6 +121,13 @@ Recommended product direction when this decision is requested: keep base/text OC
 
 Do not silently disable formula/region/table models merely to shrink the installer; that changes OCR semantics and requires a product/quality decision plus new benchmarks.
 
+## D4 packaging blocker — NSIS mmapping / MSI fallback validation
+
+- Exact head `e5f978f136028c3668255a4e16342a2550c40996`, Windows Desktop CI run `39078999916`: Cargo and OCR resources PASS; NSIS `makensis` failed with `Internal compiler error #12345: error mmapping datablock to 920209`.
+- This failure concerns large installer bundling, not Paddle OCR inference. The `main` D3 release gate remains green.
+- Dedicated D4 branch tests Tauri's supported WiX MSI packaging for the complete offline text OCR payload. Acceptance still requires silent installation, core/office/ocr startup and clean shutdown on Windows.
+- Do not mark MSI PASS until the exact-head Windows installer CI succeeds. The existing NSIS baseline on `main` is preserved.
+
 ## D4 desktop integration — IMPLEMENTED, exact-head Windows installer CI pending
 
 - OCR text integration is being validated on the dedicated D4 branch.

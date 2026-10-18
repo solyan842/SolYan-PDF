@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["msi"],
     "resources": {
       "resources/core/": "core/",
       "resources/office/": "office/",
