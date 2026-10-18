@@ -1,0 +1,8 @@
+# D5 local signing service only. Never pull Linux uvloop and never require Docker.
+fastapi==0.119.0
+uvicorn==0.37.0
+python-multipart==0.0.20
+httpx==0.28.1
+pyHanko==0.37.0
+pyinstaller==6.22.3
+pypdf==6.1.1

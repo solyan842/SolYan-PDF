@@ -1,0 +1,104 @@
+name: Windows Signing Runtime CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "desktop/backend/sign_runner.py"
+      - "desktop/backend/requirements-sign-windows.txt"
+      - "desktop/backend/tests/test_sign_runner.py"
+      - "desktop/backend/tests/sign_runtime_smoke.py"
+      - "engines/sign-service/**"
+      - ".github/workflows/windows-sign-runtime-ci.yml"
+  push:
+    branches:
+      - "feat/windows-desktop-d5-signing"
+    paths:
+      - "desktop/backend/sign_runner.py"
+      - "desktop/backend/requirements-sign-windows.txt"
+      - "desktop/backend/tests/test_sign_runner.py"
+      - "desktop/backend/tests/sign_runtime_smoke.py"
+      - "engines/sign-service/**"
+      - ".github/workflows/windows-sign-runtime-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-sign-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-sign-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: desktop/backend/requirements-sign-windows.txt
+
+      - name: Create diagnostics
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force artifacts | Out-Null
+
+      - name: Install pinned signing dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r desktop/backend/requirements-sign-windows.txt 2>&1 | Tee-Object -FilePath artifacts/sign-dependencies.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip check 2>&1 | Tee-Object -FilePath artifacts/sign-pip-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Local authentication and API contract regression tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s desktop/backend/tests -p "test_sign_runner.py" -v 2>&1 | Tee-Object -FilePath artifacts/sign-contract-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build frozen signing service
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-sign --paths . --paths engines/sign-service --collect-submodules app --collect-all pyhanko --collect-all pyhanko_certvalidator desktop/backend/sign_runner.py 2>&1 | Tee-Object -FilePath artifacts/sign-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path dist/solyan-sign.exe)) { throw "Missing solyan-sign.exe" }
+          Get-Item dist/solyan-sign.exe | Select-Object Name, Length, FullName |
+            Format-List | Out-String | Set-Content artifacts/sign-sidecar-inventory.log
+
+      - name: Real PKCS12 sign and offline validation of frozen Windows executable
+        shell: pwsh
+        run: |
+          python desktop/backend/tests/sign_runtime_smoke.py --exe dist/solyan-sign.exe --output artifacts 2>&1 | Tee-Object -FilePath artifacts/sign-runtime-smoke.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve diagnostics including real stderr
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-sign-runtime-diagnostics
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish signing sidecar executable
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solyan-sign-windows-x64
+          path: dist/solyan-sign.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  ci-result:
+    needs: build-sign-runtime
+    if: ${{ always() }}
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    uses: ./.github/workflows/ci-result.yml
+    with:
+      build-result: ${{ needs.build-sign-runtime.result }}
