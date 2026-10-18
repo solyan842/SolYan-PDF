@@ -8,6 +8,9 @@ on:
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
+      - ".github/workflows/ci-result.yml"
+      - "scripts/Get-CiBrief.ps1"
+      - "scripts/tests/**"
   workflow_dispatch:
   push:
     branches:
@@ -19,6 +22,9 @@ on:
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
+      - ".github/workflows/ci-result.yml"
+      - "scripts/Get-CiBrief.ps1"
+      - "scripts/tests/**"
 
 permissions:
   contents: read
@@ -387,3 +393,14 @@ jobs:
           name: SolYan-PDF-Windows-x64
           path: desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+
+  ci-result:
+    needs: build-windows-x64
+    if: ${{ always() }}
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    uses: ./.github/workflows/ci-result.yml
+    with:
+      build-result: ${{ needs.build-windows-x64.result }}

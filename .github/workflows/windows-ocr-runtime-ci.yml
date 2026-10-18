@@ -12,6 +12,9 @@ on:
       - "desktop/backend/tests/**"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
+      - ".github/workflows/ci-result.yml"
+      - "scripts/Get-CiBrief.ps1"
+      - "scripts/tests/**"
   push:
     branches:
       - "feat/windows-desktop-d4-ocr"
@@ -25,6 +28,9 @@ on:
       - "desktop/backend/tests/**"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
+      - ".github/workflows/ci-result.yml"
+      - "scripts/Get-CiBrief.ps1"
+      - "scripts/tests/**"
 
 permissions:
   contents: read
@@ -210,6 +216,7 @@ jobs:
                   files={"file": (image.name, handle, "image/png")},
                   headers={"X-SolYan-Desktop-Token": os.environ["SOLYAN_OCR_TOKEN"]},
               )
+          Path("artifacts/windows-ocr-response.json").write_text(response.text, encoding="utf-8")
           response.raise_for_status()
           payload = response.json()
           Path("artifacts/windows-ocr-paddle-smoke.json").write_text(
@@ -255,3 +262,14 @@ jobs:
           path: dist/solyan-ocr.exe
           if-no-files-found: error
           retention-days: 7
+
+  ci-result:
+    needs: windows-ocr-runtime
+    if: ${{ always() }}
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    uses: ./.github/workflows/ci-result.yml
+    with:
+      build-result: ${{ needs.windows-ocr-runtime.result }}

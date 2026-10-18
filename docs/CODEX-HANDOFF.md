@@ -2,6 +2,12 @@
 
 `AGENTS.md` is the source of truth. This note is a dated snapshot, not a replacement rulebook.
 
+## Current operating mode — 2026-10-18
+
+Read [CI-AUTOMATION.md](CI-AUTOMATION.md). The Windows OCR and Desktop workflows now call a final reusable summary job on the same ref; GitHub owns waiting, evidence collection, Job Summary, compact result artifacts and PASS/FAIL notifications to issue #135. No `workflow_run`, main edit, AI API or automatic rebuild is needed. Codex may exit after verifying the push/run was accepted. The old snapshot and prompt below are historical context; prefer the current operating mode.
+
+OCR fix verified: run #17 / `39105494976` PASS at `b18ea284e2eae82b0cdd3ebfaccf85dab36235f1`, with real PaddleOCR output, fallback disabled and outbound blocked. Subsequent commits still need their own exact-SHA CI. There is no configured GitHub-to-Codex session wakeup; return with the generated brief when another code fix is needed.
+
 ## Verified snapshot — 2026-10-18 (Asia/Bangkok)
 
 - Repository: `solyan842/SolYan-PDF`; active D4 branch: `feat/windows-desktop-d4-text-integration` (no literal `D4` branch).
