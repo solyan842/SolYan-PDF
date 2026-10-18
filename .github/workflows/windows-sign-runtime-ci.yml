@@ -7,6 +7,7 @@ on:
       - "desktop/backend/sign_runner.py"
       - "desktop/backend/requirements-sign-windows.txt"
       - "desktop/backend/tests/test_sign_runner.py"
+      - "desktop/backend/tests/test_sign_proxy_forwarding.py"
       - "desktop/backend/tests/sign_runtime_smoke.py"
       - "engines/sign-service/**"
       - ".github/workflows/windows-sign-runtime-ci.yml"
@@ -17,6 +18,7 @@ on:
       - "desktop/backend/sign_runner.py"
       - "desktop/backend/requirements-sign-windows.txt"
       - "desktop/backend/tests/test_sign_runner.py"
+      - "desktop/backend/tests/test_sign_proxy_forwarding.py"
       - "desktop/backend/tests/sign_runtime_smoke.py"
       - "engines/sign-service/**"
       - ".github/workflows/windows-sign-runtime-ci.yml"
@@ -56,7 +58,7 @@ jobs:
       - name: Local authentication and API contract regression tests
         shell: pwsh
         run: |
-          python -m unittest discover -s desktop/backend/tests -p "test_sign_runner.py" -v 2>&1 | Tee-Object -FilePath artifacts/sign-contract-tests.log
+          python -m unittest discover -s desktop/backend/tests -p "test_sign_*.py" -v 2>&1 | Tee-Object -FilePath artifacts/sign-contract-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build frozen signing service
