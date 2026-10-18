@@ -41,6 +41,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip check 2>&1 | Tee-Object artifacts/pdfa-check.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stage existing checksum-pinned D4 Tesseract for OCRmyPDF preflight
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tesseractRoot = Join-Path $env:RUNNER_TEMP "solyan-pdfa-tesseract"
+          & ./desktop/backend/stage-ocr-runtime.ps1 -Destination $tesseractRoot 2>&1 | Tee-Object artifacts/pdfa-tesseract-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tesseractExe = Join-Path $tesseractRoot "tesseract.exe"
+          $tessdata = Join-Path $tesseractRoot "tessdata"
+          if (-not (Test-Path $tesseractExe -PathType Leaf) -or -not (Test-Path $tessdata -PathType Container)) {
+            throw "Pinned Tesseract runtime failed to stage"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $tesseractRoot -Encoding utf8
+          Add-Content -Path $env:GITHUB_ENV -Value "TESSDATA_PREFIX=$tessdata" -Encoding utf8
       - name: Prove native offline PDF-A conversion via existing service
         shell: pwsh
         run: |
