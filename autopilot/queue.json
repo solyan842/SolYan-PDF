@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "repository": "solyan842/SolYan-PDF",
+  "source_branch": "feat/windows-desktop-d4-text-integration",
+  "state_branch": "autopilot/state",
+  "max_ai_calls_per_utc_day": 4,
+  "max_fixes_per_task": 2,
+  "lease_seconds": 600,
+  "tasks": [
+    {
+      "id": "desktop-d5-signing",
+      "title": "D5: local PDF signing runtime",
+      "dependencies": [],
+      "required_workflows": [
+        "Windows Desktop CI"
+      ],
+      "allowed_paths": [
+        "desktop/",
+        "backend/",
+        "engines/",
+        "scripts/",
+        "docs/",
+        "tests/"
+      ],
+      "instructions": "Read AGENTS.md, docs/WINDOWS-DESKTOP-V1.md and current code. Reuse existing signing/pyHanko components, integrate missing offline Windows signing sidecar or route incrementally, add targeted tests and keep Tauri loopback/token/cleanup guarantees. Make one bounded, independently testable improvement. Do not claim all D5 complete unless actual acceptance evidence supports it. If a workflow or acceptance gate requires modification, stop and report the exact blocker instead of editing the gate automatically."
+    },
+    {
+      "id": "desktop-d5-pdfa",
+      "title": "D5: local PDF/A and archive runtime",
+      "dependencies": [
+        "desktop-d5-signing"
+      ],
+      "required_workflows": [
+        "Windows Desktop CI"
+      ],
+      "allowed_paths": [
+        "desktop/",
+        "backend/",
+        "engines/",
+        "scripts/",
+        "docs/",
+        "tests/"
+      ],
+      "instructions": "Recheck current state before changes. Reuse established PDF/A/archive service. Integrate one missing offline Windows D5 capability with focused tests and rigorous local-only runtime/sidecar lifecycle. Preserve established Office/OCR contracts and all CI gates. If a workflow or acceptance gate requires modification, stop and report the exact blocker instead of editing the gate automatically."
+    },
+    {
+      "id": "desktop-d6-installer",
+      "title": "D6: Windows installer and release-readiness hardening",
+      "dependencies": [
+        "desktop-d5-pdfa"
+      ],
+      "required_workflows": [
+        "Windows Desktop CI"
+      ],
+      "allowed_paths": [
+        "desktop/",
+        "scripts/",
+        "docs/",
+        "tests/"
+      ],
+      "instructions": "Audit the existing Windows NSIS artifact, smoke and install/uninstall tests against docs/WINDOWS-DESKTOP-V1.md. Implement missing D6 smoke/hardening with targeted regression checks. Do not merge main, tag, sign or publish a release; report remaining genuine credential/product gates. If a workflow or acceptance gate requires modification, stop and report the exact blocker instead of editing the gate automatically."
+    }
+  ]
+}

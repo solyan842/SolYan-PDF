@@ -1,0 +1,47 @@
+name: Autopilot Controller Tests
+
+on:
+  push:
+    branches:
+      - feat/autopilot-engine
+    paths:
+      - "autopilot/**"
+      - "scripts/Install-Autopilot.ps1"
+      - ".github/workflows/autopilot-tests.yml"
+  pull_request:
+    paths:
+      - "autopilot/**"
+      - "scripts/Install-Autopilot.ps1"
+      - ".github/workflows/autopilot-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Syntax and deterministic state/lock tests
+        run: |
+          python -m compileall -q autopilot
+          python -m unittest discover -s autopilot/tests -v
+  powershell-parser:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse installer without scheduling any task
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/Install-Autopilot.ps1), [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+          'PowerShell syntax PASS'
