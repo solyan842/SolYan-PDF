@@ -7,3 +7,6 @@ html[data-theme=dark]{--accent:#9dc5ff}html[data-theme=dark] :is(footer,#signOpt
 
 /* Per-document bookmark sidebar, consistent with the existing outline. */
 #bookmarks{padding:10px;overflow:auto}#bookmarks p{font-size:12px;color:#66748a;line-height:1.5}.bookmark-row{display:flex;align-items:center;gap:4px;margin-bottom:4px}.bookmark-row .bookmark-link{flex:1;min-width:0;text-align:left;border:0;background:transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bookmark-row .bookmark-remove{flex:none;padding:4px 8px;min-width:28px}html[data-theme=dark] #bookmarks p{color:#bed0e8}
+
+/* Keep the third sidebar tab accessible at narrow widths. */
+#sidebar .sideTabs{flex-wrap:wrap}#sidebar .sideTabs button{flex:1 1 auto;font-size:12px;padding:5px 7px;white-space:nowrap}
