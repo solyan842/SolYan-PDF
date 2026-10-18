@@ -30,6 +30,29 @@ _structure_pipeline: Any | None = None
 _model_lock = threading.Lock()
 
 
+def _pinned_text_models() -> dict[str, str]:
+    """Pin exact local Windows models when provided; leave web/service defaults unchanged."""
+    root = os.getenv("SOLYAN_OCR_MODEL_ROOT", "").strip()
+    if not root:
+        return {}
+    model_root = Path(root)
+    models = {
+        "doc_orientation_classify": "PP-LCNet_x1_0_doc_ori",
+        "doc_unwarping": "UVDoc",
+        "textline_orientation": "PP-LCNet_x1_0_textline_ori",
+        "text_detection": "PP-OCRv6_medium_det",
+        "text_recognition": "PP-OCRv6_medium_rec",
+    }
+    overrides: dict[str, str] = {}
+    for kind, name in models.items():
+        directory = model_root / name
+        if not directory.is_dir() or not any(directory.iterdir()):
+            raise RuntimeError(f"Offline OCR model is missing: {directory}")
+        overrides[f"{kind}_model_name"] = name
+        overrides[f"{kind}_model_dir"] = str(directory)
+    return overrides
+
+
 def _load_ocr() -> Any:
     global _ocr_pipeline
     if _ocr_pipeline is None:
@@ -43,6 +66,7 @@ def _load_ocr() -> Any:
                     use_doc_unwarping=True,
                     use_textline_orientation=True,
                     engine="paddle",
+                    **_pinned_text_models(),
                 )
     return _ocr_pipeline
 
