@@ -20,6 +20,7 @@ on:
       - "feat/windows-desktop-d4-text-integration"
       - "feat/windows-desktop-d5-signing"
       - "feat/windows-desktop-d5-pdfa-integration"
+      - "feat/windows-desktop-d6-release-gate"
     paths:
       - "desktop/**"
       - "backend/app/**"
@@ -71,6 +72,20 @@ jobs:
         run: |
           & ./desktop/ui/validate-contract.ps1 2>&1 | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate D6 installer release PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tokens = $null
+          $parseErrors = $null
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "desktop/backend/verify-installer-release.ps1"),
+            [ref]$tokens,
+            [ref]$parseErrors
+          )
+          if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
+          "D6 release script parser: PASS" | Tee-Object artifacts/desktop-d6-script-lint.log
 
       - name: Stage pinned browser-local PDF engine
         shell: pwsh
@@ -459,6 +474,16 @@ jobs:
           & .pdfa-venv/Scripts/python.exe desktop/backend/tests/pdfa_frozen_smoke.py --exe $archiveExe.FullName --output artifacts 2>&1 | Tee-Object -FilePath artifacts/desktop-installed-pdfa-smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+          # D6 gate runs only after the installed signing and PDF/A functional
+          # smokes have passed. Then verify the exact NSIS payload checksum
+          # and perform a real silent uninstall (without deleting user data).
+          & ./desktop/backend/verify-installer-release.ps1 -InstallerPath $installer.FullName -InstallRoot $installRoot -AppPath $appExe -ArtifactDirectory "artifacts" 2>&1 |
+            Tee-Object -FilePath artifacts/desktop-d6-release-gate.log
+          $d6 = Get-Content artifacts/desktop-windows-release-gate.json -Raw | ConvertFrom-Json
+          if ($d6.status -ne "PASS" -or -not $d6.silent_uninstall -or -not $d6.installed_executables_removed) {
+            throw "D6 installer verification was not completed"
+          }
+
       - name: Upload desktop diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -473,6 +498,16 @@ jobs:
         with:
           name: SolYan-PDF-Windows-x64
           path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Upload D6 release checksum and manifest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolYan-PDF-Windows-release-checksums
+          path: |
+            artifacts/SolYan-PDF-Windows-x64.sha256
+            artifacts/desktop-windows-release-gate.json
           if-no-files-found: error
 
   ci-result:
