@@ -91,6 +91,14 @@ export function installR2(api){
     try{localStorage.setItem(d.bookmarkKey,JSON.stringify(d.bookmarkRecord));}
     catch{api.message('Không ghi được dấu trang trong hồ sơ ứng dụng.');}
   }
+  function flushBookmark(d){
+    if(!d?.bookmarkRecord)return;
+    clearTimeout(d.bookmarkTimer);
+    const page=d.view?.currentPageNumber;
+    if(Number.isInteger(page)&&page>=1&&page<=d.pdf.numPages&&d.bookmarkRecord.lastPage!==page){
+      d.bookmarkRecord.lastPage=page;persistBook(d);
+    }
+  }
   function renderBookmarks(d){
     if(bookmarkList.hidden)return;
     bookmarkList.replaceChildren();
@@ -168,5 +176,5 @@ export function installR2(api){
     const check=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});if(check.getPageCount()!==d.pdf.numPages)throw Error('Kiểm tra lưu: số trang bị thay đổi.');return bytes;
   }
   document.addEventListener('keydown',event=>{if(!event.ctrlKey||!api.current()||event.target.closest('input,textarea,[contenteditable=true]'))return;if(event.key.toLowerCase()==='z'||event.key.toLowerCase()==='y'){event.preventDefault();undo(event.key.toLowerCase()==='y'||event.shiftKey);}});
-  return{get mode(){return mode;},selection,opened,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
+  return{get mode(){return mode;},selection,opened,flushBookmark,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
 }
