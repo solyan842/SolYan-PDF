@@ -502,6 +502,10 @@ def ocr_text(file: UploadFile = File(...)) -> dict[str, Any]:
             pages = [_result_json(result) for result in results]
             return {"mode": "text", "engine": "PaddleOCR", "pages": pages, "text": _extract_text(pages), "fallback_used": False}
         except Exception as paddle_exc:
+            # Preserve the original response/fallback contract; only CI explicitly
+            # enables a full chained traceback in the sidecar's diagnostic stderr.
+            if os.getenv("SOLYAN_OCR_DEBUG_ERRORS") == "1":
+                traceback.print_exc()
             if not _tesseract_enabled():
                 raise HTTPException(status_code=422, detail=f"OCR failed: {paddle_exc}") from paddle_exc
             try:
