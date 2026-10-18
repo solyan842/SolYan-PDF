@@ -134,6 +134,7 @@ jobs:
           $env:TESSERACT_LANG = "vie+eng"
           $env:OCR_LANG = "vi"
           $env:PADDLE_PDX_CACHE_HOME = $cacheRoot
+          $env:SOLYAN_OCR_MODEL_ROOT = Join-Path $cacheRoot "official_models"
           $env:PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK = "True"
           $env:HTTP_PROXY = "http://127.0.0.1:9"
           $env:HTTPS_PROXY = "http://127.0.0.1:9"
