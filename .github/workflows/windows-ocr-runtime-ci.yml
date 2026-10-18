@@ -146,6 +146,7 @@ jobs:
           $env:no_proxy = "127.0.0.1,localhost"
           $port = 38191
           $env:SOLYAN_OCR_TOKEN = "desktop-ocr-smoke-token-0123456789abcdef"
+          $env:SOLYAN_OCR_DEBUG_ERRORS = "1"
           $stdout = Join-Path $PWD "artifacts/windows-ocr-sidecar.stdout.log"
           $stderr = Join-Path $PWD "artifacts/windows-ocr-sidecar.stderr.log"
           $process = Start-Process -FilePath (Resolve-Path dist/solyan-ocr.exe) -ArgumentList "--port", "$port", "--token", "$env:SOLYAN_OCR_TOKEN" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
