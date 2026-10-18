@@ -13,6 +13,8 @@ import httpx
 import pikepdf
 from pypdf import PdfWriter
 
+from frozen_smoke_process import stop_frozen_sidecar
+
 TOKEN = "solyan-archive-ci-token-0123456789abcdef"
 HEADERS = {"X-SolYan-Desktop-Token": TOKEN}
 
@@ -82,13 +84,7 @@ def main() -> None:
                     )
                     print(json.dumps(result))
             finally:
-                if proc.poll() is None:
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait(timeout=5)
+                stop_frozen_sidecar(proc, port)
 
 
 if __name__ == "__main__":

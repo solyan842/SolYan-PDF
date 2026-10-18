@@ -87,6 +87,12 @@ jobs:
           if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
           "D6 release script parser: PASS" | Tee-Object artifacts/desktop-d6-script-lint.log
 
+      - name: Regression test frozen PyInstaller smoke cleanup
+        shell: pwsh
+        run: |
+          python -m unittest discover -s desktop/backend/tests -p "test_frozen_smoke_process.py" -v 2>&1 | Tee-Object -FilePath artifacts/desktop-frozen-smoke-cleanup-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Stage pinned browser-local PDF engine
         shell: pwsh
         run: |
@@ -473,6 +479,17 @@ jobs:
           $env:TESSDATA_PREFIX = Join-Path $tesseractBin "tessdata"
           & .pdfa-venv/Scripts/python.exe desktop/backend/tests/pdfa_frozen_smoke.py --exe $archiveExe.FullName --output artifacts 2>&1 | Tee-Object -FilePath artifacts/desktop-installed-pdfa-smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Frozen PyInstaller --onefile smoke processes must be gone BEFORE
+          # NSIS uninstall; no post-test taskkill workaround is allowed here.
+          $smokeOrphans = @(Get-Process -Name @("solyan-sign", "solyan-archive") -ErrorAction SilentlyContinue)
+          if ($smokeOrphans.Count -gt 0) {
+            $smokeOrphans | Select-Object ProcessName, Id, Path |
+              Format-List | Out-String | Set-Content artifacts/desktop-frozen-smoke-orphans.log
+            throw "Installed functional smoke left frozen sidecar processes running"
+          }
+          "sign_and_archive_smoke_processes_released=true" |
+            Set-Content artifacts/desktop-frozen-smoke-cleanup.log
 
           # D6 gate runs only after the installed signing and PDF/A functional
           # smokes have passed. Then verify the exact NSIS payload checksum

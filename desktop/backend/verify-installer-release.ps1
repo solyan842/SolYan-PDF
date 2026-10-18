@@ -96,7 +96,14 @@ try {
     Start-Sleep -Milliseconds 500
   }
   if ($remaining.Count) {
-    throw "D6 gate: uninstall left installed application/runtime binaries: $($remaining.Count)"
+    # Preserve the exact missing uninstaller targets and running process names,
+    # not just a count. Never downgrade the strict uninstall gate.
+    $leftoverNames = @($remaining | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+    $report["remaining_installed_binaries"] = $leftoverNames
+    $live = @(Get-Process -Name @("solyan-core", "solyan-office", "solyan-ocr", "solyan-sign", "solyan-archive") -ErrorAction SilentlyContinue |
+      Select-Object -ExpandProperty ProcessName -Unique)
+    $report["running_sidecars_after_uninstall"] = $live
+    throw "D6 gate: uninstall left installed binaries: $($leftoverNames -join ', '); running sidecars: $($live -join ', ')"
   }
   foreach ($name in @("solyan-core", "solyan-office", "solyan-ocr", "solyan-sign", "solyan-archive")) {
     if (Get-Process -Name $name -ErrorAction SilentlyContinue) {

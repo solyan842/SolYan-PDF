@@ -37,6 +37,27 @@ D6 adds **only** missing release assurance, without rewriting engines:
 shows all jobs green, `desktop-windows-release-gate.json` says PASS, and
 the installer SHA-256 corresponds to the same exact artifact.
 
+## CI #130 uninstall failure and targeted regression
+
+Windows Desktop CI #130 at `3230b66` failed only at D6 uninstall
+verification, after both real installed signing and PDF/A smoke tests passed.
+The real job log said 2 installed executable files remained. GitHub Actions
+runner cleanup specifically terminated orphan `solyan-sign` and
+`solyan-archive` processes after the job, identifying the failed test
+isolation boundary. Existing smoke scripts called
+`Popen.terminate()`, which only targets the PyInstaller `--onefile`
+parent, not necessarily the frozen server's child.
+
+The D6 fix uses **taskkill /PID <owned PID> /T /F** on Windows, scoped
+strictly to the process tree spawned by each smoke test. It then requires
+the loopback socket to stop listening. This is a test harness fix, **not**
+a blanket system-wide kill and **not** a weakening of the uninstall gate.
+The CI includes a small regression test for process-tree cleanup and an
+additional pre-uninstall assertion that no smoke-owned signing/archive
+processes remain. The D6 error manifest now lists exact leftover executable
+names and live sidecar names if uninstall still fails. Successful installed
+signing/PDF-A crypto/format tests remain mandatory.
+
 ## Remaining restrictions
 
 - The produced installer is **unsigned** unless Authenticode signing is

@@ -20,6 +20,8 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from pypdf import PdfWriter
 
+from frozen_smoke_process import stop_frozen_sidecar
+
 TOKEN = "local-sign-ci-token-0123456789abcdef"
 PASSWORD = b"CI-only-testing-passphrase"
 AUTH = {"X-SolYan-Desktop-Token": TOKEN}
@@ -136,13 +138,7 @@ def main():
                     )
                     print(json.dumps(sanitized))
             finally:
-                if proc.poll() is None:
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait(timeout=5)
+                stop_frozen_sidecar(proc, port)
 
 
 if __name__ == "__main__":
