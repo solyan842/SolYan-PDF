@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $required = @(
-  "desktop/ui/index.html", "desktop/ui/styles.css", "desktop/ui/catalog.js", "desktop/ui/catalog-additions.js", "desktop/ui/app.js",
+  "desktop/ui/index.html", "desktop/ui/styles.css", "desktop/ui/catalog.js", "desktop/ui/catalog-additions.js", "desktop/ui/icons.js", "desktop/ui/app.js",
+  "desktop/ui/icons/phosphor-duotone/SOURCE.json", "desktop/ui/icons/phosphor-duotone/LICENSE",
+  "desktop/ui/tests/icon-contract.test.cjs",
   "desktop/ui/merge.html", "desktop/ui/merge.js", "desktop/ui/repair.html", "desktop/ui/repair.js",
   "desktop/ui/extract-images.html", "desktop/ui/extract-images.js", "desktop/ui/info.html", "desktop/ui/info.js",
   "desktop/ui/active-content.html", "desktop/ui/active-content.js", "desktop/ui/attachments.html", "desktop/ui/attachments.js",

@@ -15,11 +15,22 @@
   const toolsSubtitle = document.getElementById('tools-subtitle');
   const toast = document.getElementById('toast');
   const byCategory = new Map(categories.map(c => [c.id, c]));
+  const icons = window.SOLYAN_PHOSPHOR;
+  if (!icons) throw new Error('Pinned offline SVG icon assets missing');
+
   const routes = { merge: './merge.html', repair: './repair.html', 'extract-images': './extract-images.html', info: './info.html', 'active-content': './active-content.html', attachments: './attachments.html', 'remove-images': './remove-images.html', sanitize: './sanitize.html', linearize: './linearize.html', decompress: './decompress.html', compress: './transform.html?tool=compress', flatten: './transform.html?tool=flatten', 'image-opt': './transform.html?tool=image-opt', protect: './security-transform.html?tool=protect', unlock: './security-transform.html?tool=unlock', 'remove-signature': './remove-signature.html', permissions: './permissions.html', 'remove-annotations': './remove-annotations.html', 'unlock-forms': './unlock-forms.html', 'remove-blank': './remove-blank.html', 'page-labels': './page-labels.html', 'pdf-text': './poppler-convert.html?tool=text', 'pdf-html': './poppler-convert.html?tool=html', 'pdf-xml': './poppler-convert.html?tool=xml', 'pdf-cbz': './poppler-convert.html?tool=cbz', 'pdf-svg': './poppler-convert.html?tool=svg', 'pdf-ps': './poppler-convert.html?tool=ps', 'pdf-eps': './poppler-convert.html?tool=eps', portfolio: './portfolio.html', sign: './sign.html', pdfa: './pdfa.html', 'verify-signature': './sign.html?mode=verify', 'word-pdf': './office-convert.html?tool=word-pdf', 'excel-pdf': './office-convert.html?tool=excel-pdf', 'ppt-pdf': './office-convert.html?tool=ppt-pdf', 'odf-pdf': './office-convert.html?tool=odf-pdf', 'rtf-pdf': './office-convert.html?tool=rtf-pdf', 'pdf-word': './office-convert.html?tool=pdf-word', 'pdf-ppt': './office-convert.html?tool=pdf-ppt', 'ocr-pdf': './ocr.html', 'ocr-image': './ocr.html', 'edit-pdf': './workspace.html' };
   let activeCategory = 'all';
-  function card(tool) { return `<button class="tool-card" data-tool="${tool.id}" title="${tool.name}"><span class="tool-icon tone-${tool.tone || 'blue'}">${tool.icon}</span><span class="tool-body"><span class="tool-name">${tool.name}</span><span class="tool-desc">${tool.desc}</span></span><span class="tool-arrow">›</span></button>`; }
-  function mini(tool) { return `<button class="mini-item" data-tool="${tool.id}"><span class="mini-dot tone-${tool.tone || 'blue'}">${tool.icon}</span><span>${tool.name}</span><span>›</span></button>`; }
-  categoryNav.innerHTML = categories.map(c => `<button class="nav-item" data-category="${c.id}"><span>${c.icon}</span>${c.label}</button>`).join('');
+  function card(tool) {
+    const pending = !routes[tool.id];
+    return `<button class="tool-card${pending ? ' is-pending' : ''}" data-tool="${tool.id}" title="${tool.name}"${pending ? ' aria-description="Chưa có màn hình xử lý trong bản Windows này"' : ''}><span class="tool-icon tone-${tool.tone || 'blue'}">${icons.tool(tool.id, tool.category)}</span><span class="tool-body"><span class="tool-name">${tool.name}</span><span class="tool-desc">${tool.desc}</span>${pending ? '<span class="tool-status">Chưa khả dụng</span>' : ''}</span><span class="tool-arrow">›</span></button>`;
+  }
+  function mini(tool) {
+    return `<button class="mini-item" data-tool="${tool.id}"><span class="mini-dot tone-${tool.tone || 'blue'}">${icons.mini(tool.id, tool.category)}</span><span>${tool.name}</span>${routes[tool.id] ? '' : '<span class="mini-status">Sắp có</span>'}<span>›</span></button>`;
+  }
+  document.querySelectorAll('[data-nav-icon]').forEach(node => {
+    node.innerHTML = icons.nav(node.dataset.navIcon);
+  });
+  categoryNav.innerHTML = categories.map(c => `<button class="nav-item" data-category="${c.id}"><span class="nav-icon">${icons.category(c.id)}</span>${c.label}</button>`).join('');
   popularGrid.innerHTML = tools.filter(t => t.popular).slice(0, 10).map(card).join('');
   convertList.innerHTML = tools.filter(t => t.category === 'convert').slice(0, 5).map(mini).join('');
   organizeList.innerHTML = tools.filter(t => t.category === 'organize').slice(0, 5).map(mini).join('');

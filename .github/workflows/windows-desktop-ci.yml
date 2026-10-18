@@ -21,6 +21,7 @@ on:
       - "feat/windows-desktop-d5-signing"
       - "feat/windows-desktop-d5-pdfa-integration"
       - "feat/windows-desktop-d6-release-gate"
+      - "feat/windows-desktop-phosphor-icons"
     paths:
       - "desktop/**"
       - "backend/app/**"
@@ -91,6 +92,12 @@ jobs:
         shell: pwsh
         run: |
           python -m unittest discover -s desktop/backend/tests -p "test_frozen_smoke_process.py" -v 2>&1 | Tee-Object -FilePath artifacts/desktop-frozen-smoke-cleanup-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate offline Phosphor Duotone SVG integrity and Windows card layout
+        shell: pwsh
+        run: |
+          node --test desktop/ui/tests/icon-contract.test.cjs 2>&1 | Tee-Object -FilePath artifacts/desktop-phosphor-icons-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Stage pinned browser-local PDF engine
