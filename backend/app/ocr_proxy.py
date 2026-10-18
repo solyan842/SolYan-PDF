@@ -47,6 +47,9 @@ def _post_bytes(
             }
             if form:
                 request_kwargs["data"] = form
+            desktop_token = os.getenv("SOLYAN_OCR_TOKEN", "")
+            if desktop_token:
+                request_kwargs["headers"] = {"X-SolYan-Desktop-Token": desktop_token}
             response = client.post(f"{OCR_SERVICE_URL}{path}", **request_kwargs)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail="OCR service is unavailable") from exc
@@ -180,7 +183,9 @@ def _qr_analysis(data: bytes, filename: str, content_type: str) -> dict[str, Any
 @router.get("/health")
 def ocr_health() -> dict:
     try:
-        response = httpx.get(f"{OCR_SERVICE_URL}/health", timeout=5.0)
+        desktop_token = os.getenv("SOLYAN_OCR_TOKEN", "")
+        headers = {"X-SolYan-Desktop-Token": desktop_token} if desktop_token else {}
+        response = httpx.get(f"{OCR_SERVICE_URL}/health", headers=headers, timeout=5.0)
         response.raise_for_status()
         return response.json()
     except (httpx.HTTPError, ValueError) as exc:
