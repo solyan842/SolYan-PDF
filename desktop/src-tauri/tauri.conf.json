@@ -34,7 +34,8 @@
     "resources": {
       "resources/core/": "core/",
       "resources/office/": "office/",
-      "resources/ocr/": "ocr/"
+      "resources/ocr/": "ocr/",
+      "resources/sign/": "sign/"
     },
     "category": "Productivity",
     "shortDescription": "Bộ công cụ PDF dễ dùng cho Windows",

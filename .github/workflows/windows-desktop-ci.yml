@@ -5,6 +5,7 @@ on:
     paths:
       - "desktop/**"
       - "backend/app/**"
+      - "engines/sign-service/**"
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
@@ -16,9 +17,11 @@ on:
     branches:
       - "feat/windows-desktop-v1"
       - "feat/windows-desktop-d4-text-integration"
+      - "feat/windows-desktop-d5-signing"
     paths:
       - "desktop/**"
       - "backend/app/**"
+      - "engines/sign-service/**"
       - "engines/office-service/**"
       - "docs/WINDOWS-DESKTOP-*.md"
       - ".github/workflows/windows-desktop-ci.yml"
@@ -141,6 +144,25 @@ jobs:
           }
           Get-ChildItem $root -File -Recurse | Select-Object FullName, Length | Format-Table | Out-String | Set-Content artifacts/desktop-ocr-resource-inventory.log
 
+      - name: Package dedicated Windows signing sidecar (pyHanko)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m pip install -r desktop/backend/requirements-sign-windows.txt 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-pip-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip check 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-pip-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s desktop/backend/tests -p "test_sign_runner.py" -v 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-contract-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-sign --paths . --paths engines/sign-service --collect-submodules app --collect-all pyhanko --collect-all pyhanko_certvalidator desktop/backend/sign_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-pyinstaller.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $root = "desktop/src-tauri/resources/sign"
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Copy-Item dist/solyan-sign.exe "$root/solyan-sign.exe" -ErrorAction Stop
+          if (-not (Test-Path "$root/solyan-sign.exe" -PathType Leaf)) { throw "Windows signing sidecar resource missing" }
+          Get-ChildItem $root -File | Select-Object Name,Length,FullName |
+            Format-List | Out-String | Set-Content artifacts/desktop-sign-resource-inventory.log
+
       - name: Check pinned Tauri CLI
         shell: pwsh
         run: |
@@ -211,7 +233,7 @@ jobs:
           }
           $removed | Set-Content artifacts/desktop-excluded-source-assets.log -Encoding utf8
 
-          foreach ($component in @("core", "office", "ocr")) {
+          foreach ($component in @("core", "office", "ocr", "sign")) {
             $items = @(Get-ChildItem (Join-Path $root $component) -Recurse -File)
             [pscustomobject]@{
               Component = $component
@@ -235,6 +257,7 @@ jobs:
             "$root/core/solyan-core.exe",
             "$root/office/solyan-office.exe",
             "$root/ocr/solyan-ocr.exe",
+            "$root/sign/solyan-sign.exe",
             "$root/ocr/tesseract/tesseract.exe",
             "$root/ocr/tesseract/tessdata/vie.traineddata",
             "$root/ocr/tesseract/tessdata/eng.traineddata",
@@ -310,10 +333,13 @@ jobs:
           if (-not $ocrExe) { throw "Installed solyan-ocr.exe resource was not found" }
           if (-not $tesseractExe) { throw "Installed Tesseract runtime was not found" }
           if (-not $modelInventory) { throw "Installed offline Paddle model inventory was not found" }
+          $signExe = Get-ChildItem $installRoot -Filter "solyan-sign.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $signExe) { throw "Installed solyan-sign.exe was not found" }
 
           Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name "solyan-sign" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $appExe -PassThru
           $core = $null
           $office = $null
@@ -322,12 +348,14 @@ jobs:
             $core = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
             $office = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
             $ocr = Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($core -and $office -and $ocr) { break }
+            $sign = Get-Process -Name "solyan-sign" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($core -and $office -and $ocr -and $sign) { break }
             if ($app.HasExited) { throw "SolYan PDF exited before local sidecars became ready" }
           }
           if (-not $office) { throw "SolYan PDF did not start solyan-office.exe" }
           if (-not $core) { throw "SolYan PDF did not start solyan-core.exe" }
           if (-not $ocr) { throw "SolYan PDF did not start solyan-ocr.exe" }
+          if (-not $sign) { throw "SolYan PDF did not start solyan-sign.exe" }
 
           $closed = $app.CloseMainWindow()
           if ($closed) { $null = $app.WaitForExit(15000) }
@@ -343,7 +371,8 @@ jobs:
             $coreOrphan = Get-Process -Name "solyan-core" -ErrorAction SilentlyContinue | Select-Object -First 1
             $officeOrphan = Get-Process -Name "solyan-office" -ErrorAction SilentlyContinue | Select-Object -First 1
             $ocrOrphan = Get-Process -Name "solyan-ocr" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $coreOrphan -and -not $officeOrphan -and -not $ocrOrphan) { break }
+            $signOrphan = Get-Process -Name "solyan-sign" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $coreOrphan -and -not $officeOrphan -and -not $ocrOrphan -and -not $signOrphan) { break }
           }
           if ($coreOrphan) {
             $coreOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -357,6 +386,10 @@ jobs:
             $ocrOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
             throw "solyan-ocr.exe remained after SolYan PDF exited"
           }
+          if ($signOrphan) {
+            $signOrphan | Stop-Process -Force -ErrorAction SilentlyContinue
+            throw "solyan-sign.exe remained after SolYan PDF exited"
+          }
 
           @(
             "installer=$($installer.Name)",
@@ -364,6 +397,7 @@ jobs:
             "core=$($coreExe.FullName)",
             "office=$($officeExe.FullName)",
             "ocr=$($ocrExe.FullName)",
+            "sign=$($signExe.FullName)",
             "tesseract=$($tesseractExe.FullName)",
             "paddle_model_inventory=$($modelInventory.FullName)",
             "libreoffice=$($sofficeExe.FullName)",
@@ -373,9 +407,11 @@ jobs:
             "runtime_core_started=true",
             "runtime_office_started=true",
             "runtime_ocr_started=true",
+            "runtime_sign_started=true",
             "runtime_core_stopped=true",
             "runtime_office_stopped=true",
-            "runtime_ocr_stopped=true"
+            "runtime_ocr_stopped=true",
+            "runtime_sign_stopped=true"
           ) | Set-Content "artifacts/desktop-installed-runtime-smoke.log"
 
       - name: Upload desktop diagnostics

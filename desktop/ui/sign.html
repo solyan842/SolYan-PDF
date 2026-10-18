@@ -1,0 +1,32 @@
+<!doctype html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ký PDF — SolYan PDF</title><link rel="stylesheet" href="./tool.css"></head>
+<body class="tool-shell"><div class="tool-layout"><aside class="tool-sidebar">
+<a class="back-link" href="./index.html">← Trang chủ</a><div class="desktop-brand">SolYan PDF</div>
+<p class="desktop-subtitle">Windows Desktop</p><hr class="tool-divider"><div class="sidebar-links">Sắp xếp PDF<br>Chuyển đổi<br>Chỉnh sửa<br>Bảo mật</div></aside>
+<main class="tool-main"><div class="tool-top"><a class="back-link" href="./index.html">Công cụ › <span id="crumb">Ký PDF</span></a>
+<span class="muted-small">Cục bộ · pyHanko · Không tải chứng thư lên mạng</span></div>
+<div class="tool-title"><div class="big-icon info-icon">✍</div><div><h1 id="title">Ký PDF</h1>
+<p id="description">Ký tài liệu bằng chứng thư số PKCS#12 (P12/PFX) trên máy tính.</p></div></div>
+<div class="repair-layout"><section class="surface"><div id="dropzone" class="dropzone">
+<div class="upload-icon">⇧</div><h2>Chọn tệp PDF</h2><p>Kéo PDF vào đây hoặc chọn từ máy.</p>
+<input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
+<button id="pickPdf" class="primary" type="button">＋ Chọn PDF</button>
+<div class="upload-helper">Tối đa 100 MB · Tệp nguồn giữ nguyên</div></div>
+<div id="selectedPdf" class="selected-file" hidden><div class="selected-file-icon">PDF</div>
+<div class="selected-file-body"><strong id="pdfName"></strong><span id="pdfMeta"></span></div>
+<button id="removePdf" class="secondary-button" type="button">Xóa</button></div>
+<div id="result" class="active-report" hidden><div id="verdict" class="verdict-card clear"></div>
+<div id="summary" class="info-summary-grid"></div><div id="signatureDetails" class="info-section"></div></div>
+</section><aside class="surface options"><h2 id="optionsTitle">Chứng thư ký số</h2>
+<div id="certificateOptions"><div class="option-group"><label for="certInput">Chứng thư P12/PFX</label>
+<input id="certInput" type="file" accept=".p12,.pfx,application/x-pkcs12">
+<p id="certLabel" class="muted-small">Chỉ đọc từ máy · Tối đa 10 MB</p></div>
+<div class="option-group"><label for="certPassword">Mật khẩu chứng thư</label>
+<input id="certPassword" type="password" maxlength="512" autocomplete="off" placeholder="Mật khẩu P12/PFX"></div>
+<div class="option-group"><label for="fieldName">Tên trường chữ ký</label>
+<input id="fieldName" type="text" maxlength="128" value="Signature1"></div>
+<div class="security-note warning">Mật khẩu được xóa khỏi biểu mẫu sau lần xử lý; không lưu vào dự án.</div></div>
+<div id="verifyNote" class="security-note warning" hidden>Chữ ký đúng về mặt mật mã không đồng nghĩa chứng thư được tin cậy. Việc xác minh offline không kiểm tra thu hồi qua mạng.</div>
+<button id="runBtn" class="primary merge-btn" type="button" disabled>Ký PDF →</button>
+<p id="status" class="status-text" role="status">Chọn PDF và chứng thư để bắt đầu.</p></aside></div></main></div>
+<script src="./sign.js"></script></body></html>

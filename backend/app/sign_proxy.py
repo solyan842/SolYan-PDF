@@ -8,6 +8,12 @@ from fastapi.responses import JSONResponse, Response
 
 router = APIRouter(prefix="/sign", tags=["Digital signing"])
 SIGN_SERVICE_URL = os.getenv("SIGN_SERVICE_URL", "http://sign-service:8030").rstrip("/")
+SIGN_SERVICE_TOKEN = os.getenv("SOLYAN_SIGN_TOKEN", "")
+
+
+def _sign_auth_headers() -> dict[str, str]:
+    """Forward the desktop-only sidecar token; leave web signing unchanged."""
+    return {"X-SolYan-Desktop-Token": SIGN_SERVICE_TOKEN} if SIGN_SERVICE_TOKEN else {}
 MAX_PDF_SIZE = int(os.getenv("SIGN_PROXY_MAX_PDF_SIZE", str(100 * 1024 * 1024)))
 MAX_CERT_SIZE = int(os.getenv("SIGN_PROXY_MAX_CERT_SIZE", str(10 * 1024 * 1024)))
 
@@ -32,7 +38,7 @@ def _upstream_error(response: httpx.Response) -> HTTPException:
 @router.get("/health")
 def sign_health() -> dict:
     try:
-        response = httpx.get(f"{SIGN_SERVICE_URL}/health", timeout=8.0)
+        response = httpx.get(f"{SIGN_SERVICE_URL}/health", headers=_sign_auth_headers(), timeout=8.0)
         response.raise_for_status()
         return response.json()
     except (httpx.HTTPError, ValueError) as exc:
@@ -62,6 +68,7 @@ def sign_pkcs12(
                     "file": (file.filename or "document.pdf", pdf_data, file.content_type or "application/pdf"),
                     "certificate": (certificate.filename or "certificate.p12", cert_data, certificate.content_type or "application/x-pkcs12"),
                 },
+                headers=_sign_auth_headers(),
                 data={
                     "passphrase": passphrase,
                     "field_name": field_name,
@@ -97,6 +104,7 @@ def validate_pdf_signatures(file: UploadFile = File(...)) -> JSONResponse:
                 files={
                     "file": (file.filename or "document.pdf", pdf_data, file.content_type or "application/pdf"),
                 },
+                headers=_sign_auth_headers(),
             )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail="Signature service is unavailable") from exc
