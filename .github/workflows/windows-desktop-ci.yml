@@ -126,7 +126,7 @@ jobs:
           & ./desktop/backend/stage-ocr-models.ps1 2>&1 | Tee-Object -FilePath artifacts/desktop-paddle-models-stage.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --collect-all chardet --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pyinstaller.log
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --additional-hooks-dir desktop/backend/hooks --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --collect-all chardet --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-ocr-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $root = "desktop/src-tauri/resources/ocr"
           Copy-Item dist/solyan-ocr.exe "$root/solyan-ocr.exe"

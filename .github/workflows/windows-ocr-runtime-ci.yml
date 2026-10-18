@@ -8,6 +8,8 @@ on:
       - "desktop/backend/requirements-ocr-windows.txt"
       - "desktop/backend/stage-ocr-runtime.ps1"
       - "desktop/backend/stage-ocr-models.ps1"
+      - "desktop/backend/hooks/**"
+      - "desktop/backend/tests/**"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
   push:
@@ -19,6 +21,8 @@ on:
       - "desktop/backend/requirements-ocr-windows.txt"
       - "desktop/backend/stage-ocr-runtime.ps1"
       - "desktop/backend/stage-ocr-models.ps1"
+      - "desktop/backend/hooks/**"
+      - "desktop/backend/tests/**"
       - "engines/ocr-service/**"
       - ".github/workflows/windows-ocr-runtime-ci.yml"
 
@@ -119,7 +123,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --collect-all chardet --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
+          python -m unittest discover -s desktop/backend/tests -p "test_paddlex_hook.py" 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-hook-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m PyInstaller --noconfirm --clean --onefile --name solyan-ocr --additional-hooks-dir desktop/backend/hooks --paths . --paths engines/ocr-service --collect-submodules app --collect-all paddle --collect-all paddleocr --collect-all paddlex --collect-all pypdfium2 --collect-all chardet --hidden-import cv2 desktop/backend/ocr_runner.py 2>&1 | Tee-Object -FilePath artifacts/windows-ocr-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path dist/solyan-ocr.exe)) { throw "solyan-ocr.exe was not produced" }
           Get-Item dist/solyan-ocr.exe | Select-Object Name, Length, FullName | Format-List | Out-String | Set-Content artifacts/windows-ocr-sidecar-inventory.log
