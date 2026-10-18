@@ -148,25 +148,96 @@ jobs:
           cargo check 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-cargo-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Measure NSIS payload footprint
+      - name: Trim source-only resources and measure installer payload
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $root = "desktop/src-tauri/resources"
-          $files = @(Get-ChildItem $root -Recurse -File -ErrorAction Stop)
-          $total = ($files | Measure-Object Length -Sum).Sum
-          $summary = foreach ($category in @("core", "office", "ocr")) {
-            $items = @($files | Where-Object { $_.FullName -like "*\\resources\\$category\\*" })
-            [pscustomobject]@{
-              Component = $category
-              FileCount = $items.Count
-              Bytes = [int64](($items | Measure-Object Length -Sum).Sum)
+          $totalBefore = (Get-ChildItem $root -File -Recurse | Measure-Object Length -Sum).Sum
+          $removed = New-Object System.Collections.Generic.List[string]
+
+          # LibreOffice has already been checksum-verified and administratively
+          # extracted. The MSI is not required for runtime execution or NSIS uninstall.
+          $office = Join-Path $root "office/libreoffice"
+          Get-ChildItem $office -Filter "*.msi" -File -ErrorAction Stop | ForEach-Object {
+            $removed.Add("MSI: $($_.FullName)")
+            Remove-Item $_.FullName -Force
+          }
+          foreach ($optional in @("help", "readmes")) {
+            $candidate = Join-Path $office $optional
+            if (Test-Path $candidate) {
+              $removed.Add("Office documentation: $candidate")
+              Remove-Item $candidate -Recurse -Force
             }
           }
-          $summary | Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-payload-by-component.log
-          $files | Sort-Object Length -Descending | Select-Object -First 20 FullName, Length |
-            Format-Table | Out-String | Tee-Object -FilePath artifacts/desktop-largest-payload-files.log
-          "Total resource payload bytes: $total" | Tee-Object -FilePath artifacts/desktop-payload-total.log
+
+          # Spellcheck dictionaries are optional for headless PDF conversion.
+          # Retain English and Vietnamese; preserve the full LibreOffice program,
+          # fonts, templates, filters, and every conversion component.
+          $extensions = Join-Path $office "share/extensions"
+          if (Test-Path $extensions) {
+            Get-ChildItem $extensions -Directory -Filter "dict-*" | Where-Object {
+              $_.Name -notin @("dict-en", "dict-vi", "dict-vn")
+            } | ForEach-Object {
+              $removed.Add("Optional spellcheck dictionary: $($_.FullName)")
+              Remove-Item $_.FullName -Recurse -Force
+            }
+          }
+
+          # Only developer import/static libraries and headers, never CLI binaries,
+          # runtime DLLs, Tesseract language files, or Paddle model weights.
+          $core = Join-Path $root "core"
+          Get-ChildItem (Join-Path $core "qpdf") -Directory | ForEach-Object {
+            $candidate = Join-Path $_.FullName "lib"
+            if (Test-Path $candidate) {
+              $removed.Add("qpdf static/import libraries: $candidate")
+              Remove-Item $candidate -Recurse -Force
+            }
+          }
+          Get-ChildItem (Join-Path $core "poppler") -Directory | ForEach-Object {
+            foreach ($optional in @("Library/include", "Library/lib")) {
+              $candidate = Join-Path $_.FullName $optional
+              if (Test-Path $candidate) {
+                $removed.Add("Poppler development files: $candidate")
+                Remove-Item $candidate -Recurse -Force
+              }
+            }
+          }
+          $removed | Set-Content artifacts/desktop-excluded-source-assets.log -Encoding utf8
+
+          foreach ($component in @("core", "office", "ocr")) {
+            $items = @(Get-ChildItem (Join-Path $root $component) -Recurse -File)
+            [pscustomobject]@{
+              Component = $component
+              Files = $items.Count
+              Bytes = [int64](($items | Measure-Object Length -Sum).Sum)
+            } | Format-List | Out-String | Add-Content artifacts/desktop-payload-by-component.log
+          }
+          $remainingFiles = @(Get-ChildItem $root -File -Recurse)
+          $totalAfter = ($remainingFiles | Measure-Object Length -Sum).Sum
+          @(
+            "before_bytes=$totalBefore"
+            "after_bytes=$totalAfter"
+            "reclaimed_bytes=$($totalBefore - $totalAfter)"
+          ) | Set-Content artifacts/desktop-payload-total.log
+          $remainingFiles | Sort-Object Length -Descending |
+            Select-Object -First 20 FullName, Length |
+            Format-List | Out-String | Set-Content artifacts/desktop-largest-payload-files.log
+          if ($totalAfter -ge $totalBefore) { throw "No non-runtime packaging assets were removed" }
+
+          foreach ($essential in @(
+            "$root/core/solyan-core.exe",
+            "$root/office/solyan-office.exe",
+            "$root/ocr/solyan-ocr.exe",
+            "$root/ocr/tesseract/tesseract.exe",
+            "$root/ocr/tesseract/tessdata/vie.traineddata",
+            "$root/ocr/tesseract/tessdata/eng.traineddata",
+            "$root/ocr/paddlex-cache/solyan-model-inventory.json"
+          )) {
+            if (-not (Test-Path $essential -PathType Leaf)) {
+              throw "Required runtime resource removed: $essential"
+            }
+          }
 
       - name: Build NSIS installer with local sidecars
         shell: pwsh
