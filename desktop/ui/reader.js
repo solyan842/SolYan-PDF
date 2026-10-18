@@ -48,6 +48,9 @@ async function openFile(file) {
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
   r2?.opened(doc);
   bus.on('pagesinit', () => { view.currentScaleValue = 'page-width'; });
+  // PDF.js resets custom page children before async raster rendering. Restore
+  // overlays against the updated viewports immediately, not only at draw end.
+  bus.on('scalechanging', () => { if (doc.id === active) renderSignatures(doc); });
   bus.on('pagerendered', () => { if (doc.id === active) renderSignatures(doc); });
   bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) $('pageNumber').value = pageNumber; });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });

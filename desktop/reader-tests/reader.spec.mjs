@@ -17,7 +17,39 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
   const drag=async(locator,dx,dy)=>{const box=await locator.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+dx,box.y+box.height/2+dy,{steps:6});await page.mouse.up();};
   await drag(stamp,40,-40);
   for(const handle of ['nw','n','ne','e','se','s','sw','w']){await drag(stamp.locator(`[data-h=${handle}]`),handle.includes('w')?-4:4,handle.includes('n')?-3:3);}
-  const before=await stamp.boundingBox();await page.locator('#zoom').selectOption('1.5');await expect.poll(async()=>Math.round((await stamp.boundingBox()).width)).not.toBe(Math.round(before.width));
+  await stamp.scrollIntoViewIfNeeded();await expect(stamp).toBeInViewport();
+  const before=await stamp.boundingBox();expect(before).not.toBeNull();
+  // Hold raster drawing so fast local machines cannot hide the reset-to-render gap.
+  // The overlay must use the new viewport before PDF.js finishes its async draw.
+  const zoomState=await page.evaluate(async()=>{
+    const {PDFPageView}=await import('/vendor/pdfjs/web/pdf_viewer.mjs');
+    const originalDraw=PDFPageView.prototype.draw;let release;
+    const pending=new Promise(resolve=>{release=resolve;});
+    window.zoomRenderDone=false;
+    PDFPageView.prototype.draw=async function(...args){await pending;const result=await originalDraw.apply(this,args);if(this.id===window.zoomSignaturePage)window.zoomRenderDone=true;return result;};
+    window.releaseZoomDraw=()=>{PDFPageView.prototype.draw=originalDraw;release();};
+    const signature=document.querySelector('.signature.selected'),pdfPage=signature.closest('.page');window.zoomSignaturePage=Number(pdfPage.dataset.pageNumber);
+    const relative=()=>{const node=document.querySelector('.signature.selected');if(!node)return null;const r=node.getBoundingClientRect(),p=pdfPage.getBoundingClientRect();return{x:(r.x-p.x)/p.width,y:(r.y-p.y)/p.height,w:r.width/p.width,h:r.height/p.height,width:r.width,height:r.height,pageWidth:p.width,pageHeight:p.height,pageNumber:pdfPage.dataset.pageNumber,id:node.dataset.signature};};
+    const before=relative();const zoom=document.getElementById('zoom');zoom.value='1.5';zoom.dispatchEvent(new Event('change',{bubbles:true}));
+    return{before,during:relative()};
+  });
+  try {
+    expect(zoomState.during,'signature survives page reset while raster rendering is pending').not.toBeNull();
+    await expect(stamp).toBeVisible();
+    expect(zoomState.during.id).toBe(zoomState.before.id);
+    for(const axis of ['x','y','w','h'])expect(zoomState.during[axis]).toBeCloseTo(zoomState.before[axis],3);
+    expect(Math.round(zoomState.during.width)).not.toBe(Math.round(before.width));
+    expect(zoomState.during.pageWidth).toBeCloseTo(1200,0);expect(zoomState.during.pageHeight).toBeCloseTo(1600,0);
+    expect(zoomState.during.width).toBeGreaterThan(0);expect(zoomState.during.height).toBeGreaterThan(0);
+    await expect.poll(async()=>{const box=await stamp.boundingBox();return box?Math.round(box.width):null;}).toBe(Math.round(zoomState.during.width));
+  } finally {await page.evaluate(()=>window.releaseZoomDraw());}
+  // Assert again after the actual asynchronous page render and overlay rebuild.
+  await expect.poll(()=>page.evaluate(()=>window.zoomRenderDone)).toBe(true);
+  await expect(page.locator(`.page[data-page-number="${zoomState.before.pageNumber}"]`)).toHaveAttribute('data-loaded','true');
+  await expect(stamp).toBeVisible();await expect(stamp).toHaveAttribute('data-signature',zoomState.before.id);
+  const after=await stamp.evaluate(node=>{const r=node.getBoundingClientRect(),p=node.closest('.page').getBoundingClientRect();return{x:(r.x-p.x)/p.width,y:(r.y-p.y)/p.height,w:r.width/p.width,h:r.height/p.height,width:r.width,height:r.height};});
+  for(const axis of ['x','y','w','h'])expect(after[axis]).toBeCloseTo(zoomState.before[axis],3);
+  expect(after.width).toBeCloseTo(zoomState.during.width,1);expect(after.height).toBeCloseTo(zoomState.during.height,1);
   await page.locator('#applyScope').selectOption('all');await page.locator('#apply').click();await expect(page.locator('.signature')).toHaveCount(3);
   const downloadPromise=page.waitForEvent('download');await page.locator('#save').click();const download=await downloadPromise;expect(download.suggestedFilename()).toBe('Reader-da-ky.pdf');
   const saved=new Uint8Array(await readFile(await download.path()));const reopened=await getDocument({data:saved.slice()}).promise;expect(reopened.numPages).toBe(3);for(let i=1;i<=3;i++)expect((await(await reopened.getPage(i)).getTextContent()).items.map(i=>i.str).join(' ')).toContain('SOLYAN Reader search text');await reopened.loadingTask.destroy();

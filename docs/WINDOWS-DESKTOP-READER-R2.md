@@ -36,3 +36,11 @@ No placeholder buttons were added for deferred functions. No gate was removed or
 ## CI handoff
 
 One consolidated R2 push triggers existing Windows Desktop CI. GitHub owns building, waiting, the reusable result summary, diagnostic artifacts and issue #135 notifications. Installer artifacts retain established names `SolYan-PDF-Windows-x64` (sTool) and `SolYan-PDF-Reader-Windows-x64` (sReader); filenames display new product names. A pending run is not PASS. There is no configured GitHub-to-Codex wakeup; return with the generated brief for any necessary fix.
+
+## Desktop #134 zoom lifecycle regression
+
+The real failed job `117742451877` in run `39150320680` at `bfb31ce` failed in the Reader browser scenario: `stamp.boundingBox()` returned null after changing zoom to 150%. The pinned PDF.js `PDFPageView.update()` calls `reset()`, removing custom page children including our signature layer. Placement data survives; previously the DOM overlay was restored only on asynchronous `pagerendered`, leaving a real visibility gap.
+
+Reader now also restores overlays on `scalechanging`, after PDF.js updates page viewports and resets page children. The existing final-render restoration, signature coordinates/resize/apply/save behavior and Toolbox are unchanged. The regression deliberately holds PDF.js raster drawing pending, proving the original implementation loses the overlay and the fix restores it immediately. It checks the same signature ID, visible positive dimensions, actual 150% page dimensions, and unchanged page-relative position/size both during pending rendering and after actual raster completion. No assertion or CI gate was removed.
+
+Local verification: the deterministic regression failed on the original product code; all 6 Reader browser scenarios and all 6 Node / 5 original Toolbox icon tests passed after the fix. The strengthened affected scenario also passed three consecutive local repetitions before push. Native Windows CI still requires its own exact-commit result; this note does not claim CI PASS.
