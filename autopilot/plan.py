@@ -64,7 +64,7 @@ def source_branch_safe(branch):
 def permitted_files(files, prefixes):
     forbidden = ("AGENTS.md", ".env", ".github/workflows", "autopilot/queue.json")
     return bool(files) and all(
-        not (path == f or path.startswith(f + "/") for f in forbidden)
+        not any(path == f or path.startswith(f + "/") for f in forbidden)
         and any(path == p or path.startswith(p) for p in prefixes)
         for path in files
     )

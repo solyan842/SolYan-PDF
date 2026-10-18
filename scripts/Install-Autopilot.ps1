@@ -51,7 +51,7 @@ $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(2)) -Repeti
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 3) -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-Write-Host "Installed $taskName: checks every 5 minutes when this user is logged on."
+Write-Host "Installed ${taskName}: checks every 5 minutes when this user is logged on."
 Write-Host "Source: $work"
 Write-Host "Controller: $app"
 Write-Host "Status: python $worker status"
