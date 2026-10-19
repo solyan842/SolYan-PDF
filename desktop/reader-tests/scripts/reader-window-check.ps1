@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect','Minimize','Association','CancelOpen')][string]$Mode = 'Inspect',
+    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs')][string]$Mode = 'Inspect',
     [Parameter(Mandatory)][string]$Exe,
     [string]$FilePath
 )
@@ -17,6 +17,9 @@ public static class ReaderWindows {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder text, int count);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam);
+    [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr hwnd, int id);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string kind, string title);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetWindowText(IntPtr hwnd, string text);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -39,6 +42,19 @@ public static class ReaderWindows {
             if (owner == processId && kind.ToString() == "#32770") {
                 found = PostMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero); return false;
             }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+    public static bool SaveAs(uint processId, string path) {
+        bool found = false;
+        EnumWindows((hwnd, state) => {
+            uint owner; GetWindowThreadProcessId(hwnd, out owner);
+            var kind = new StringBuilder(256); GetClassName(hwnd, kind, kind.Capacity);
+            if (owner != processId || kind.ToString() != "#32770") return true;
+            var edit = GetDlgItem(hwnd, 1152);
+            if (edit == IntPtr.Zero) { var combo = GetDlgItem(hwnd, 1148); if (combo != IntPtr.Zero) { edit = FindWindowEx(combo,IntPtr.Zero,"Edit",null); if (edit == IntPtr.Zero) edit = combo; } }
+            if (edit != IntPtr.Zero && SetWindowText(edit,path)) { found = PostMessage(hwnd,0x0111,new IntPtr(1),IntPtr.Zero); return false; }
             return true;
         }, IntPtr.Zero);
         return found;
@@ -78,6 +94,14 @@ if ($Mode -eq 'Association') {
     exit
 }
 $apps = @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)) -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Exe })
+if ($Mode -eq 'SaveAs') {
+    if ($apps.Count -ne 1) { throw 'Expected one Reader process' }
+    $testRoot = [IO.Path]::GetFullPath((Join-Path (Get-Location) 'desktop/reader-tests/test-results/native-activation'))
+    $target = [IO.Path]::GetFullPath($FilePath)
+    if (-not $target.StartsWith($testRoot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetExtension($target) -ne '.pdf') { throw 'Save test must stay inside synthetic native results' }
+    @{ submitted=[ReaderWindows]::SaveAs($apps[0].Id,$target) } | ConvertTo-Json -Compress
+    exit
+}
 if ($Mode -eq 'CancelOpen') {
     if ($apps.Count -ne 1) { throw 'Expected one Reader process' }
     @{ cancelled=[ReaderWindows]::CancelOpen($apps[0].Id) } | ConvertTo-Json -Compress

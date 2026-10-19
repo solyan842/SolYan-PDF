@@ -2,6 +2,7 @@ import * as pdfjs from './vendor/pdfjs/build/pdf.mjs';
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor/pdfjs/web/pdf_viewer.mjs';
 import { installR2 } from './reader-r2.js';
 import { connectNativeReader } from './reader-native.js';
+import { installLanguage,t,getLanguage } from './reader-language.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
@@ -10,6 +11,12 @@ let active = null, selected = null, asset = null, busy = false, drawing = false,
 const message = text => { $('status').textContent = text; };
 const attempt = fn => async (...args) => { try { await fn(...args); } catch (e) { message(`Không thể thực hiện: ${typeof e === 'string' ? e : e.message}`); } };
 const current = () => documents.get(active);
+function syncView(doc){
+  if(doc.id!==active)return;
+  const range=$('zoomRange');if(range)range.value=Math.round(doc.view.currentScale*100);
+  const value=doc.view.currentScaleValue;if(value){const select=$('zoom');if(![...select.options].some(o=>o.value===String(value))){let o=select.querySelector('[data-live]');if(!o){o=document.createElement('option');o.dataset.live='true';select.append(o);}o.value=String(value);o.textContent=Math.round(doc.view.currentScale*100)+'%';}select.value=String(value);}
+  for(const [id,on]of [['singlePage',doc.view.scrollMode===3],['twoPage',doc.view.spreadMode!==0],['continuous',doc.view.scrollMode===0&&doc.view.spreadMode===0]])$(id)?.setAttribute('aria-pressed',String(on));
+}
 let r2;
 const checkpoint = doc => r2?.checkpoint(doc);
 function changed(doc) { if (!doc.dirty) { doc.dirty = true; renderTabs(); } }
@@ -20,11 +27,12 @@ function renderTabs() {
     const title = document.createElement('button'); title.className = 'title'; title.textContent = `${doc.dirty ? '● ' : ''}${doc.name}`; title.title = doc.name; title.onclick = () => activate(doc.id);
     const close = document.createElement('button'); close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', `Đóng ${doc.name}`);
     close.onclick = attempt(async () => {
-      if (busy || (doc.dirty && !confirm('Đóng tài liệu và bỏ chữ ký chưa lưu?'))) return;
+      if (busy || (doc.dirty && !confirm(t('Đóng tài liệu và bỏ chữ ký chưa lưu?')))) return;
       if (active === doc.id) { selected = null; active = null; }
       r2?.flushBookmark(doc); doc.thumbnails?.disconnect(); doc.r2Abort?.abort(); clearTimeout(doc.bookmarkTimer); doc.view.setDocument(null); doc.container.remove(); documents.delete(doc.id); await doc.pdf.loadingTask.destroy();
       if (!active && documents.size) activate(documents.keys().next().value);
-      else if (!documents.size) { $('welcome').hidden = false; $('thumbs').replaceChildren(); $('outline').replaceChildren(); document.getElementById('bookmarks')?.replaceChildren(); $('signOptions').hidden = true; $('save').disabled = true; }
+      else if (!documents.size) { $('welcome').hidden = false; $('thumbs').replaceChildren(); $('outline').replaceChildren(); document.getElementById('bookmarks')?.replaceChildren(); $('signOptions').hidden = true; $('save').disabled = true; $('saveCurrent').disabled = true; }
+      if(!documents.size&&$('presentation'))$('presentation').disabled=true;
       renderTabs();
     });
     tab.append(title, close); $('tabs').append(tab);
@@ -37,7 +45,7 @@ async function openFile(file, source = null) {
   const task = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, enableXfa: false,
     cMapUrl: './vendor/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: './vendor/pdfjs/standard_fonts/', wasmUrl: './vendor/pdfjs/wasm/' });
   task.onPassword = (update, reason) => {
-    const password = prompt(reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD ? 'Mật khẩu chưa đúng. Nhập lại:' : 'Mật khẩu PDF:');
+    const password = prompt(t(reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD ? 'Mật khẩu chưa đúng. Nhập lại:' : 'Mật khẩu PDF:'));
     if (password === null) { task.destroy(); message('Đã hủy mở PDF.'); } else update(password);
   };
   const pdf = await task.promise;
@@ -51,7 +59,8 @@ async function openFile(file, source = null) {
   bus.on('pagesinit', () => { view.currentScaleValue = 'page-width'; });
   // PDF.js resets custom page children before async raster rendering. Restore
   // overlays against the updated viewports immediately, not only at draw end.
-  bus.on('scalechanging', () => { if (doc.id === active) renderSignatures(doc); });
+  bus.on('scalechanging', () => { if (doc.id === active) {renderSignatures(doc);syncView(doc);} });
+  for(const event of ['scrollmodechanged','spreadmodechanged'])bus.on(event,()=>syncView(doc));
   bus.on('pagerendered', () => { if (doc.id === active) renderSignatures(doc); });
   bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });
@@ -61,8 +70,11 @@ function activate(id) {
   active = id; const doc = current(); selected = doc.selectedId;
   for (const other of documents.values()) other.container.hidden = other.id !== id;
   $('welcome').hidden = true; $('pageCount').textContent = `/ ${doc.pdf.numPages}`; $('pageNumber').max = doc.pdf.numPages; $('pageNumber').value = doc.view.currentPageNumber;
-  $('save').disabled = false; $('query').value = doc.query; $('matches').textContent = doc.matches; $('signOptions').hidden = !selected;
+  $('save').disabled = false; $('saveCurrent').disabled = false; $('query').value = doc.query; $('matches').textContent = doc.matches; $('signOptions').hidden = !selected;
+  if($('presentation'))$('presentation').disabled=false;
   renderTabs(); doc.view.update(); thumbnails(doc); outline(doc); renderSignatures(doc); r2?.activated(doc);
+  syncView(doc);
+  document.dispatchEvent(new Event('reader-document-activated'));
 }
 async function thumbnails(doc) {
   doc.thumbnails?.disconnect(); $('thumbs').replaceChildren();
@@ -95,7 +107,7 @@ async function outline(doc) {
     const add = (items, depth = 0) => { for (const item of items || []) {
       const button = document.createElement('button'); button.textContent = item.title; button.style.paddingLeft = `${10 + Math.min(depth, 10) * 12}px`;
       button.onclick = attempt(async () => { if (item.dest) await doc.link.goToDestination(item.dest); }); $('outline').append(button); add(item.items, depth + 1);
-    } }; add(items); if (!items?.length) $('outline').textContent = 'PDF này chưa có mục lục.';
+    } }; add(items);$('outline').dataset.empty=String(!items?.length); if (!items?.length) $('outline').textContent = t('PDF này chưa có mục lục.');
   } catch (e) { message(`Mục lục: ${e.message}`); }
 }
 function renderSignatures(doc = current()) {
@@ -107,7 +119,7 @@ function renderSignatures(doc = current()) {
     if (!layer) { layer = document.createElement('div'); layer.className = 'signatureLayer'; page.div.append(layer); }
     const node = document.createElement('div'); node.className = `signature${item.id === selected ? ' selected' : ''}`; node.dataset.signature = item.id; node.tabIndex = 0; node.setAttribute('aria-label', `${item.label||'Chữ ký'}: kéo di chuyển hoặc dùng phím mũi tên`);
     const position = () => {
-      if(item.viewport){const frame=window.ReaderEdits.frame(item,page.viewport);Object.assign(node.style,{left:`${frame.left}px`,top:`${frame.top}px`,width:`${frame.width}px`,height:`${frame.height}px`,transform:frame.transform,transformOrigin:'0 0'});}
+      if(item.viewport){const frame=window.ReaderEdits.frame(item,page.viewport),matrix=new DOMMatrix(frame.transform);node.style.setProperty('--handle-inverse',String(1/Math.max(.001,Math.hypot(matrix.a,matrix.b))));Object.assign(node.style,{left:`${frame.left}px`,top:`${frame.top}px`,width:`${frame.width}px`,height:`${frame.height}px`,transform:frame.transform,transformOrigin:'0 0'});}
       else Object.assign(node.style, { left: `${item.rect.x*100}%`, top: `${item.rect.y*100}%`, width: `${item.rect.w*100}%`, height: `${item.rect.h*100}%` });
     }; position();
     if(item.kind){node.classList.add('annotation');node.dataset.kind=item.kind;node.append(r2.visual(item));}
@@ -132,11 +144,12 @@ function renderSignatures(doc = current()) {
       node.onpointerup = end; node.onpointercancel = end; node.onlostpointercapture = end;
     };
     node.onkeydown = e => {
-      if (e.key === 'Delete') { selected = doc.selectedId = item.id; removeSignature(); return; }
+      if (e.key === 'Delete') { e.preventDefault();selected = doc.selectedId = item.id; removeSignature(); return; }
       const delta = { ArrowLeft: [-.002,0], ArrowRight: [.002,0], ArrowUp: [0,-.002], ArrowDown: [0,.002] }[e.key];
       if (delta) { e.preventDefault(); checkpoint(doc);item.rect = Q.move(item.rect, ...delta); position(); changed(doc); }
     };
     layer.append(node);
+    if(item.kind==='text')node.ondblclick=e=>{e.preventDefault();e.stopPropagation();r2.editText(doc,item);};
   }
 }
 function removeSignature() { const doc = current(); if (!doc || busy) return; checkpoint(doc);doc.placements = doc.placements.filter(p => p.id !== selected); selected = doc.selectedId = null; $('signOptions').hidden = true; changed(doc); renderSignatures(); }
@@ -147,7 +160,7 @@ ink.onpointerdown = e => { drawing = true; inked = true; ink.setPointerCapture(e
 ink.onpointermove = e => { if (!drawing) return; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#122c50'; ctx.lineTo(...inkPoint(e)); ctx.stroke(); };
 ink.onpointerup = ink.onpointercancel = () => { drawing = false; };
 $('open').onclick = attempt(async () => {
-  if(window.__TAURI__?.event) await window.__TAURI__.core.invoke('reader_choose_files');
+  if(window.__TAURI__?.event) await window.__TAURI__.core.invoke('reader_choose_files',{language:getLanguage()});
   else $('pdfFiles').click();
 });
 $('pdfFiles').onchange = attempt(async e => { for (const file of e.target.files) await openFile(file); e.target.value = ''; });
@@ -193,23 +206,26 @@ $('apply').onclick = attempt(async () => {
   checkpoint(doc);doc.placements=doc.placements.filter(p=>p.group!==item.group).concat(replacements);selected=doc.selectedId=replacements[0]?.id;changed(doc);renderSignatures();message(`Đã áp dụng trên ${indexes.length} trang; lưu thành PDF mới để hoàn tất.`);
 });
 $('removeSign').onclick=removeSignature;
-$('save').onclick=attempt(async()=>{
-  const doc=current(); if(!doc||busy)return;busy=true;$('save').disabled=true;
+async function saveDocument(saveAs){
+  const doc=current(); if(!doc||busy)return;busy=true;$('save').disabled=true;$('saveCurrent').disabled=true;
   try {
     const bytes=await r2.exportDocument(doc);
     const suffix=doc.placements.some(p=>p.role==='fill')&&!doc.placements.some(p=>!p.kind&&p.role!=='fill')?'-da-dien.pdf':'-da-ky.pdf';
      const name=doc.name.replace(/\.pdf$/i,'')+suffix;
     if(window.__TAURI__?.core){
-      const path=await window.__TAURI__.core.invoke('reader_save_as',{bytes:Array.from(bytes),name});
-      if(path){doc.dirty=false;r2.saved(doc);renderTabs();message(`Đã lưu bản PDF mới: ${path}`);}else message('Đã hủy lưu. Chữ ký vẫn ở bản làm việc.');
+      const command=!saveAs&&doc.outputSaved?'reader_save':'reader_save_as';
+      const path=await window.__TAURI__.core.invoke(command,{bytes:Array.from(bytes),name,document:doc.id,language:getLanguage()});
+      if(path){doc.outputSaved=true;doc.dirty=false;r2.saved(doc);renderTabs();message(`Đã lưu bản PDF mới: ${path}`);}else message('Đã hủy lưu. Chữ ký vẫn ở bản làm việc.');
       return;
     }
     const blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
     // Keep the source and unsaved marker: a download request cannot prove that
     // the user completed the native Save As dialog.
     message('Đã tạo bản PDF mới để Lưu thành. PDF nguồn không thay đổi.');
-  } finally {busy=false;$('save').disabled=false;}
-});
+  } finally {busy=false;$('save').disabled=false;$('saveCurrent').disabled=false;}
+}
+$('save').onclick=attempt(()=>saveDocument(true));
+$('saveCurrent').onclick=attempt(()=>saveDocument(false));
 function find(back=false){const doc=current();if(doc){doc.query=$('query').value;doc.bus.dispatch('find',{source:window,type:'again',query:doc.query,phraseSearch:true,caseSensitive:false,entireWord:false,highlightAll:true,findPrevious:back});}}
 $('query').onkeydown=e=>{if(e.key==='Enter')find(e.shiftKey);};$('findNext').onclick=()=>find();$('findPrevious').onclick=()=>find(true);
 $('previous').onclick=()=>{if(current())current().view.currentPageNumber=Math.max(1,current().view.currentPageNumber-1);};
@@ -221,12 +237,22 @@ function changeZoom(value){const d=current();if(!d)return;d.view.update();d.view
 $('zoom').onchange=()=>changeZoom($('zoom').value);
 $('zoomIn').onclick=()=>{if(current())changeZoom(Math.min(4,current().view.currentScale*1.2));};
 $('zoomOut').onclick=()=>{if(current())changeZoom(Math.max(.25,current().view.currentScale/1.2));};
+$('documents').addEventListener('wheel',event=>{
+  const d=current();if(!event.ctrlKey||!d)return;event.preventDefault();d.view.update();
+  const units=event.deltaMode===1?16:event.deltaMode===2?d.container.clientHeight:1;
+  const scale=Math.min(4,Math.max(.25,d.view.currentScale*Math.exp(-Math.max(-300,Math.min(300,event.deltaY*units))*.002)));
+  const bounds=d.container.getBoundingClientRect();
+  d.view.updateScale({scaleFactor:scale/d.view.currentScale,drawingDelay:100,origin:[event.clientX-bounds.left+d.container.offsetLeft,event.clientY-bounds.top+d.container.offsetTop]});
+},{passive:false});
 $('sideToggle').onclick=()=>{$('sidebar').hidden=!$('sidebar').hidden;};$('showThumbs').onclick=()=>{$('thumbs').hidden=false;$('outline').hidden=true;const list=$('bookmarks');if(list)list.hidden=true;};$('showOutline').onclick=()=>{$('thumbs').hidden=true;$('outline').hidden=false;const list=$('bookmarks');if(list)list.hidden=true;};
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',attempt(async e=>{e.preventDefault();for(const file of e.dataTransfer.files)if(file.name.toLowerCase().endsWith('.pdf'))await openFile(file);}));
-document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}});
+document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();$(e.shiftKey?'save':'saveCurrent').click();}});
+document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected&&!e.target.closest('input,textarea,select,[contenteditable=true]')&&!document.querySelector('dialog[open]')){e.preventDefault();removeSignature();}});
 window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
 $('tools').onclick=attempt(async e=>{if(window.__TAURI__?.core){e.preventDefault();await window.__TAURI__.core.invoke('desktop_switch_tools');}});
 r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},get busy(){return busy;}});
+installLanguage();
+document.addEventListener('reader-language-changed',()=>{if($('outline').dataset.empty==='true')$('outline').textContent=t('PDF này chưa có mục lục.');});
 $('open').disabled=false;
 document.body.dataset.ready='true';
 attempt(async()=>{

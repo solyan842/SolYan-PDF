@@ -26,7 +26,7 @@ test('compact shell, popovers, night display and real UI review captures',async(
     const geometry=await page.evaluate(()=>{const rect=s=>{const r=document.querySelector(s).getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom};};return{header:rect('header'),toolbar:rect('.toolbar'),main:rect('main'),sidebar:rect('#sidebar'),zoom:rect('.zoom-pill'),last:rect('#readerMenu'),left:rect('.toolbar-left'),center:rect('.toolbar-center'),right:rect('.toolbar-right'),canvas:rect('#documents'),ribbons:document.querySelectorAll('[data-ribbon]').length};});
     expect(geometry.ribbons).toBe(0);expect(geometry.header.h).toBe(40);expect(geometry.toolbar.h).toBe(46);expect(geometry.main.y).toBe(86);
     expect(geometry.sidebar.w).toBeGreaterThanOrEqual(230);expect(geometry.sidebar.w).toBeLessThanOrEqual(270);expect(geometry.last.right).toBeLessThanOrEqual(width);
-    expect(geometry.zoom.right).toBeLessThan(geometry.canvas.right);expect(geometry.zoom.bottom).toBeLessThan(height);
+    expect(geometry.zoom.y).toBeGreaterThanOrEqual(geometry.canvas.bottom);expect(geometry.zoom.bottom).toBeLessThanOrEqual(height);
     expect(geometry.left.right).toBeLessThanOrEqual(geometry.center.x);expect(geometry.center.right).toBeLessThanOrEqual(geometry.right.x);
     await expect(page.locator('.signature')).toHaveAttribute('data-signature',state);
     await page.screenshot({path:`test-results/reader-compact-${width}x${height}.png`});
@@ -36,7 +36,7 @@ test('compact shell, popovers, night display and real UI review captures',async(
   await page.keyboard.press('Escape');await expect(page.locator('#readerMenuPanel')).not.toBeVisible();await expect(page.locator('#readerMenu')).toBeFocused();
   await command(page,'pageNight');expect(await page.locator('body').getAttribute('class')).toContain('page-night');
   expect(await page.locator('.signature img').evaluate(el=>getComputedStyle(el).filter)).toBe('none');
-  expect(await page.locator('.signature').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
+  expect(await page.locator('.signature').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
   expect(await page.locator('.canvasWrapper').first().evaluate(el=>getComputedStyle(el).filter)).toContain('invert(1)');
   await page.screenshot({path:'test-results/reader-compact-night.png'});await command(page,'pageNight');
   await page.locator('#theme').click();await page.screenshot({path:'test-results/reader-compact-dark.png'});await page.reload();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');

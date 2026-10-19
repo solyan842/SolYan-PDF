@@ -1,5 +1,5 @@
 //! OS-supplied file requests only. No command accepts a filesystem path from JS.
-use std::{collections::{HashMap, VecDeque}, fs::{self, File}, io::Read, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet, VecDeque}, fs::{self, File}, io::Read, path::{Path, PathBuf}};
 
 pub const MAX_REQUESTS: usize = 32;
 const MAX_BYTES: u64 = 200 * 1024 * 1024;
@@ -10,9 +10,19 @@ pub struct OpenQueue {
     pending: VecDeque<Result<(String, PathBuf), String>>,
     grants: HashMap<String, PathBuf>,
     counter: u64,
+    sources: HashSet<String>,
     overflow: bool,
 }
 impl OpenQueue {
+    pub fn is_source(&self, path: &Path) -> bool {
+        if let Ok(path) = fs::canonicalize(path) {
+            let key = path.to_string_lossy().to_string();
+            #[cfg(windows)]
+            let key = key.to_lowercase();
+            return self.sources.contains(&key);
+        }
+        false
+    }
     pub fn enqueue(&mut self, paths: impl IntoIterator<Item = PathBuf>, cwd: &Path) {
         for path in paths {
             if !path.extension().map(|x| x.to_string_lossy().eq_ignore_ascii_case("pdf")).unwrap_or(false) { continue; }
@@ -24,6 +34,7 @@ impl OpenQueue {
                     let key = path.to_string_lossy().to_string();
                     #[cfg(windows)]
                     let key = key.to_lowercase();
+                    self.sources.insert(key.clone());
                     Ok((key, path))
                 });
             // Collapse repeated pending launches, but allow reactivation after delivery.
@@ -86,6 +97,9 @@ mod tests {
         let mut queue = OpenQueue::default();
         queue.enqueue(["Tiếng Việt (1).pdf", "./Tiếng Việt (1).pdf", "other/Tiếng Việt (1).pdf"].map(PathBuf::from), &root);
         let first = queue.next().unwrap(); let other = queue.next().unwrap();
+        assert!(queue.is_source(&root.join("./Tiếng Việt (1).pdf")));
+        let output = root.join("working-copy.pdf"); fs::write(&output, b"%PDF-copy").unwrap();
+        assert!(!queue.is_source(&output));
         assert_eq!(first.2, other.2); assert_ne!(first.1, other.1); assert!(queue.next().is_none());
         assert_eq!(read_pdf(&queue.take(&first.0).unwrap()).unwrap(), b"%PDF-fixture");
         assert!(queue.take(&first.0).is_err()); assert!(queue.take("C:/arbitrary.pdf").is_err());
@@ -113,6 +127,7 @@ mod tests {
         let root = fixtures(); let mut queue = OpenQueue::default();
         queue.enqueue([PathBuf::from("TIẾNG VIỆT (1).PDF"), PathBuf::from("Tiếng Việt (1).pdf")], &root);
         assert!(queue.next().unwrap().3.is_none()); assert!(queue.next().is_none());
+        assert!(queue.is_source(&root.join("TIẾNG VIỆT (1).PDF")));
         cleanup(root);
     }
 }

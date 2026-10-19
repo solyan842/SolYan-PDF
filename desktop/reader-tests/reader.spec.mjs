@@ -142,7 +142,7 @@ test('Fill & Sign text date check and cross roundtrip without rasterizing page',
  await expect(page.locator('.page canvas').first()).toBeVisible();
  await command(page,'fillText');await page.locator('#fillTextInput').fill('Nguyễn Văn An');
  await page.getByRole('button',{name:'Đặt vào trang',exact:true}).click();
- await expect(page.locator('.signature img[alt="Văn bản"]')).toHaveCount(1);
+ await expect(page.locator('.signature[data-kind=text] .typewriter-visual')).toHaveText('Nguyễn Văn An');
  for(const id of ['fillDate','fillCheck','fillCross'])await command(page,id);
  await expect(page.locator('.signature')).toHaveCount(4);
  const stamp=page.locator('.signature').first(),b=await stamp.boundingBox();
@@ -152,7 +152,8 @@ test('Fill & Sign text date check and cross roundtrip without rasterizing page',
  expect(saved.suggestedFilename()).toBe('Form-da-dien.pdf');
  const opened=await getDocument({data:new Uint8Array(await readFile(await saved.path()))}).promise;
  const page1=await opened.getPage(1);expect((await page1.getTextContent()).items.map(x=>x.str).join(' ')).toContain('ORIGINAL SEARCHABLE CONTENT');
- const ops=await page1.getOperatorList();expect(ops.fnArray.filter(x=>x===85).length).toBeGreaterThanOrEqual(4);
+ expect((await page1.getTextContent()).items.map(x=>x.str).join(' ')).toContain('Nguyễn Văn An');
+ const ops=await page1.getOperatorList();expect(ops.fnArray.filter(x=>x===85).length).toBeGreaterThanOrEqual(3);
  await opened.loadingTask.destroy();expect(errors).toEqual([]);
 });
 
