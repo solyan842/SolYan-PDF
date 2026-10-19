@@ -266,3 +266,13 @@ Forbidden:
 - treating a single upstream tool as mandatory when orchestration would be simpler;
 - researching the same upstream alternatives again because the decision was never written into the repo;
 - expanding scope merely to make one engine universal.
+
+## 13. RESOURCE / TWO-PC / CODEX DISCIPLINE (USER-APPROVED)
+
+- GitHub and this AGENTS.md are the only persistent source of truth across home PC, company PC, chat and Codex. Re-fetch current branch HEAD plus latest repository-wide Actions before continuing. Never rely on a local PC state when it conflicts with GitHub.
+- One active writer per feature branch. Preserve uncommitted local work; never force-push, reset, or delete it blindly. Keep main/stable protected.
+- Conserve Codex quotas and expensive Windows CI: ChatGPT may research/plan/read CI; Codex writes/tests locally; GitHub Actions builds and packages. Batch fast local tests before one coherent push/CI. Do not run parallel Windows CI or repeatedly poll a running job using costly agent cycles.
+- Once CI is launched, checkpoint and WAIT without consuming unnecessary model work; after completion inspect exact-head outcome. On failure read real job log ONCE then diagnostic artifact fallback and fix root cause; on success continue next milestone without redundant reruns.
+- If quota, session time, permissions or logs genuinely block work, record branch/HEAD/checkpoint/error/next step to GitHub-tracked docs and STOP cleanly; resume after recovery. Never start paid API charges or downgrade test gates without permission.
+- Keeping the company PC on 24/7 does NOT itself make Codex continuously autonomous. Distinguish idle, local task execution, CI wait and scheduled automation; never claim background progress without evidence.
+- Fast-start handoff: docs/CODEX-COMPANY-PC-HANDOFF-2026-10-19.md. Its dated SHA/status snapshot is subordinate to live GitHub.
