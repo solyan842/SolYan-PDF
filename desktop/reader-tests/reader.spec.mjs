@@ -52,7 +52,18 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
   await expect.poll(()=>page.evaluate(()=>window.zoomRenderDone)).toBe(true);
   await expect(page.locator(`.page[data-page-number="${zoomState.before.pageNumber}"]`)).toHaveAttribute('data-loaded','true');
   await expect(stamp).toBeVisible();await expect(stamp).toHaveAttribute('data-signature',zoomState.before.id);
-  const after=await stamp.evaluate(node=>{const pdfPage=node.closest('.page'),r=node.getBoundingClientRect(),p=pdfPage.getBoundingClientRect(),scale=Number.parseFloat(getComputedStyle(pdfPage).getPropertyValue('--scale-factor'));return{x:(r.x-p.x)/(600*scale),y:(r.y-p.y)/(800*scale),w:r.width/(600*scale),h:r.height/(800*scale),width:r.width,height:r.height};});
+  // pagerendered rebuilds overlays. Resolve and measure the live node in one
+  // browser task: a locator's element handle can detach before evaluate runs.
+  let after;
+  await expect.poll(async()=>{
+    after=await page.evaluate(()=>{
+      const node=document.querySelector('.signature.selected'),pdfPage=node?.closest('.page');
+      if(!pdfPage)return null;
+      const r=node.getBoundingClientRect(),p=pdfPage.getBoundingClientRect(),scale=Number.parseFloat(getComputedStyle(pdfPage).getPropertyValue('--scale-factor'));
+      return{id:node.dataset.signature,x:(r.x-p.x)/(600*scale),y:(r.y-p.y)/(800*scale),w:r.width/(600*scale),h:r.height/(800*scale),width:r.width,height:r.height};
+    });
+    return after?.id;
+  }).toBe(zoomState.before.id);
   for(const axis of ['x','y','w','h'])expect(after[axis]).toBeCloseTo(zoomState.before[axis],3);
   expect(after.width).toBeCloseTo(zoomState.during.width,1);expect(after.height).toBeCloseTo(zoomState.during.height,1);
   await page.locator('#applyScope').selectOption('all');await page.locator('#apply').click();await expect(page.locator('.signature')).toHaveCount(3);
