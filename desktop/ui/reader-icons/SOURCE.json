@@ -26,5 +26,42 @@
     "squares-four-duotone.svg": "08872949367b6a6f2f0578ff77364f6c8ebb407942629a28b322194512927381",
     "list-bullets-duotone.svg": "1f4c9a2353c05b2d3314959b2d7604c0a20c77e8bc3e35f8ed28fdb2217518b0",
     "bookmark-simple-duotone.svg": "b560161da8079c67c381dcfd1ae69b39e8eed3815370cf2adc6ba4b3bea04aff"
+  },
+  "outline": {
+    "derivation": "SolYan display variants: remove only the opacity=0.2 shaded path from pinned original; retain all opaque paths.",
+    "assets": {
+      "hand-outline.svg": "b845c51acbe69c5ac2ec208c5648806f33c0a86b06d2dfa53ebe599ccb0f9c65",
+      "cursor-text-outline.svg": "0fcad440eff0a470830a18638218ee08c339cc690256e980a3ce9c04c58556d8",
+      "copy-outline.svg": "5a892fc6a72866e60c67db2088a87653cf44b57b1a5d183b36e950cdc5dd66b3",
+      "highlighter-outline.svg": "d914b3ead576e755bd0b208ef8c4354deb47de8f4b4bf068f45b7351338b1aa5",
+      "text-underline-outline.svg": "31739d959bc52b6d0384d2a878145b130107a94c2dc84e1da9aa9f1370581cfd",
+      "text-strikethrough-outline.svg": "fc8021134eba2374f4b404b9d2a351ac04864d2441aef8da5142f27f8f82d7b9",
+      "note-pencil-outline.svg": "85f05d1a02f8d808ca9b023e765e7dec7ec2d706313dddf464010f35c9469264",
+      "rectangle-outline.svg": "0c0d719ced81064b5a466d2dcf39a09077d39309773504d0bdd02b2fdc9a4590",
+      "circle-outline.svg": "efc9ee22b165d0d40c21b1c5ebe2463c99744af44ab6f530b4d6c44f25181974",
+      "line-segment-outline.svg": "34bb472adfc45207fb72feea287bb3add08301d4c328e694441d32922914f0d5",
+      "arrow-up-right-outline.svg": "e45089f23b93072e5383d328ea6716c213cc19867b0087b1ea10e6e791510d00",
+      "arrow-counter-clockwise-outline.svg": "4eb160d5ae781107c674481ac081962e6bce6281a646129e6c3f960b9dd5dac6",
+      "moon-outline.svg": "5c91f82aea4e7b53305bf29628caebc22a1198ba9fa46c62eef13fb8b3c3f21d",
+      "sun-outline.svg": "8df1c7b747774f8b2c1fe353b1b785c74aac35bfa50f2ed7d8d9a85a4191b2ac",
+      "file-pdf-outline.svg": "a8fb648659a7af4093f00b87a4f054e00da9ff0d2563ce598067a19057225a0a",
+      "floppy-disk-outline.svg": "067b385ee62469be500d2d5bcd10e2aedd7529cd615ed180fa8414aaef0e40ab",
+      "list-outline.svg": "fb1851842c74b40a3f42ce3d6ae0e67ede556b624218e79c0f4ead7d9ceec51f",
+      "pen-outline.svg": "67a737aa9704950fc5f4315d3df71cc71e8da5a42a193c725f5a0cbbbcaf723b",
+      "eraser-outline.svg": "3e2e2a1f466051a32abed16cd8e6eadf30f9c560aeb6dcf2545f9c8a95ddfdef",
+      "signature-outline.svg": "de7d616f0851b0ddcfcbcdc190c4addd3b90e3e797bc21acc2a83e876a2edc05",
+      "squares-four-outline.svg": "b134bf963916309a98d9f9ebf031c29f69f43436b19df1a7c63667df74fb9a5d",
+      "list-bullets-outline.svg": "b76b39fc5f651c85391721e405f70d9b1c3384f211268c5365c3d436644fea10",
+      "bookmark-simple-outline.svg": "493a836009ab98f8d4ca84f088cc03f2785cdee86daa1643e003865ff3168b41"
+    }
+  },
+  "local": {
+    "description": "SolYan page layout and fullscreen symbols, project license.",
+    "assets": {
+      "page-single-outline.svg": "2b73cbad74735f1f519d3da4f4e86cedc9224afc62bd207eed7ef3ed70ef92f0",
+      "page-continuous-outline.svg": "fade25fe20ac233f5db6cb7146262ebaf830be26be9a5b8d5f6de2ba2138b72a",
+      "pages-two-outline.svg": "4e965ab60e16f14fd41fc5ccf84cc4cde4d2647954af9efae5fd4b62c9fbb714",
+      "presentation-outline.svg": "182702f5d2608a574474526b3dee2cb45823ae56fd7523592d3bd79876af27aa"
+    }
   }
 }

@@ -14,3 +14,11 @@ test('Reader icons remain pinned MIT Phosphor originals',()=>{
  for(const [name,hash]of Object.entries(source.assets))assert.equal(createHash('sha256').update(read('../ui/reader-icons/'+name)).digest('hex'),hash,name);
  assert.match(read('../ui/reader-icons/LICENSE').toString(),/MIT License/);
 });
+
+test('Reader displays unshaded icons and distinct layout/fullscreen symbols',()=>{
+ const source=JSON.parse(read('../ui/reader-icons/SOURCE.json'));
+ assert.equal(Object.keys(source.outline.assets).length,23);assert.equal(Object.keys(source.local.assets).length,4);
+ for(const [name,hash]of Object.entries({...source.outline.assets,...source.local.assets})){const bytes=read('../ui/reader-icons/'+name);assert.equal(createHash('sha256').update(bytes).digest('hex'),hash,name);assert.doesNotMatch(bytes.toString(),/opacity=/,name);}
+ for(const name of Object.keys(source.assets)){const original=read('../ui/reader-icons/'+name).toString().replace(/\r\n/g,'\n');assert.equal(read('../ui/reader-icons/'+name.replace('-duotone','-outline')).toString(),original.replace(/<path\b[^>]*\bopacity="0\.2"[^>]*\/>/g,''));}
+ assert.equal(new Set(Object.values(source.local.assets)).size,4);
+});

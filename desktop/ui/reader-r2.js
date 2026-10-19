@@ -9,7 +9,7 @@ export function installR2(api){
   let mode='select';
   const panels=element('div'),panel={};
   for(const id of ['home','comment','sign','view']){panel[id]=element('section');panels.append(panel[id]);}
-  function button(group,id,label,icon,fn){const b=element('button',label,{id});if(icon){const image=element('img','',{src:`./reader-icons/${icon}-duotone.svg`,alt:''});b.prepend(image);}b.onclick=api.attempt(fn);panel[group].append(b);return b;}
+  function button(group,id,label,icon,fn){const b=element('button',label,{id});if(icon){const image=element('img','',{src:`./reader-icons/${icon}-outline.svg`,alt:''});b.prepend(image);}b.onclick=api.attempt(fn);panel[group].append(b);return b;}
   const doc=()=>{const d=api.current();if(!d)throw Error('Mở PDF trước.');return d;};
   const presentation=installPresentation({...api,visual});
   const colorStyle=element('div','',{id:'annotationStyles'}),colors={};

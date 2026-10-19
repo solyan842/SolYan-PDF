@@ -16,8 +16,11 @@ test('compact shell, popovers, night display and real UI review captures',async(
   const fixture={name:'Document review.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())};
   await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
   await page.locator('#pdfFiles').setInputFiles(fixture);await expect(page.locator('.textLayer span').first()).toBeVisible();
+  const toolsBefore=await page.locator('#tools').boundingBox();await page.locator('#pdfFiles').setInputFiles([{...fixture,name:'Second.pdf'},{...fixture,name:'Third.pdf'}]);await expect(page.locator('#tabs .tab')).toHaveCount(3);expect((await page.locator('#tools').boundingBox()).x).toBeCloseTo(toolsBefore.x,0);await page.locator('#tabs .tab .title').first().click();await expect(page.locator('#tools img')).toHaveAttribute('src','./vendor/sTool_PDF.png');expect(await page.locator('#tools img').evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   await command(page,'fillCheck');await expect(page.locator('.signature.selected')).toBeVisible();
   await page.locator('.readerContainer:not([hidden]) .page').first().click({position:{x:35,y:220}});
+  const viewIcons=await page.locator('#readerFooter .footer-views img,#readerFooter #presentation img').evaluateAll(images=>images.map(img=>({src:img.getAttribute('src'),loaded:img.complete&&img.naturalWidth>0})));expect(viewIcons).toHaveLength(4);expect(new Set(viewIcons.map(x=>x.src)).size).toBe(4);expect(viewIcons.every(x=>x.loaded&&x.src.endsWith('-outline.svg'))).toBe(true);
+  for(const image of await page.locator('.toolbar img').all())await expect(image).toHaveAttribute('src',/-outline\.svg$/);
   const state=await page.locator('.signature').getAttribute('data-signature');
   await page.locator('#zoom').selectOption('page-fit');
   if(await page.locator('html').getAttribute('data-theme')==='dark')await page.locator('#theme').click();

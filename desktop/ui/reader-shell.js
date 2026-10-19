@@ -9,7 +9,7 @@ export function installReaderShell(api,panels){
   const take=id=>$(id)||commands.get(id);
   function icon(b,label,asset){
     label??=b.textContent.trim();b.title=label;b.setAttribute('aria-label',label);b.classList.add('icon-button');
-    if(asset){b.replaceChildren(node('img',{src:`./reader-icons/${asset}-duotone.svg`,alt:''}));}
+    if(asset){b.replaceChildren(node('img',{src:`./reader-icons/${asset}-outline.svg`,alt:''}));}
     else {const image=b.querySelector('img');if(image)b.replaceChildren(image);}
     return b;
   }
@@ -18,7 +18,8 @@ export function installReaderShell(api,panels){
   header.append(icon($('open'),'Mở PDF (Ctrl+O)','file-pdf'),icon($('saveCurrent'),'Lưu (Ctrl+S)','floppy-disk'),icon($('save'),'Lưu thành… (Ctrl+Shift+S)','copy'),$('tabs'));
   header.querySelector('.spacer')?.remove();
   const drag=node('div',{className:'title-drag',title:'Kéo cửa sổ · nhấp đúp để phóng to'}),caption=node('div',{id:'windowControls',hidden:true});
-  header.append($('tools'),drag,caption);
+  const tools=$('tools');tools.replaceChildren(node('img',{src:'./vendor/sTool_PDF.png',alt:''}),node('span',{textContent:'sTool PDF ↗'}));
+  header.append(drag,tools,caption);
   const invoke=(action)=>window.__TAURI__.core.invoke('reader_window_control',{action});
   for(const [action,label,glyph]of [['minimize','Thu nhỏ','−'],['maximize','Phóng to / khôi phục','□'],['close','Đóng cửa sổ','×']]){
     const b=node('button',{id:'window-'+action,textContent:glyph,title:label});b.setAttribute('aria-label',label);
@@ -56,10 +57,10 @@ export function installReaderShell(api,panels){
   const footer=node('footer',{id:'readerFooter'}),navigation=node('div',{className:'footer-navigation'}),views=node('div',{className:'footer-views'}),zoom=node('div',{className:'zoom-pill',ariaLabel:'Thu phóng'});
   const first=node('button',{id:'firstPage',textContent:'«',title:'Trang đầu'}),last=node('button',{id:'lastPage',textContent:'»',title:'Trang cuối'});first.setAttribute('aria-label','Trang đầu');last.setAttribute('aria-label','Trang cuối');first.onclick=()=>{if(api.current())api.current().view.currentPageNumber=1;};last.onclick=()=>{if(api.current())api.current().view.currentPageNumber=api.current().pdf.numPages;};
   take('previous').textContent='‹';take('next').textContent='›';navigation.append(first);for(const id of ['previous','pageNumber','pageCount','next'])navigation.append(take(id));navigation.append(last);
-  for(const id of ['singlePage','continuous','twoPage'])icon(move(id,views));
+  for(const id of ['singlePage','continuous','twoPage'])icon(move(id,views),undefined,({singlePage:'page-single',continuous:'page-continuous',twoPage:'pages-two'})[id]);
   const slider=node('input',{id:'zoomRange',type:'range',min:25,max:400,step:5,value:100});slider.setAttribute('aria-label','Thu phóng');slider.title='Thu phóng';slider.oninput=()=>{const select=take('zoom');let option=select.querySelector('[data-slider]');if(!option){option=node('option');option.dataset.slider='true';select.append(option);}option.value=String(Number(slider.value)/100);option.textContent=slider.value+'%';select.value=option.value;select.dispatchEvent(new Event('change'));};
   zoom.append(take('zoomOut'),slider,take('zoom'),take('zoomIn'));
-  const message=node('span',{id:'status',textContent:$('status').textContent});message.setAttribute('role','status');message.setAttribute('aria-live','polite');$('status').replaceWith(footer);footer.append(navigation,message,views,zoom,icon(move('presentation',footer)));
+  const message=node('span',{id:'status',textContent:$('status').textContent});message.setAttribute('role','status');message.setAttribute('aria-live','polite');$('status').replaceWith(footer);footer.append(navigation,message,views,zoom,icon(move('presentation',footer),undefined,'presentation'));
   const sidebar=$('sidebar'),strip=sidebar.querySelector('.sideTabs');sidebar.append(strip);
   const modes=[['showThumbs','Trang','squares-four'],['showOutline','Mục lục','list-bullets'],['showBookmarks','Dấu trang','bookmark-simple']];
   for(const [id,label,asset]of modes){const b=icon($(id),label,asset);b.addEventListener('click',()=>modes.forEach(([key])=>$(key).setAttribute('aria-pressed',String(key===id))));}strip.firstChild.setAttribute('aria-pressed','true');

@@ -46,7 +46,7 @@ footer{position:absolute;bottom:0;left:260px;max-width:calc(100% - 500px);z-inde
 .signature .handle:hover{background:transparent}.signature .handle::before{content:'';position:absolute;inset:4px;background:white;border:1px solid #4382d0;border-radius:1px}
 .signature .handle[data-h=nw]{left:-7px;top:-7px}.signature .handle[data-h=ne]{right:-7px;top:-7px}.signature .handle[data-h=sw]{left:-7px;bottom:-7px}.signature .handle[data-h=se]{right:-7px;bottom:-7px}
 .signature .handle[data-h=n]{left:calc(50% - 7px);top:-7px}.signature .handle[data-h=s]{left:calc(50% - 7px);bottom:-7px}.signature .handle[data-h=w]{left:-7px;top:calc(50% - 7px)}.signature .handle[data-h=e]{right:-7px;top:calc(50% - 7px)}
-header #tools{font-size:12px;white-space:nowrap;padding:6px 9px;border-radius:5px;flex-shrink:0}header #tools:hover{background:#1768cf12}#tabs{min-width:0}.toolbar .presentation-button{font-size:11px;font-weight:600}
+header #tools{display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;padding:6px 9px;border-radius:5px;flex-shrink:0}header #tools:hover{background:#1768cf12}#tabs{min-width:0}.toolbar .presentation-button{font-size:11px;font-weight:600}
 body.presentation-active>:not(#presentationStage){visibility:hidden}
 #presentationStage{position:fixed;inset:0;z-index:1000;background:black;display:grid;place-items:center;overflow:hidden;color:white;outline:0}
 #presentationStage:fullscreen{width:100vw;height:100vh}.presentation-paper{position:relative;flex:none;background:white;overflow:hidden}.presentation-paper>canvas{display:block}.presentation-mark{position:absolute;transform-origin:0 0;pointer-events:none}.presentation-mark img{display:block;width:100%;height:100%}
@@ -66,3 +66,5 @@ html[data-theme=dark]{--shell:#1c2027;--surface:#242a34;--line:#353d49;--canvas:
 html[data-theme=dark] :is(header,.toolbar,#sidebar,.sideTabs,.command-popover){background:var(--surface)}html[data-theme=dark] header{background:var(--shell)}html[data-theme=dark] #tabs{background:transparent}html[data-theme=dark] #tabs .tab{background:transparent}html[data-theme=dark] #tabs .tab.active{background:var(--surface)}html[data-theme=dark] .icon-button img,html[data-theme=dark] .command-popover img{filter:invert(1)}html[data-theme=dark] .zoom-pill select{background:transparent}html[data-theme=dark] footer{background:var(--surface)}
 html[data-theme=dark] :is(.toolbar button,.icon-button,.thumbnail,.zoom-pill button,.command-popover button){background:transparent}html[data-theme=dark] .thumbnail[aria-current=true]{background:#9dc5ff0c}
 @media(max-width:1100px){.toolbar{gap:3px;padding:5px 6px}.toolbar-center{gap:1px}.toolbar input[type=search]{width:110px}.toolbar button{width:30px}.toolbar-left,.toolbar-right{gap:1px}header strong{display:none}}
+
+header #tools img{width:19px;height:19px;object-fit:contain;flex:none}
