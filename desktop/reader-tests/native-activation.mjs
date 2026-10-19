@@ -98,8 +98,11 @@ try{
   // Native IPC cannot be used as an arbitrary filesystem reader.
   expect(await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('reader_read_open_request',{ticket:'C:/Windows/win.ini'});return false;}catch{return true;}})).toBe(true);
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
   await page.locator('#zoom').selectOption('1.5');
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
   await command(page,'fillCheck');
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
   const signature=await page.locator('.signature.selected').getAttribute('data-signature');
   const scroll=await page.locator('.readerContainer:not([hidden])').evaluate(node=>node.scrollTop);
   await expect(page.locator('#tabs .title')).toContainText('●');

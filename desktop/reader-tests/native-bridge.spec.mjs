@@ -37,13 +37,17 @@ test('native startup queue survives notifications before listener readiness',asy
   await expect(page.locator('.readerContainer:not([hidden]) .textLayer')).toContainText(['NATIVE B']);
 });
 
-test('forwarded files preserve dirty tabs and view state; duplicate path focuses without reading again',async({page})=>{
+for(const viewport of [{width:1440,height:940},{width:1024,height:768}])test(`forwarded files preserve dirty tabs and view state at ${viewport.width}x${viewport.height}; duplicate path focuses without reading again`,async({page})=>{
+  await page.setViewportSize(viewport);
   await mockNative(page,{a:await fixture('NATIVE A'),b:await fixture('NATIVE B')});
   await page.goto('/reader.html');await expect(page.locator('#tabs .tab')).toHaveCount(1);
   await expect(page.locator('.page canvas').first()).toBeVisible();
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
   await page.locator('#zoom').selectOption('1.5');
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
   await command(page,'fillCheck');
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
   await expect(page.locator('#tabs .title')).toContainText('●');
   const id=await page.locator('.signature.selected').getAttribute('data-signature');
   const scroll=await page.locator('.readerContainer:not([hidden])').evaluate(node=>node.scrollTop);
@@ -60,6 +64,22 @@ test('forwarded files preserve dirty tabs and view state; duplicate path focuses
   expect(await page.evaluate(()=>window.__discards.length)).toBe(1);
   const scale=await page.locator('.readerContainer:not([hidden]) .page').first().evaluate(node=>parseFloat(getComputedStyle(node).getPropertyValue('--scale-factor')));
   expect(scale).toBe(2);
+});
+
+for(const control of ['zoom','zoomIn','zoomOut'])test(`rapid page navigation followed by ${control} retains the requested page`,async({page})=>{
+  await page.setViewportSize({width:1024,height:768});
+  await mockNative(page,{a:await fixture('RAPID A')});
+  await page.goto('/reader.html');await expect(page.locator('.page canvas').first()).toBeVisible();
+  const state=await page.evaluate(control=>{
+    const page=document.getElementById('pageNumber'),zoom=document.getElementById('zoom');
+    page.value='2';page.dispatchEvent(new Event('change'));
+    const afterNavigation=page.value;
+    if(control==='zoom'){zoom.value='1.5';zoom.dispatchEvent(new Event('change'));}
+    else document.getElementById(control).click();
+    return {afterNavigation,afterZoom:page.value};
+  },control);
+  expect(state).toEqual({afterNavigation:'2',afterZoom:'2'});
+  await expect(page.locator('#pageNumber')).toHaveValue('2');
 });
 
 test('malformed forwarded PDF does not block the next request or discard current document',async({page})=>{

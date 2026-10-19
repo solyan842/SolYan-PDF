@@ -215,9 +215,12 @@ $('query').onkeydown=e=>{if(e.key==='Enter')find(e.shiftKey);};$('findNext').onc
 $('previous').onclick=()=>{if(current())current().view.currentPageNumber=Math.max(1,current().view.currentPageNumber-1);};
 $('next').onclick=()=>{if(current())current().view.currentPageNumber=Math.min(current().pdf.numPages,current().view.currentPageNumber+1);};
 $('pageNumber').onchange=()=>{if(current())current().view.currentPageNumber=Math.max(1,Math.min(current().pdf.numPages,Number($('pageNumber').value)||1));};
-$('zoom').onchange=()=>{if(current())current().view.currentScaleValue=$('zoom').value;};
-$('zoomIn').onclick=()=>{if(current())current().view.currentScale=Math.min(4,current().view.currentScale*1.2);};
-$('zoomOut').onclick=()=>{if(current())current().view.currentScale=Math.max(.25,current().view.currentScale/1.2);};
+// PDF.js caches the location used by zoom until its scroll update runs. A page
+// jump immediately followed by zoom must refresh that location synchronously.
+function changeZoom(value){const d=current();if(!d)return;d.view.update();d.view.currentScaleValue=value;}
+$('zoom').onchange=()=>changeZoom($('zoom').value);
+$('zoomIn').onclick=()=>{if(current())changeZoom(Math.min(4,current().view.currentScale*1.2));};
+$('zoomOut').onclick=()=>{if(current())changeZoom(Math.max(.25,current().view.currentScale/1.2));};
 $('sideToggle').onclick=()=>{$('sidebar').hidden=!$('sidebar').hidden;};$('showThumbs').onclick=()=>{$('thumbs').hidden=false;$('outline').hidden=true;const list=$('bookmarks');if(list)list.hidden=true;};$('showOutline').onclick=()=>{$('thumbs').hidden=true;$('outline').hidden=false;const list=$('bookmarks');if(list)list.hidden=true;};
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',attempt(async e=>{e.preventDefault();for(const file of e.dataTransfer.files)if(file.name.toLowerCase().endsWith('.pdf'))await openFile(file);}));
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}});
