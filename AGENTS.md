@@ -276,3 +276,7 @@ Forbidden:
 - If quota, session time, permissions or logs genuinely block work, record branch/HEAD/checkpoint/error/next step to GitHub-tracked docs and STOP cleanly; resume after recovery. Never start paid API charges or downgrade test gates without permission.
 - Keeping the company PC on 24/7 does NOT itself make Codex continuously autonomous. Distinguish idle, local task execution, CI wait and scheduled automation; never claim background progress without evidence.
 - Fast-start handoff: docs/CODEX-COMPANY-PC-HANDOFF-2026-10-19.md. Its dated SHA/status snapshot is subordinate to live GitHub.
+
+## 14. ACTIVE sReader NEXT EXECUTION — 2026-10-19
+
+After Reader-only CI #1 SUCCESS on `feat/windows-reader-fast-ci`, the next Codex task is **not more CI plumbing**. Read `docs/CODEX-SREADER-NEXT-AFTER-CI1-2026-10-19.md` and execute immediately: P1 Explorer launches the second PDF into a new TAB of the SAME Reader window; P2 compact Rune-inspired Reader UI with screenshots for owner; P3 real F5 presentation; P4 remaining functional gaps. Preserve full Toolbox, Quick Sign and Reader-only CI, and do not rerun full Toolbox for incremental Reader work. GitHub current HEAD overrides old SHAs or this dated note.
