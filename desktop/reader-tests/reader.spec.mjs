@@ -170,3 +170,30 @@ test('local per-PDF bookmarks and last reading position survive document reopen'
   await page.locator('#bookmarks .bookmark-remove').click();
   await expect(page.locator('#bookmarks .bookmark-row')).toHaveCount(0);
 });
+
+for (const exit of ['tab close', 'beforeunload']) {
+  test(`last page flushes synchronously on ${exit} before debounce`, async ({page}) => {
+    const pdf = await PDFDocument.create();
+    for (let i = 0; i < 4; i++) pdf.addPage([595,842]).drawText(`Flush page ${i+1}`);
+    const fixture = {name:'Flush.pdf', mimeType:'application/pdf', buffer:Buffer.from(await pdf.save())};
+    await page.goto('/reader.html');
+    await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+    await page.locator('#pdfFiles').setInputFiles(fixture);
+    await expect(page.locator('.page canvas').first()).toBeVisible();
+    const record = await page.evaluate(exit => {
+      // Navigation and teardown in the same task: the 500 ms timer cannot fire.
+      const input = document.getElementById('pageNumber');
+      input.value = '4'; input.dispatchEvent(new Event('change'));
+      if (exit === 'tab close') document.querySelector('#tabs .close').click();
+      else window.dispatchEvent(new Event('beforeunload', {cancelable:true}));
+      return Object.entries(localStorage).filter(([key]) => key.startsWith('sreader.bookmarks.v1:'))
+        .map(([,value]) => JSON.parse(value));
+    }, exit);
+    expect(record).toHaveLength(1);
+    expect(record[0].lastPage).toBe(4);
+    await page.reload();
+    await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+    await page.locator('#pdfFiles').setInputFiles(fixture);
+    await expect(page.locator('#pageNumber')).toHaveValue('4');
+  });
+}
