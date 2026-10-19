@@ -1,6 +1,7 @@
 import * as pdfjs from './vendor/pdfjs/build/pdf.mjs';
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor/pdfjs/web/pdf_viewer.mjs';
 import { installR2 } from './reader-r2.js';
+import { connectNativeReader } from './reader-native.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
@@ -29,7 +30,7 @@ function renderTabs() {
     tab.append(title, close); $('tabs').append(tab);
   }
 }
-async function openFile(file) {
+async function openFile(file, source = null) {
   if (file.size > 200 * 1024 * 1024) throw Error('Reader R1 giới hạn mỗi PDF ở 200 MB.');
   message(`Đang mở ${file.name}…`);
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -44,7 +45,7 @@ async function openFile(file) {
   const viewer = document.createElement('div'); viewer.className = 'pdfViewer'; container.append(viewer); $('documents').append(container);
   const bus = new EventBus(), link = new PDFLinkService({ eventBus: bus, externalLinkEnabled: false }), find = new PDFFindController({ eventBus: bus, linkService: link });
   const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE, maxCanvasPixels: 12_000_000, enableScripting: false });
-  const doc = { id: crypto.randomUUID(), name: file.name, bytes, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
+  const doc = { id: crypto.randomUUID(), name: file.name, source, bytes, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
   r2?.opened(doc);
   bus.on('pagesinit', () => { view.currentScaleValue = 'page-width'; });
@@ -145,7 +146,10 @@ function inkPoint(e) { const r = ink.getBoundingClientRect(); return [(e.clientX
 ink.onpointerdown = e => { drawing = true; inked = true; ink.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...inkPoint(e)); };
 ink.onpointermove = e => { if (!drawing) return; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#122c50'; ctx.lineTo(...inkPoint(e)); ctx.stroke(); };
 ink.onpointerup = ink.onpointercancel = () => { drawing = false; };
-$('open').onclick = () => $('pdfFiles').click();
+$('open').onclick = attempt(async () => {
+  if(window.__TAURI__?.event) await window.__TAURI__.core.invoke('reader_choose_files');
+  else $('pdfFiles').click();
+});
 $('pdfFiles').onchange = attempt(async e => { for (const file of e.target.files) await openFile(file); e.target.value = ''; });
 $('sign').onclick = () => { if (!current() || busy) { message('Mở PDF trước khi ký.'); return; } clearInk(); $('signatureDialog').showModal(); };
 $('clearInk').onclick = clearInk;
@@ -222,7 +226,6 @@ $('tools').onclick=attempt(async e=>{if(window.__TAURI__?.core){e.preventDefault
 r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},get busy(){return busy;}});
 $('open').disabled=false;
 document.body.dataset.ready='true';
-if(window.__TAURI__?.core) attempt(async()=>{
-  const initial=await window.__TAURI__.core.invoke('reader_initial_file');
-  if(initial)await openFile(new File([Uint8Array.from(initial[1])],initial[0],{type:'application/pdf'}));
+attempt(async()=>{
+  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,message});
 })();

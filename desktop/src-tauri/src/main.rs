@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod reader_open;
+
 use rand::RngCore;
 use std::{
     ffi::OsString,
@@ -12,7 +14,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::{path::BaseDirectory, Manager, State};
+use tauri::{path::BaseDirectory, Emitter, Manager, State};
 
 #[cfg(windows)]
 use std::os::windows::{io::AsRawHandle, process::CommandExt};
@@ -776,16 +778,59 @@ async fn reader_save_as(window: tauri::WebviewWindow, bytes: Vec<u8>, name: Stri
     { let _ = (window, bytes, name); Err("Native Save As is available on Windows".into()) }
 }
 
+struct ReaderOpenState { queue: Mutex<reader_open::OpenQueue> }
 #[tauri::command]
-async fn reader_initial_file() -> Result<Option<(String, Vec<u8>)>, String> {
-    // Only the file supplied by Windows at launch; this command accepts no path
-    // from web content and does not expose arbitrary filesystem access.
-    let path = match std::env::args_os().skip(1).map(PathBuf::from).find(|path| path.extension().map(|e| e.to_string_lossy().eq_ignore_ascii_case("pdf")).unwrap_or(false)) {
-        Some(path) => path, None => return Ok(None),
-    };
-    if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 200 * 1024 * 1024 { return Err("Reader R1 PDF size limit is 200 MB".into()); }
-    let name = path.file_name().ok_or("Missing PDF filename")?.to_string_lossy().to_string();
-    fs::read(path).map(|bytes| Some((name, bytes))).map_err(|e| e.to_string())
+async fn reader_choose_files(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>) -> Result<bool, String> {
+    reader_window(&window)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStringExt;
+        use windows_sys::Win32::UI::Controls::Dialogs::{GetOpenFileNameW, CommDlgExtendedError, OPENFILENAMEW, OFN_ALLOWMULTISELECT, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR};
+        let mut file = vec![0u16; 65536];
+        let filter: Vec<u16> = "PDF document\0*.pdf\0\0".encode_utf16().collect();
+        let title: Vec<u16> = "sReader PDF - Mở PDF\0".encode_utf16().collect();
+        let mut dialog: OPENFILENAMEW = unsafe { std::mem::zeroed() };
+        dialog.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+        dialog.hwndOwner = window.hwnd().map_err(|e| e.to_string())?.0;
+        dialog.lpstrFilter = filter.as_ptr(); dialog.lpstrFile = file.as_mut_ptr(); dialog.nMaxFile = file.len() as u32;
+        dialog.lpstrTitle = title.as_ptr();
+        dialog.Flags = OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+        if unsafe { GetOpenFileNameW(&mut dialog) } == 0 {
+            let error = unsafe { CommDlgExtendedError() };
+            return if error == 0 { Ok(false) } else { Err(format!("Open PDF dialog failed: {error}")) };
+        }
+        let parts: Vec<OsString> = file.split(|x| *x == 0).take_while(|part| !part.is_empty()).map(OsString::from_wide).collect();
+        let paths = if parts.len() == 1 { vec![PathBuf::from(&parts[0])] }
+            else { parts.iter().skip(1).map(|name| PathBuf::from(&parts[0]).join(name)).collect() };
+        state.queue.lock().map_err(|_| "Reader queue unavailable")?.enqueue(paths, Path::new(""));
+        window.emit("reader-open-pending", ()).map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+    #[cfg(not(windows))]
+    { let _ = state; Err("Native PDF selection is available on Windows".into()) }
+}
+fn reader_window(window: &tauri::WebviewWindow) -> Result<(), String> {
+    let label = if cfg!(feature = "reader-only") { "main" } else { "reader" };
+    if window.label() != label { return Err("Chỉ cửa sổ Reader được nhận tệp.".into()); }
+    Ok(())
+}
+#[tauri::command]
+fn reader_next_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>) -> Result<Option<reader_open::Ticket>, String> {
+    reader_window(&window)?;
+    let request = state.queue.lock().map_err(|_| "Reader queue unavailable")?.next();
+    Ok(request)
+}
+#[tauri::command]
+async fn reader_read_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<Vec<u8>, String> {
+    reader_window(&window)?;
+    let path = state.queue.lock().map_err(|_| "Reader queue unavailable")?.take(&ticket)?;
+    reader_open::read_pdf(&path)
+}
+#[tauri::command]
+fn reader_discard_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<(), String> {
+    reader_window(&window)?;
+    state.queue.lock().map_err(|_| "Reader queue unavailable")?.take(&ticket)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -804,7 +849,36 @@ async fn desktop_switch_tools(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 fn main() {
-    let app = tauri::Builder::default()
+    let mut requests = reader_open::OpenQueue::default();
+    requests.enqueue(std::env::args_os().skip(1).map(PathBuf::from), &std::env::current_dir().unwrap_or_default());
+    let builder = tauri::Builder::default().manage(ReaderOpenState { queue: Mutex::new(requests) });
+    // First plugin, Reader only. Its mutex is scoped by vn.solyan.pdf.reader.
+    #[cfg(all(windows, feature = "reader-only"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+        let state = app.state::<ReaderOpenState>();
+        if let Ok(mut queue) = state.queue.lock() {
+            queue.enqueue(args.into_iter().skip(1).map(PathBuf::from), Path::new(&cwd));
+        }
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+            let _ = window.emit("reader-open-pending", ());
+        }
+    }));
+    let app = builder
+        .on_window_event(|window, event| {
+            #[cfg(all(windows, feature = "reader-only"))]
+            if window.label() == "main" {
+                if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                    let state = window.state::<ReaderOpenState>();
+                    if let Ok(mut queue) = state.queue.lock() {
+                        queue.enqueue(paths.iter().cloned(), &std::env::current_dir().unwrap_or_default());
+                    }
+                    let _ = window.emit("reader-open-pending", ());
+                }
+            }
+        })
         .manage(CoreState::default())
         .setup(|app| {
             if cfg!(feature = "reader-only") { return Ok(()); }
@@ -872,7 +946,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_initial_file])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

@@ -1,48 +1,40 @@
-# Runs only on a clean GitHub-hosted Windows runner; never installs on a user's PC.
+# Install only on a clean, disposable Windows runner. Never on the owner's PC.
 param([Parameter(Mandatory)][string]$Installer)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') { throw 'Disposable Windows Actions runner required' }
 $root = Join-Path $env:LOCALAPPDATA 'sReader PDF'
 if (Test-Path -LiteralPath $root) { throw 'Reader is already installed; refuse to overwrite it' }
-$app = $null
-$tracked = @()
+$exe = Join-Path $root 'solyan-pdf-reader.exe'
 try {
     $install = Start-Process -FilePath (Resolve-Path -LiteralPath $Installer).Path -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
     if ($install.ExitCode -ne 0) { throw "Reader install failed: $($install.ExitCode)" }
-    $exe = Join-Path $root 'solyan-pdf-reader.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw 'Reader executable missing' }
     foreach ($engine in @('core','office','ocr','sign','archive')) {
         if (Test-Path -LiteralPath (Join-Path $root $engine)) { throw "Unexpected Tools resource: $engine" }
     }
-    $app = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
-    Start-Sleep -Seconds 5
-    $app.Refresh()
-    if ($app.HasExited) { throw 'Installed Reader exited before startup smoke' }
-    $engines = @(Get-Process -Name solyan-core,solyan-office,solyan-ocr,solyan-sign,solyan-archive -ErrorAction SilentlyContinue)
-    if ($engines.Count) { throw 'Reader started a Tools engine' }
-    # Record only this application's process tree; never kill unrelated WebViews.
-    $all = @(Get-CimInstance Win32_Process)
-    $tracked = @([uint32]$app.Id)
-    do {
-        $children = @($all | Where-Object { $_.ParentProcessId -in $tracked -and $_.ProcessId -notin $tracked } | Select-Object -ExpandProperty ProcessId)
-        $tracked += $children
-    } while ($children.Count)
-    "reader_running=true; tools_engines=0; reader_pid=$($app.Id); child_processes=$($tracked.Count - 1)"
+    & node desktop/reader-tests/native-activation.mjs $exe
+    if ($LASTEXITCODE -ne 0) { throw "Installed Reader activation failed: $LASTEXITCODE" }
+    'reader_running=true; native_activation=true; tools_engines=0; reader_orphans=0'
 } finally {
-    if ($app -and -not $app.HasExited) {
+    # Keep only reports/screenshots, never WebView profiles or local signature data.
+    $results = 'desktop/reader-tests/test-results/native-activation'
+    if (Test-Path -LiteralPath $results) {
+        New-Item -ItemType Directory -Force artifacts/reader-native-results | Out-Null
+        Get-ChildItem -LiteralPath $results -File | Where-Object { $_.Extension -in @('.json','.png') } | Copy-Item -Destination artifacts/reader-native-results/
+    }
+    # Fallback cleanup if a failed test left its installed Reader alive.
+    foreach ($app in @(Get-Process -Name solyan-pdf-reader -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe })) {
         & taskkill.exe /PID $app.Id /T /F
         if ($LASTEXITCODE -ne 0) { throw 'Failed to stop Reader process tree' }
-    }
-    foreach ($processId in $tracked) {
-        if (Get-Process -Id $processId -ErrorAction SilentlyContinue) { throw "Reader process orphan: $processId" }
+        $app | Wait-Process -Timeout 10 -ErrorAction Stop
     }
     $uninstaller = Join-Path $root 'uninstall.exe'
     if (Test-Path -LiteralPath $uninstaller) {
         $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
         if ($uninstall.ExitCode -ne 0) { throw "Reader uninstall failed: $($uninstall.ExitCode)" }
         $deadline = (Get-Date).AddSeconds(30)
-        while ((Test-Path -LiteralPath (Join-Path $root 'solyan-pdf-reader.exe')) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
-        if (Test-Path -LiteralPath (Join-Path $root 'solyan-pdf-reader.exe')) { throw 'Reader executable remains after uninstall' }
-        'reader_uninstalled=true; reader_orphans=0'
+        while ((Test-Path -LiteralPath $exe) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+        if (Test-Path -LiteralPath $exe) { throw 'Reader executable remains after uninstall' }
+        'reader_uninstalled=true'
     } elseif (Test-Path -LiteralPath $root) { throw 'Reader uninstaller missing' }
 }

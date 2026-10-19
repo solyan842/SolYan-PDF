@@ -1,0 +1,12 @@
+{
+  "identifier": "reader-events",
+  "description": "Only local Reader windows may listen for native file-open notifications.",
+  "windows": [
+    "main",
+    "reader"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

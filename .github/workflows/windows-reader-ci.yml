@@ -63,6 +63,14 @@ jobs:
         with:
           workspaces: 'desktop/src-tauri -> target'
           shared-key: standalone-reader
+      - name: Native Reader request queue tests
+        working-directory: desktop/src-tauri
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:TAURI_CONFIG = Get-Content tauri.reader.conf.json -Raw
+          cargo test --features reader-only reader_open::tests -- --nocapture 2>&1 | Tee-Object ../../artifacts/reader-native-unit-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build standalone Reader only
         working-directory: desktop/src-tauri
         shell: pwsh
@@ -95,5 +103,6 @@ jobs:
             artifacts/reader-*.log
             artifacts/reader-sha.txt
             artifacts/reader-browser-results/
+            artifacts/reader-native-results/
             artifacts/reader-installer/checksum.json
           if-no-files-found: warn
