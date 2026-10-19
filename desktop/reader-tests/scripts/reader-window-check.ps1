@@ -99,4 +99,7 @@ do {
     $children = @($all | Where-Object { $_.ParentProcessId -in $tracked -and $_.ProcessId -notin $tracked } | Select-Object -ExpandProperty ProcessId)
     $tracked += $children
 } while ($children.Count)
-@{ apps=$result; engines=$engines.Count; descendants=$tracked; livePids=@($all | Select-Object -ExpandProperty ProcessId) } | ConvertTo-Json -Depth 4 -Compress
+$webviews = @($all | Where-Object { $_.ProcessId -in $tracked -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object {
+    @{ pid=$_.ProcessId; executable=$_.ExecutablePath; commandLine=$_.CommandLine }
+})
+@{ apps=$result; engines=$engines.Count; descendants=$tracked; livePids=@($all | Select-Object -ExpandProperty ProcessId); webviews=$webviews } | ConvertTo-Json -Depth 5 -Compress

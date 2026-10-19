@@ -1,4 +1,4 @@
-// Installed EXE + real WebView2. CDP is enabled only by this test's child env.
+// Installed EXE + real WebView2. Test-only CDP bootstrap also handles elevated runners.
 import {chromium,expect} from '@playwright/test';
 import {PDFDocument} from 'pdf-lib';
 import {spawn,execFile} from 'node:child_process';
@@ -11,12 +11,19 @@ const exec=promisify(execFile);
 if(process.platform!=='win32'||process.env.GITHUB_ACTIONS!=='true')throw Error('Installed activation tests require a disposable Windows Actions runner');
 const exe=resolve(process.argv[2]),root=resolve('desktop/reader-tests/test-results/native-activation');
 const helper=fileURLToPath(new URL('./scripts/reader-window-check.ps1',import.meta.url));
+const policyHelper=fileURLToPath(new URL('./scripts/webview2-test-policy.ps1',import.meta.url));
 await mkdir(join(root,'Tiếng Việt (1)'),{recursive:true});
 const a=join(root,'Tiếng Việt (1)','Tài liệu A (1).pdf'),b=join(root,'B.pdf'),c=join(root,'Tài liệu A (1).pdf'),bad=join(root,'broken.pdf');
 async function fixture(path,text){const pdf=await PDFDocument.create();for(let i=0;i<3;i++)pdf.addPage([600,800]).drawText(`${text} page ${i+1}`,{x:60,y:650});await writeFile(path,await pdf.save());}
 await fixture(a,'NATIVE SOURCE A');await fixture(b,'NATIVE SOURCE B');await fixture(c,'NATIVE SOURCE C');await writeFile(bad,'not a PDF');
 const originalA=await readFile(a);
-const log=[],owned=new Set();let app,browser,page;
+const log=[],owned=new Set(),policies=new Set();let app,browser,page;
+async function policy(mode,stateFile,cdp,profile){
+  const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',policyHelper,'-Mode',mode,'-StateFile',stateFile];
+  if(mode==='Setup')args.push('-Port',String(cdp),'-UserDataFolder',profile);
+  const {stdout}=await exec('powershell.exe',args,{windowsHide:true,timeout:20000});
+  return JSON.parse(stdout.trim());
+}
 async function windows(mode='Inspect',file){
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-Mode',mode,'-Exe',exe];
   if(file)args.push('-FilePath',file);
@@ -36,11 +43,23 @@ async function secondary(files){
 }
 async function start(files,earlyFiles){
   const cdp=await port();
-  app=spawn(exe,files,{windowsHide:true,stdio:'ignore',env:{...process.env,WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-address=127.0.0.1 --remote-debugging-port=${cdp}`,WEBVIEW2_USER_DATA_FOLDER:join(root,`webview-${cdp}`)}});
+  const profile=join(root,`webview-${cdp}`),stateFile=join(root,`webview2-policy-${cdp}.json`);
+  policies.add(stateFile);
+  const setup=await policy('Setup',stateFile,cdp,profile);
+  log.push({webview2Setup:setup});console.log('WebView2 test bootstrap '+JSON.stringify(setup));
+  app=spawn(exe,files,{windowsHide:true,stdio:'ignore',env:{...process.env,WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-address=127.0.0.1 --remote-debugging-port=${cdp}`,WEBVIEW2_USER_DATA_FOLDER:profile}});
   owned.add(app.pid);
   app.on('error',e=>{log.push({spawnError:e.message});});
+  const child=app;child.on('exit',(code,signal)=>log.push({readerExit:{pid:child.pid,code,signal}}));
   if(earlyFiles){await assertSingle();await secondary(earlyFiles);log.push({case:'launch-before-WebView-attachment'});}
-  await expect.poll(async()=>{try{return(await fetch(`http://127.0.0.1:${cdp}/json/version`,{signal:AbortSignal.timeout(1000)})).ok;}catch{return false;}},{timeout:45000,intervals:[200,500]}).toBe(true);
+  let lastConnectionError;
+  try {
+    await expect.poll(async()=>{
+      if(app.exitCode!==null||app.signalCode!==null)throw Error(`Reader exited before CDP: ${app.exitCode}/${app.signalCode}`);
+      try{const response=await fetch(`http://127.0.0.1:${cdp}/json/version`,{signal:AbortSignal.timeout(1000)});lastConnectionError=`HTTP ${response.status}`;return response.ok;}
+      catch(error){lastConnectionError=error.cause?.code||error.message;return false;}
+    },{timeout:45000,intervals:[200,500]}).toBe(true);
+  }catch(error){log.push({cdpFailure:{port:cdp,lastConnectionError,state:await windows()}});throw error;}
   browser=await chromium.connectOverCDP(`http://127.0.0.1:${cdp}`);
   await expect.poll(()=>browser.contexts()[0]?.pages().some(p=>p.url().includes('reader.html')),{timeout:30000}).toBe(true);
   page=browser.contexts()[0].pages().find(p=>p.url().includes('reader.html'));
@@ -48,6 +67,7 @@ async function start(files,earlyFiles){
   await expect(page.locator('body')).toHaveAttribute('data-ready','true');
 }
 async function stop(){
+  try {
   const tracked=(await windows()).descendants;
   if(browser){await browser.close();browser=null;}
   for(const pid of [...owned]){
@@ -59,6 +79,9 @@ async function stop(){
   }
   await expect.poll(async()=>(await windows()).apps.length,{timeout:10000}).toBe(0);
   await expect.poll(async()=>{const state=await windows();return tracked.filter(pid=>state.livePids.includes(pid));},{timeout:10000}).toEqual([]);
+  } finally {
+    for(const stateFile of [...policies]){await policy('Cleanup',stateFile);policies.delete(stateFile);}
+  }
 }
 const activeText=()=>page.locator('.readerContainer:not([hidden]) .textLayer');
 try{

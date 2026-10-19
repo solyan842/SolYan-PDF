@@ -20,13 +20,19 @@ try {
     $results = 'desktop/reader-tests/test-results/native-activation'
     if (Test-Path -LiteralPath $results) {
         New-Item -ItemType Directory -Force artifacts/reader-native-results | Out-Null
-        Get-ChildItem -LiteralPath $results -File | Where-Object { $_.Extension -in @('.json','.png') } | Copy-Item -Destination artifacts/reader-native-results/
+        Get-ChildItem -LiteralPath $results -File | Where-Object { $_.Name -eq 'report.json' -or $_.Extension -eq '.png' } | Copy-Item -Destination artifacts/reader-native-results/
     }
     # Fallback cleanup if a failed test left its installed Reader alive.
     foreach ($app in @(Get-Process -Name solyan-pdf-reader -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe })) {
         & taskkill.exe /PID $app.Id /T /F
         if ($LASTEXITCODE -ne 0) { throw 'Failed to stop Reader process tree' }
         $app | Wait-Process -Timeout 10 -ErrorAction Stop
+    }
+    # Recover the app-specific test policies even if Node terminated unexpectedly.
+    if (Test-Path -LiteralPath $results) {
+        foreach ($stateFile in @(Get-ChildItem -LiteralPath $results -Filter 'webview2-policy-*.json' -File)) {
+            & ./desktop/reader-tests/scripts/webview2-test-policy.ps1 -Mode Cleanup -StateFile $stateFile.FullName
+        }
     }
     $uninstaller = Join-Path $root 'uninstall.exe'
     if (Test-Path -LiteralPath $uninstaller) {
