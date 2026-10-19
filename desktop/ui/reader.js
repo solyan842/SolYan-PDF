@@ -21,7 +21,7 @@ function renderTabs() {
     close.onclick = attempt(async () => {
       if (busy || (doc.dirty && !confirm('Đóng tài liệu và bỏ chữ ký chưa lưu?'))) return;
       if (active === doc.id) { selected = null; active = null; }
-      doc.thumbnails?.disconnect(); doc.r2Abort?.abort(); clearTimeout(doc.bookmarkTimer); doc.view.setDocument(null); doc.container.remove(); documents.delete(doc.id); await doc.pdf.loadingTask.destroy();
+      r2?.flushBookmark(doc); doc.thumbnails?.disconnect(); doc.r2Abort?.abort(); clearTimeout(doc.bookmarkTimer); doc.view.setDocument(null); doc.container.remove(); documents.delete(doc.id); await doc.pdf.loadingTask.destroy();
       if (!active && documents.size) activate(documents.keys().next().value);
       else if (!documents.size) { $('welcome').hidden = false; $('thumbs').replaceChildren(); $('outline').replaceChildren(); document.getElementById('bookmarks')?.replaceChildren(); $('signOptions').hidden = true; $('save').disabled = true; }
       renderTabs();
@@ -217,7 +217,7 @@ $('zoomOut').onclick=()=>{if(current())current().view.currentScale=Math.max(.25,
 $('sideToggle').onclick=()=>{$('sidebar').hidden=!$('sidebar').hidden;};$('showThumbs').onclick=()=>{$('thumbs').hidden=false;$('outline').hidden=true;const list=$('bookmarks');if(list)list.hidden=true;};$('showOutline').onclick=()=>{$('thumbs').hidden=true;$('outline').hidden=false;const list=$('bookmarks');if(list)list.hidden=true;};
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',attempt(async e=>{e.preventDefault();for(const file of e.dataTransfer.files)if(file.name.toLowerCase().endsWith('.pdf'))await openFile(file);}));
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}});
-window.addEventListener('beforeunload',e=>{if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
 $('tools').onclick=attempt(async e=>{if(window.__TAURI__?.core){e.preventDefault();await window.__TAURI__.core.invoke('desktop_switch_tools');}});
 r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},get busy(){return busy;}});
 $('open').disabled=false;
