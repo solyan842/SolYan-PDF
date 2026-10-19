@@ -1,3 +1,4 @@
+import {command} from './reader-command.mjs';
 import {test,expect} from '@playwright/test';
 import {PDFDocument} from 'pdf-lib';
 
@@ -42,7 +43,7 @@ test('forwarded files preserve dirty tabs and view state; duplicate path focuses
   await expect(page.locator('.page canvas').first()).toBeVisible();
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
   await page.locator('#zoom').selectOption('1.5');
-  await page.locator('[data-ribbon=sign]').click();await page.locator('#fillCheck').click();
+  await command(page,'fillCheck');
   await expect(page.locator('#tabs .title')).toContainText('●');
   const id=await page.locator('.signature.selected').getAttribute('data-signature');
   const scroll=await page.locator('.readerContainer:not([hidden])').evaluate(node=>node.scrollTop);

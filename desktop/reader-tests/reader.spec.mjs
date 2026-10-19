@@ -1,3 +1,4 @@
+import {command} from './reader-command.mjs';
 import { test,expect } from '@playwright/test';
 import { PDFDocument,degrees,PDFName,PDFString } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -104,30 +105,30 @@ test('signature library survives reload and reuses artwork across PDFs',async({p
  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('sreader.signatures.v1')).length)).toBe(1);
  await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');
  await page.locator('#pdfFiles').setInputFiles({name:'Second.pdf',mimeType:'application/pdf',buffer});await expect(page.locator('.page canvas').first()).toBeVisible();
- await page.locator('[data-ribbon=sign]').click();await page.locator('#signatureLibrary').click();await expect(page.locator('.signature-library-row img')).toBeVisible();
+ await command(page,'signatureLibrary');await expect(page.locator('.signature-library-row img')).toBeVisible();
  page.once('dialog',d=>d.accept('My signature'));await page.getByRole('button',{name:'Đổi tên',exact:true}).click();
  await page.getByRole('button',{name:'My signature',exact:true}).click();await expect(page.locator('.signature')).toHaveCount(1);
  const downloadPromise=page.waitForEvent('download');await page.locator('#save').click();const download=await downloadPromise;
  const reopened=await getDocument({data:new Uint8Array(await readFile(await download.path()))}).promise;expect(reopened.numPages).toBe(1);expect((await(await reopened.getPage(1)).getTextContent()).items.map(x=>x.str).join(' ')).toContain('Reusable signature source');await reopened.loadingTask.destroy();
- await page.locator('#signatureLibrary').click();page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Xóa',exact:true}).click();await expect(page.locator('.signature-library-row')).toHaveCount(0);expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('sreader.signatures.v1')))).toEqual([]);
+ await command(page,'signatureLibrary');page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Xóa',exact:true}).click();await expect(page.locator('.signature-library-row')).toHaveCount(0);expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('sreader.signatures.v1')))).toEqual([]);
 });
 test('annotation tools, undo/redo and native PDF save roundtrip',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const pdf=await PDFDocument.create();pdf.addPage([600,800]).drawText('Annotation source stays searchable',{x:50,y:700});
  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'Annotated.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.page canvas').first()).toBeVisible();
- await page.locator('[data-ribbon=comment]').click();
+
  for(const [index,kind]of ['highlight','underline','strike','note','ink','rectangle','ellipse','line','arrow'].entries()){
-  await page.locator(`#annot-${kind}`).click();const box=await page.locator('.page').first().boundingBox(),x=box.x+box.width*(.15+(index%3)*.23),y=box.y+box.height*(.12+Math.floor(index/3)*.08);
+  await command(page,`annot-${kind}`);const box=await page.locator('.page').first().boundingBox(),x=box.x+box.width*(.15+(index%3)*.23),y=box.y+box.height*(.12+Math.floor(index/3)*.08);
   if(kind==='note')page.once('dialog',d=>d.accept('Ghi chú tiếng Việt'));
   await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+70,y+25,{steps:5});await page.mouse.up();await expect(page.locator('.signature.annotation')).toHaveCount(index+1);
  }
- await page.locator('[data-ribbon=home]').click();await page.locator('#undo').click();await expect(page.locator('.signature.annotation')).toHaveCount(8);await page.locator('#redo').click();await expect(page.locator('.signature.annotation')).toHaveCount(9);
- await page.locator('[data-ribbon=view]').click();await page.locator('#rotateView').click();await expect(page.locator('.signature.annotation')).toHaveCount(9);await page.locator('#theme').click();
+ await command(page,'undo');await expect(page.locator('.signature.annotation')).toHaveCount(8);await command(page,'redo');await expect(page.locator('.signature.annotation')).toHaveCount(9);
+ await command(page,'rotateView');await expect(page.locator('.signature.annotation')).toHaveCount(9);await page.locator('#theme').click();
  const pending=page.waitForEvent('download');await page.locator('#save').click();const output=await pending;const bytes=new Uint8Array(await readFile(await output.path())),reopened=await getDocument({data:bytes}).promise;
  expect((await(await reopened.getPage(1)).getAnnotations()).length).toBe(9);expect((await(await reopened.getPage(1)).getTextContent()).items.map(x=>x.str).join(' ')).toContain('Annotation source stays searchable');await reopened.loadingTask.destroy();await page.screenshot({path:'test-results/reader-r2-annotations.png'});expect(errors).toEqual([]);
 });
 test('selected text creates a native highlight with Unicode note editing',async({page})=>{
  const pdf=await PDFDocument.create();pdf.addPage([500,700]).drawText('Select this searchable text',{x:50,y:600});
- await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'Selection.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.textLayer span').first()).toBeVisible();await page.locator('[data-ribbon=comment]').click();
+ await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'Selection.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.textLayer span').first()).toBeVisible();
  await page.locator('.textLayer span').first().evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(range);});await page.locator('#annot-highlight').click();await expect(page.locator('.signature.annotation[data-kind=highlight]')).toHaveCount(1);
  await page.locator('#annot-note').click();const b=await page.locator('.page').first().boundingBox();page.once('dialog',d=>d.accept('Ghi chú ban đầu'));await page.mouse.click(b.x+100,b.y+100);await expect(page.locator('#annotationNote')).toBeVisible();await page.locator('#annotationNote').fill('Đã sửa ghi chú');await page.locator('#annotationNote').press('Tab');
  const pending=page.waitForEvent('download');await page.locator('#save').click();const output=await pending;const reopened=await getDocument({data:new Uint8Array(await readFile(await output.path()))}).promise;const annots=await(await reopened.getPage(1)).getAnnotations();expect(annots.some(a=>a.subtype==='Highlight'&&a.quadPoints?.length)).toBeTruthy();expect(annots.some(a=>a.contentsObj.str==='Đã sửa ghi chú')).toBeTruthy();await reopened.loadingTask.destroy();
@@ -138,11 +139,11 @@ test('Fill & Sign text date check and cross roundtrip without rasterizing page',
  const pdf=await PDFDocument.create();pdf.addPage([595,842]).drawText('ORIGINAL SEARCHABLE CONTENT',{x:45,y:740});
  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
  await page.locator('#pdfFiles').setInputFiles({name:'Form.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
- await expect(page.locator('.page canvas').first()).toBeVisible();await page.locator('[data-ribbon=sign]').click();
- await page.locator('#fillText').click();await page.locator('#fillTextInput').fill('Nguyễn Văn An');
+ await expect(page.locator('.page canvas').first()).toBeVisible();
+ await command(page,'fillText');await page.locator('#fillTextInput').fill('Nguyễn Văn An');
  await page.getByRole('button',{name:'Đặt vào trang',exact:true}).click();
  await expect(page.locator('.signature img[alt="Văn bản"]')).toHaveCount(1);
- for(const id of ['fillDate','fillCheck','fillCross'])await page.locator('#'+id).click();
+ for(const id of ['fillDate','fillCheck','fillCross'])await command(page,id);
  await expect(page.locator('.signature')).toHaveCount(4);
  const stamp=page.locator('.signature').first(),b=await stamp.boundingBox();
  await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();
@@ -163,7 +164,7 @@ test('local per-PDF bookmarks and last reading position survive document reopen'
   await expect(page.locator('.page canvas').first()).toBeVisible();
   await page.locator('#pageNumber').fill('3');await page.locator('#pageNumber').press('Tab');
   await expect(page.locator('#pageNumber')).toHaveValue('3');
-  await page.locator('[data-ribbon=view]').click();await page.locator('#bookmarkAdd').click();
+  await command(page,'bookmarkAdd');
   await expect(page.locator('#bookmarks .bookmark-row')).toHaveCount(1);
   await expect(page.locator('#bookmarks .bookmark-link')).toHaveText('Trang 3');
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');

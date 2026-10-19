@@ -1,3 +1,4 @@
+import {command} from './reader-command.mjs';
 // Installed EXE + real WebView2. Test-only CDP bootstrap also handles elevated runners.
 import {chromium,expect} from '@playwright/test';
 import {PDFDocument} from 'pdf-lib';
@@ -88,11 +89,17 @@ try{
   await start([a]);await expect(page.locator('#tabs .tab')).toHaveCount(1);
   await expect(activeText()).toContainText(['NATIVE SOURCE A']);
   const originalWindow=await assertSingle();
+  await expect(page.locator('#windowControls')).toBeVisible();
+  const originalMaximized=originalWindow.maximized;
+  await page.locator('#window-maximize').click();
+  await expect.poll(async()=>(await assertSingle()).maximized).toBe(!originalMaximized);
+  await page.locator('#window-maximize').click();
+  await expect.poll(async()=>(await assertSingle()).maximized).toBe(originalMaximized);
   // Native IPC cannot be used as an arbitrary filesystem reader.
   expect(await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('reader_read_open_request',{ticket:'C:/Windows/win.ini'});return false;}catch{return true;}})).toBe(true);
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
   await page.locator('#zoom').selectOption('1.5');
-  await page.locator('[data-ribbon=sign]').click();await page.locator('#fillCheck').click();
+  await command(page,'fillCheck');
   const signature=await page.locator('.signature.selected').getAttribute('data-signature');
   const scroll=await page.locator('.readerContainer:not([hidden])').evaluate(node=>node.scrollTop);
   await expect(page.locator('#tabs .title')).toContainText('●');
@@ -107,7 +114,10 @@ try{
   expect(await page.locator('.readerContainer:not([hidden]) .page').first().evaluate(p=>parseFloat(getComputedStyle(p).getPropertyValue('--scale-factor')))).toBe(2);
   page.once('dialog',dialog=>dialog.dismiss());await page.locator('#tabs .tab.active .close').click();
   await expect(page.locator('#tabs .tab')).toHaveCount(2);
-  await windows('Minimize');expect((await assertSingle()).minimized).toBe(true);
+  page.once('dialog',dialog=>dialog.dismiss());await page.locator('#window-close').click();await assertSingle();
+  await expect(page.locator('#tabs .tab')).toHaveCount(2);
+  await page.locator('#window-minimize').click();
+  await expect.poll(async()=>(await assertSingle()).minimized).toBe(true);
   log.push(await windows('Association',c));
   await expect(page.locator('#tabs .tab')).toHaveCount(3);await expect(activeText()).toContainText(['NATIVE SOURCE C']);
   let restored;
@@ -131,6 +141,11 @@ try{
   expect(await readFile(a)).toEqual(originalA);
   expect(log.filter(entry=>entry.pageerror)).toEqual([]);
   log.push({case:'restart-and-early-second-launch',tabs:2});
+  const closingTree=(await windows()).descendants;
+  await page.locator('#window-close').click();
+  await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
+  await expect.poll(async()=>{const state=await windows();return closingTree.filter(pid=>state.livePids.includes(pid));},{timeout:10000}).toEqual([]);
+  log.push({case:'Reader-caption-controls',maximizeRestore:true,minimize:true,cancelDirtyClose:true,cleanClose:true});
 }catch(error){
   log.push({failure:error.stack});
   if(page&&!page.isClosed())await page.screenshot({path:join(root,'failure.png')}).catch(()=>{});

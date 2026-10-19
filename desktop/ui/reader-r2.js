@@ -1,17 +1,14 @@
+import { installReaderShell } from './reader-shell.js';
 const $=id=>document.getElementById(id),A=window.ReaderEdits,Q=window.QuickSign;
 const element=(tag,text,props={})=>Object.assign(document.createElement(tag),{textContent:text,...props});
 const snapshot=doc=>JSON.stringify(doc.placements);
 export function installR2(api){
   let mode='select';
-  const panels=element('div','',{className:'ribbon-panels'}),tabs=element('nav','',{className:'ribbon-tabs',ariaLabel:'Nhóm công cụ'});
-  const panel={};for(const [id,label] of Object.entries({home:'Trang chủ',comment:'Chú thích',sign:'Điền & ký',view:'Xem'})){
-    const button=element('button',label);button.dataset.ribbon=id;button.onclick=()=>{for(const [name,node] of Object.entries(panel))node.hidden=name!==id;tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',String(b===button)));};tabs.append(button);
-    panel[id]=element('section','',{className:'ribbon-group',hidden:id!=='home'});panels.append(panel[id]);
-  }
-  $('tabs').after(tabs,panels);tabs.firstChild.setAttribute('aria-selected','true');
+  const panels=element('div'),panel={};
+  for(const id of ['home','comment','sign','view']){panel[id]=element('section');panels.append(panel[id]);}
   function button(group,id,label,icon,fn){const b=element('button',label,{id});if(icon){const image=element('img','',{src:`./reader-icons/${icon}-duotone.svg`,alt:''});b.prepend(image);}b.onclick=api.attempt(fn);panel[group].append(b);return b;}
   const doc=()=>{const d=api.current();if(!d)throw Error('Mở PDF trước.');return d;};
-  function setMode(value){mode=value;document.body.dataset.tool=value;panels.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===value)));if(value==='select')window.getSelection()?.removeAllRanges();}
+  function setMode(value){mode=value;document.body.dataset.tool=value;document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===value)));if(value==='select')window.getSelection()?.removeAllRanges();}
   button('home','selectText','Chọn chữ','cursor-text',()=>setMode('select')).dataset.mode='select';
   button('home','pan','Bàn tay','hand',()=>setMode('pan')).dataset.mode='pan';
   button('home','copyText','Sao chép','copy',async()=>{const text=window.getSelection()?.toString();if(!text)throw Error('Chọn đoạn chữ cần sao chép.');await navigator.clipboard.writeText(text);api.message('Đã sao chép chữ đã chọn.');});
@@ -103,7 +100,7 @@ export function installR2(api){
     if(bookmarkList.hidden)return;
     bookmarkList.replaceChildren();
     if(!d){bookmarkList.append(element('p','Mở PDF để xem dấu trang.'));return;}
-    if(!d.bookmarkRecord?.pages.length){bookmarkList.append(element('p','Chưa có dấu trang. Nhấn “Đánh dấu trang” trong mục Xem.'));return;}
+    if(!d.bookmarkRecord?.pages.length){bookmarkList.append(element('p','Chưa có dấu trang. Nhấn “Đánh dấu trang” trong menu hoặc Ctrl+B.'));return;}
     for(const saved of d.bookmarkRecord.pages){
       const row=element('div','',{className:'bookmark-row'});
       const go=element('button',saved.name,{className:'bookmark-link'});
@@ -115,7 +112,8 @@ export function installR2(api){
     }
   }
   function showBookmarks(){
-    $('thumbs').hidden=true;$('outline').hidden=true;bookmarkList.hidden=false;renderBookmarks(api.current());
+    $('sidebar').hidden=false;$('thumbs').hidden=true;$('outline').hidden=true;bookmarkList.hidden=false;renderBookmarks(api.current());
+    for(const id of ['showThumbs','showOutline','showBookmarks'])$(id).setAttribute('aria-pressed',String(id==='showBookmarks'));
   }
   bookmarkBtn.onclick=showBookmarks;
   button('view','bookmarkAdd','Đánh dấu trang','note-pencil',()=>{
@@ -176,5 +174,7 @@ export function installR2(api){
     const check=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});if(check.getPageCount()!==d.pdf.numPages)throw Error('Kiểm tra lưu: số trang bị thay đổi.');return bytes;
   }
   document.addEventListener('keydown',event=>{if(!event.ctrlKey||!api.current()||event.target.closest('input,textarea,[contenteditable=true]'))return;if(event.key.toLowerCase()==='z'||event.key.toLowerCase()==='y'){event.preventDefault();undo(event.key.toLowerCase()==='y'||event.shiftKey);}});
+  installReaderShell({...api,beforeClose(){for(const d of api.documents.values())flushBookmark(d);}},panel);
+  setMode('select');
   return{get mode(){return mode;},selection,opened,flushBookmark,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
 }

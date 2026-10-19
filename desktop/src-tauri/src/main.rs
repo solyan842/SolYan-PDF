@@ -815,6 +815,20 @@ fn reader_window(window: &tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 #[tauri::command]
+fn reader_window_control(window: tauri::WebviewWindow, action: String) -> Result<bool, String> {
+    reader_window(&window)?;
+    if !cfg!(feature = "reader-only") { return Ok(false); }
+    match action.as_str() {
+        "available" => return Ok(true),
+        "minimize" => window.minimize(),
+        "maximize" => if window.is_maximized().map_err(|e| e.to_string())? { window.unmaximize() } else { window.maximize() },
+        "drag" => window.start_dragging(),
+        "close" => window.close(),
+        _ => return Err("Unknown Reader window action".into()),
+    }.map_err(|e| e.to_string())?;
+    Ok(true)
+}
+#[tauri::command]
 fn reader_next_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>) -> Result<Option<reader_open::Ticket>, String> {
     reader_window(&window)?;
     let request = state.queue.lock().map_err(|_| "Reader queue unavailable")?.next();
@@ -946,7 +960,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

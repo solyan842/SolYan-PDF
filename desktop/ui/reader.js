@@ -53,7 +53,7 @@ async function openFile(file, source = null) {
   // overlays against the updated viewports immediately, not only at draw end.
   bus.on('scalechanging', () => { if (doc.id === active) renderSignatures(doc); });
   bus.on('pagerendered', () => { if (doc.id === active) renderSignatures(doc); });
-  bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) $('pageNumber').value = pageNumber; });
+  bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });
   activate(doc.id); message(`${file.name} · ${pdf.numPages} trang · Xử lý offline`);
 }
@@ -76,7 +76,7 @@ async function thumbnails(doc) {
       queue = queue.then(async () => {
         if (current() !== doc || !entry.target.isConnected || entry.target.dataset.visible!=='true') return;
         const page = await doc.pdf.getPage(Number(entry.target.dataset.page));
-        const viewport = page.getViewport({ scale: 120 / page.getViewport({ scale: 1 }).width });
+        const viewport = page.getViewport({ scale: 180 / page.getViewport({ scale: 1 }).width });
         const canvas = document.createElement('canvas'); canvas.width = viewport.width; canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
         if (entry.target.isConnected&&entry.target.dataset.visible==='true') entry.target.prepend(canvas);
@@ -85,7 +85,7 @@ async function thumbnails(doc) {
   }, { root: $('sidebar'), rootMargin: '200px' });
   doc.thumbnails = observer;
   for (let i = 1; i <= doc.pdf.numPages; i++) {
-    const button = document.createElement('button'); button.className = 'thumbnail'; button.dataset.page = i; button.textContent = `Trang ${i}`;
+    const button = document.createElement('button'); button.className = 'thumbnail'; button.dataset.page = i; button.textContent = `Trang ${i}`;button.setAttribute('aria-current',String(i===doc.view.currentPageNumber));
     button.onclick = () => { doc.view.currentPageNumber = i; }; $('thumbs').append(button); observer.observe(button);
   }
 }
