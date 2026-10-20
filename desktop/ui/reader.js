@@ -246,13 +246,30 @@ function changeZoom(value){const d=current();if(!d)return;d.view.update();d.view
 $('zoom').onchange=()=>changeZoom($('zoom').value);
 $('zoomIn').onclick=()=>{if(current())changeZoom(Math.min(4,current().view.currentScale*1.2));};
 $('zoomOut').onclick=()=>{if(current())changeZoom(Math.max(.25,current().view.currentScale/1.2));};
-$('documents').addEventListener('wheel',event=>{
-  const d=current();if(!event.ctrlKey||!d)return;event.preventDefault();d.view.update();
+// Windows Precision Touchpad pinch is exposed by Chromium as a Ctrl+wheel.
+// Tauri's WebView2 blocks that input when zoomHotkeysEnabled is false; the
+// Reader-only window enables it, then this *non-passive capture* handler keeps
+// the gesture on the PDF rather than enlarging the whole WebView shell.
+// Capture at document level because WebView2 may target the scroll container,
+// canvas, or an overlay during a trackpad gesture.
+document.addEventListener('wheel',event=>{
+  if(!event.ctrlKey)return; // Two-finger trackpad scroll must keep working.
+  if(document.body.classList.contains('presentation-active'))return; // F11 owns its zoom.
+  event.preventDefault(); // Never apply WebView2/browser zoom to Reader chrome.
+  const d=current();if(!d)return;
+  const documentsArea=$('documents'),rect=documentsArea.getBoundingClientRect();
+  const overPdf=event.clientX>=rect.left&&event.clientX<rect.right
+    &&event.clientY>=rect.top&&event.clientY<rect.bottom;
+  if(!overPdf)return;
+  d.view.update();
   const units=event.deltaMode===1?16:event.deltaMode===2?d.container.clientHeight:1;
-  const scale=Math.min(4,Math.max(.25,d.view.currentScale*Math.exp(-Math.max(-300,Math.min(300,event.deltaY*units))*.002)));
+  const delta=Math.max(-300,Math.min(300,event.deltaY*units));
+  const scale=Math.max(.25,Math.min(4,d.view.currentScale*Math.exp(-delta*.002)));
+  if(Math.abs(scale-d.view.currentScale)<.0001)return;
   const bounds=d.container.getBoundingClientRect();
-  d.view.updateScale({scaleFactor:scale/d.view.currentScale,drawingDelay:100,origin:[event.clientX-bounds.left+d.container.offsetLeft,event.clientY-bounds.top+d.container.offsetTop]});
-},{passive:false});
+  d.view.updateScale({scaleFactor:scale/d.view.currentScale,drawingDelay:100,
+    origin:[event.clientX-bounds.left+d.container.offsetLeft,event.clientY-bounds.top+d.container.offsetTop]});
+},{capture:true,passive:false});
 $('sideToggle').onclick=()=>{$('sidebar').hidden=!$('sidebar').hidden;};$('showThumbs').onclick=()=>{$('thumbs').hidden=false;$('outline').hidden=true;const list=$('bookmarks');if(list)list.hidden=true;};$('showOutline').onclick=()=>{$('thumbs').hidden=true;$('outline').hidden=false;const list=$('bookmarks');if(list)list.hidden=true;};
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',attempt(async e=>{e.preventDefault();for(const file of e.dataTransfer.files)if(file.name.toLowerCase().endsWith('.pdf'))await openFile(file);}));
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();$(e.shiftKey?'save':'saveCurrent').click();}});

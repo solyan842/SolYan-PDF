@@ -75,3 +75,15 @@ test('Reader default PDF registration is per-user and never overrides Windows Us
  assert.match(rust,/reader_pdf_default_state/);
  assert.match(rust,/ms-settings:defaultapps\?registeredAppUser=sReader%20PDF/);
 });
+
+test('Reader-only native WebView2 enables touchpad gestures without altering Toolbox',()=>{
+ const reader=JSON.parse(read('../src-tauri/tauri.reader.conf.json'));
+ const toolbox=JSON.parse(read('../src-tauri/tauri.conf.json'));
+ assert.equal(reader.app.windows[0].zoomHotkeysEnabled,true);
+ assert.equal(toolbox.app.windows[0].zoomHotkeysEnabled,undefined);
+ const js=read('../ui/reader.js').toString();
+ assert.match(js,/document\.addEventListener\('wheel'/);
+ assert.match(js,/capture:true,passive:false/);
+ assert.match(js,/if\(!event\.ctrlKey\)return/);
+ assert.match(js,/event\.preventDefault\(\)/);
+});

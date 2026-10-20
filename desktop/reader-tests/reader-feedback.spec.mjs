@@ -129,3 +129,47 @@ test('presentation zooms from fullscreen without changing Reader zoom',async({pa
   await expect(page.locator('#presentationStage')).toBeHidden();
   await expect(page.locator('#zoom')).toHaveValue(readerZoom);
 });
+
+test('Windows touchpad pinch targets PDF zoom; two-finger scroll keeps natural scrolling',async({page})=>{
+  const pdf=await PDFDocument.create();
+  for(let n=0;n<4;n++)pdf.addPage([612,792]).drawText('Touchpad '+n,{x:50,y:730});
+  await page.goto('/reader.html');
+  await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles({name:'Touchpad.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  const viewer=page.locator('.readerContainer:not([hidden])');
+  await expect(viewer.locator('.page canvas').first()).toBeVisible();
+  const initial=await viewer.evaluate(el=>({scale:parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor')),left:el.scrollLeft,top:el.scrollTop,ratio:devicePixelRatio,visual:visualViewport?.scale||1}));
+  const rect=await viewer.boundingBox();
+  const x=rect.x+Math.min(210,rect.width/2),y=rect.y+Math.min(230,rect.height/2);
+  // The touchpad's two-finger SCROLL is an unmodified wheel and must not be consumed.
+  const scrolling=await page.evaluate(({x,y})=>{
+    const target=document.elementFromPoint(x,y);
+    const plain=new WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:false,clientX:x,clientY:y,deltaY:110});
+    target.dispatchEvent(plain);
+    return plain.defaultPrevented;
+  },{x,y});
+  expect(scrolling).toBe(false);
+  await expect.poll(async()=>viewer.evaluate(el=>el.scrollTop)).toBeGreaterThan(initial.top);
+  await page.evaluate(({x,y})=>{
+    const target=document.elementFromPoint(x,y);
+    const gesture=new WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,clientX:x,clientY:y,deltaY:-92});
+    target.dispatchEvent(gesture);
+    if(!gesture.defaultPrevented)throw Error('Pinch must cancel native WebView/browser page zoom');
+  },{x,y});
+  await expect.poll(async()=>viewer.evaluate(el=>parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor')))).toBeGreaterThan(initial.scale);
+  const enlarged=await viewer.evaluate(el=>parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor')));
+  // Pinch in and out without Ctrl key physically held by the laptop user:
+  // Chromium supplies ctrlKey to this synthetic wheel pathway.
+  await page.evaluate(({x,y})=>document.elementFromPoint(x,y).dispatchEvent(
+    new WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,clientX:x,clientY:y,deltaY:92})),{x,y});
+  await expect.poll(async()=>viewer.evaluate(el=>parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor')))).toBeLessThan(enlarged);
+  expect(await page.evaluate(()=>({ratio:devicePixelRatio,visual:visualViewport?.scale||1}))).toEqual({ratio:initial.ratio,visual:initial.visual});
+  // Wheel outside document must not zoom shell or change PDF scale.
+  const outside=await page.locator('header').boundingBox();
+  const didCancel=await page.evaluate(({x,y})=>{
+    const target=document.elementFromPoint(x,y);
+    const e=new WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,clientX:x,clientY:y,deltaY:-80});
+    target.dispatchEvent(e);return e.defaultPrevented;
+  },{x:outside.x+25,y:outside.y+20});
+  expect(didCancel).toBe(true);
+});
