@@ -842,6 +842,80 @@ async fn reader_choose_files(window: tauri::WebviewWindow, state: State<'_, Read
     #[cfg(not(windows))]
     { let _ = (state,language); Err("Native PDF selection is available on Windows".into()) }
 }
+// Windows fonts remain on the owner's machine: NEVER ship Microsoft's font files.
+// Only these fixed names can be read; the request cannot supply a path.
+#[cfg(windows)]
+const READER_FONT_ALLOWLIST: &[(&str, &str)] = &[
+    ("win-arial", "arial.ttf"),
+    ("win-times", "times.ttf"),
+    ("win-calibri", "calibri.ttf"),
+    ("win-tahoma", "tahoma.ttf"),
+    ("win-verdana", "verdana.ttf"),
+    ("win-georgia", "georgia.ttf"),
+    ("win-segoe", "segoeui.ttf"),
+    ("win-consolas", "consola.ttf"),
+    ("win-courier", "cour.ttf"),
+    ("win-trebuchet", "trebuc.ttf"),
+    ("win-candara", "candara.ttf"),
+    ("win-corbel", "corbel.ttf"),
+    ("win-constantia", "constan.ttf"),
+];
+
+// Honour OS/2 fsType rights. The PDF uses subset fonts, so reject restricted,
+// preview/print-only, no-subsetting and bitmap-only fonts rather than copy them.
+#[cfg(windows)]
+fn reader_font_bytes_impl(id: &str) -> Result<Vec<u8>, String> {
+    let filename = READER_FONT_ALLOWLIST.iter().find(|(key, _)| *key == id)
+        .map(|(_, filename)| *filename).ok_or("Font Windows không được hỗ trợ")?;
+    let system = std::env::var_os("SystemRoot").ok_or("Không tìm thấy Windows")?;
+    let path = PathBuf::from(system).join("Fonts").join(filename);
+    let size = fs::metadata(&path).map_err(|_| "Font chưa được cài trên Windows")?.len();
+    if !(128..=12 * 1024 * 1024).contains(&size) {
+        return Err("Font Windows có kích thước không hợp lệ".into());
+    }
+    let bytes = fs::read(&path).map_err(|_| "Không đọc được font Windows")?;
+    if !(bytes.starts_with(&[0, 1, 0, 0]) || bytes.starts_with(b"OTTO")) || bytes.len() < 12 {
+        return Err("Font không phải tệp OpenType/TrueType đơn".into());
+    }
+    let tables = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+    let mut permitted = false;
+    for index in 0..tables {
+        let start = 12usize.checked_add(index * 16).ok_or("Font table error")?;
+        if start + 16 > bytes.len() { return Err("Font table truncated".into()); }
+        if &bytes[start..start + 4] == b"OS/2" {
+            let offset = u32::from_be_bytes(bytes[start + 8..start + 12].try_into().unwrap()) as usize;
+            if offset.checked_add(10).is_none_or(|end| end > bytes.len()) {
+                return Err("Font OS/2 table truncated".into());
+            }
+            let flags = u16::from_be_bytes([bytes[offset + 8], bytes[offset + 9]]);
+            // 0 = installable; 0x0008 = editable. Other modes are unsuitable.
+            permitted = (flags & (0x0002 | 0x0004 | 0x0100 | 0x0200)) == 0;
+            break;
+        }
+    }
+    if !permitted { return Err("Font Windows không cho phép nhúng để chỉnh sửa PDF".into()); }
+    Ok(bytes)
+}
+
+#[tauri::command]
+fn reader_windows_fonts(window: tauri::WebviewWindow) -> Result<Vec<String>, String> {
+    reader_window(&window)?;
+    #[cfg(windows)]
+    { return Ok(READER_FONT_ALLOWLIST.iter().filter(|(key, _)| reader_font_bytes_impl(key).is_ok())
+        .map(|(key, _)| (*key).to_owned()).collect()); }
+    #[cfg(not(windows))]
+    { Ok(Vec::new()) }
+}
+
+#[tauri::command]
+fn reader_windows_font(window: tauri::WebviewWindow, id: String) -> Result<Vec<u8>, String> {
+    reader_window(&window)?;
+    #[cfg(windows)]
+    { reader_font_bytes_impl(&id) }
+    #[cfg(not(windows))]
+    { let _ = id; Err("Font Windows chỉ có trên máy Windows".into()) }
+}
+
 fn reader_window(window: &tauri::WebviewWindow) -> Result<(), String> {
     let label = if cfg!(feature = "reader-only") { "main" } else { "reader" };
     if window.label() != label { return Err("Chỉ cửa sổ Reader được nhận tệp.".into()); }
@@ -1014,7 +1088,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 
