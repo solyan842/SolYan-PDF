@@ -29,6 +29,13 @@ public static class ReaderWindows {
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
+    [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+    public static int[] WindowBounds(IntPtr hwnd) {
+        Rect rect;
+        if (!GetWindowRect(hwnd, out rect)) return new int[0];
+        return new [] { rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top };
+    }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
     public static long[] Windows(uint processId) {
@@ -170,7 +177,7 @@ if ($Mode -eq 'Minimize') {
 }
 $result = @($apps | ForEach-Object {
     $windows = [ReaderWindows]::Windows($_.Id)
-    @{ pid=$_.Id; windows=@($windows); minimized=($windows.Count -eq 1 -and [ReaderWindows]::IsIconic([IntPtr]$windows[0])); maximized=($windows.Count -eq 1 -and [ReaderWindows]::IsZoomed([IntPtr]$windows[0])); foreground=[ReaderWindows]::GetForegroundWindow().ToInt64() }
+    @{ pid=$_.Id; windows=@($windows); minimized=($windows.Count -eq 1 -and [ReaderWindows]::IsIconic([IntPtr]$windows[0])); maximized=($windows.Count -eq 1 -and [ReaderWindows]::IsZoomed([IntPtr]$windows[0])); bounds=$(if ($windows.Count -eq 1) { @([ReaderWindows]::WindowBounds([IntPtr]$windows[0])) } else { @() }); foreground=[ReaderWindows]::GetForegroundWindow().ToInt64() }
 })
 $engines = @(Get-Process -Name solyan-core,solyan-office,solyan-ocr,solyan-sign,solyan-archive -ErrorAction SilentlyContinue)
 $all = @(Get-CimInstance Win32_Process)
