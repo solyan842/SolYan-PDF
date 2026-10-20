@@ -254,3 +254,58 @@ test('Hand defaults, right Format follows tools, opacity & pencil width survive 
   }
   await page.screenshot({path:'test-results/reader-format-right-panel.png'});
 });
+
+test('all Reader sliders share one fine rail and Typewriter controls line up in light and dark',async({page})=>{
+  const pdf=await PDFDocument.create();pdf.addPage([595,842]).drawText('Reader styles',{x:40,y:760});
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles({name:'Styles.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  for(const theme of ['light','dark']){
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);
+    for(const width of [1440,1024]){
+      await page.setViewportSize({width,height:850});
+      await page.locator('#annot-ink').click();
+      await expect(page.locator('#readerFormatPanel')).toBeVisible();
+      const sliders=await page.evaluate(()=>{
+        return [...document.querySelectorAll('input[type=range]')].filter(el=>el.getClientRects().length).map(el=>({
+          id:el.id,
+          height:el.getBoundingClientRect().height,
+          appearance:getComputedStyle(el).webkitAppearance,
+          background:getComputedStyle(el).backgroundColor,
+          trackHeight:getComputedStyle(el,'::-webkit-slider-runnable-track').height,
+          thumbWidth:getComputedStyle(el,'::-webkit-slider-thumb').width,
+          thumbHeight:getComputedStyle(el,'::-webkit-slider-thumb').height
+        }));
+      });
+      expect(sliders.map(s=>s.id).sort()).toEqual(['formatOpacity','zoomRange']);
+      for(const slider of sliders){
+        expect(slider.height).toBe(20);
+        expect(slider.appearance).toBe('none');
+        expect(slider.background).toBe('rgba(0, 0, 0, 0)');
+      }
+      // Cross-check both tracks against the same design tokens. Blink may
+      // expose host-input bounds rather than pseudo-element dimensions.
+      expect(sliders[0].trackHeight).toBe(sliders[1].trackHeight);
+      expect(sliders[0].thumbHeight).toBe(sliders[1].thumbHeight);
+      expect(sliders[0].thumbWidth).toBe(sliders[1].thumbWidth);
+      await page.locator('#typewriter').click();
+      await expect(page.locator('#readerTextFormat')).toBeVisible();
+      const fields=await page.evaluate(()=>{
+        const ids=['typewriterFont','typewriterSize','typewriterColor'];
+        return ids.map(id=>{
+          const el=document.getElementById(id),r=el.getBoundingClientRect();
+          const parent=el.closest('label').getBoundingClientRect();
+          const panel=document.getElementById('readerFormatPanel').getBoundingClientRect();
+          return {id,x:r.left,y:r.top,height:r.height,width:r.width,
+            labelY:parent.top,belowPanel:r.right<=panel.right+.5};
+        });
+      });
+      for(const f of fields){expect(f.height).toBe(32);expect(f.belowPanel).toBe(true);expect(f.width).toBeGreaterThan(45);}
+      expect(Math.max(...fields.map(x=>x.y))-Math.min(...fields.map(x=>x.y))).toBeLessThanOrEqual(1);
+      expect(Math.max(...fields.map(x=>x.labelY))-Math.min(...fields.map(x=>x.labelY))).toBeLessThanOrEqual(1);
+      expect(fields[0].x).toBeLessThan(fields[1].x);
+      expect(fields[1].x).toBeLessThan(fields[2].x);
+      await page.screenshot({path:`test-results/reader-controls-${theme}-${width}.png`});
+    }
+  }
+});
