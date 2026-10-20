@@ -16,7 +16,7 @@ for(const asset of fonts.assets){
   if(!bytes||hash(bytes)!==asset.sha256){const response=await fetch(asset.url);if(!response.ok)throw Error('Font download failed: '+asset.name);bytes=Buffer.from(await response.arrayBuffer());if(hash(bytes)!==asset.sha256)throw Error('Font hash mismatch: '+asset.name);await writeFile(target,bytes);}
 }
 for (const directory of ['build','web','cmaps','standard_fonts','wasm']) {
-  await cp(new URL(`./node_modules/pdfjs-dist/${directory}/`, import.meta.url), new URL(`pdfjs/${directory}/`, vendor), { recursive: true });
+  await cp(new URL(`./node_modules/pdfjs-dist/${['build','web'].includes(directory)?'legacy/':''}${directory}/`, import.meta.url), new URL(`pdfjs/${directory}/`, vendor), { recursive: true });
 }
 await cp(new URL('./node_modules/pdfjs-dist/LICENSE', import.meta.url), new URL('pdfjs/LICENSE', vendor));
 console.log(`Staged pinned pdf-lib 1.17.1 and PDF.js 6.4.299 at ${fileURLToPath(vendor)}`);

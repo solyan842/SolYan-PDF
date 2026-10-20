@@ -1,6 +1,11 @@
 // Reader UI only. PDF text, filenames, bookmark names and signature names are excluded.
 let language='vi';try{if(localStorage.getItem('sreader.language')==='en')language='en';}catch{}
 const strings={
+  'Điền biểu mẫu PDF':'Fill PDF forms','PDF này không có trường biểu mẫu có thể điền.':'This PDF has no fillable form fields.','Nhấn vào trường trên trang để điền; dùng Tab để chuyển trường.':'Click a field on the page; use Tab to move between fields.',
+  'In PDF':'Print PDF','In PDF…    Ctrl+P':'Print PDF…    Ctrl+P','In…':'Print…','Trang cần in':'Pages to print','Độ phân giải bản in':'Print resolution','Trang cần in (all hoặc 1,3-5)':'Pages to print (all or 1,3-5)',
+  'In bản làm việc gồm biểu mẫu và phần đã chèn. PDF nguồn không thay đổi.':'Print the working copy including forms and inserted content. The source PDF stays unchanged.',
+  'Tối đa 50 trang và 80 triệu điểm ảnh mỗi đợt. Chọn khoảng nhỏ hơn khi tài liệu lớn.':'Up to 50 pages and 80 million pixels per job. Choose a smaller range for large documents.',
+  'Chọn từ 1 đến 50 trang cho mỗi đợt in.':'Select 1 to 50 pages per print job.','Bản in quá lớn; chọn ít trang hơn.':'The print job is too large; select fewer pages.','Đã mở hộp thoại in.':'Print dialog opened.','Đã chuyển bản làm việc sang sTool PDF.':'Opened the working copy in sTool PDF.',
   'Tài liệu đã thay đổi; mở lại công cụ chèn chữ.':'The active document changed; reopen the text tool.','Chưa cài sTool PDF':'sTool PDF is not installed.',
   'Ctrl + lăn chuột':'Ctrl + mouse wheel','Lưu':'Save','Lưu (Ctrl+S)':'Save (Ctrl+S)','Lưu    Ctrl+S':'Save    Ctrl+S','Trang đầu':'First page','Trang cuối':'Last page','Giới thiệu…':'About…','Phiên bản:':'Version:','Tác giả:':'Author:',
   'Màu bút / tô sáng':'Pen / highlight colors','Màu bút vẽ':'Pen color','Màu tô sáng':'Highlight color','Chèn chữ (Typewriter)':'Insert text (Typewriter)','Font chữ':'Font','Cỡ chữ':'Font size','Màu chữ':'Text color',

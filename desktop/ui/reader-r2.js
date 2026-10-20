@@ -151,7 +151,7 @@ export function installR2(api){
   const notes=element('textarea','',{id:'annotationNote',placeholder:'Nội dung ghi chú',ariaLabel:'Nội dung ghi chú'});$('signOptions').append(notes);
   notes.onchange=()=>{const d=doc(),item=d.placements.find(p=>p.id===d.selectedId);if(item?.kind==='note'){checkpoint(d);item.text=notes.value;api.changed(d);api.render(d);}};
   function checkpoint(d){const state=snapshot(d);d.undo??=[];d.redo??=[];if(d.undo.at(-1)!==state)d.undo.push(state);if(d.undo.length>30)d.undo.shift();d.redo=[];}
-  function undo(redo){const d=doc(),from=redo?d.redo:d.undo,to=redo?d.undo:d.redo;if(!from?.length)return;to.push(snapshot(d));d.placements=JSON.parse(from.pop());d.dirty=snapshot(d)!==d.savedState;api.select(null);$('signOptions').hidden=true;api.render(d);api.renderTabs();}
+  function undo(redo){const d=doc(),from=redo?d.redo:d.undo,to=redo?d.undo:d.redo;if(!from?.length)return;to.push(snapshot(d));d.placements=JSON.parse(from.pop());d.dirty=Boolean(d.formDirty)||snapshot(d)!==d.savedState;api.select(null);$('signOptions').hidden=true;api.render(d);api.renderTabs();}
   function viewport(d,index){const v=d.view.getPageView(index).viewport;return{width:v.width/v.scale,height:v.height/v.scale,transform:v.transform.map((n,i)=>i<6?n/v.scale:n),rotation:v.rotation};}
   // Viewport transforms are stored at scale 1, independently of zoom/view rotation.
   function itemAt(d,index,rect,kind,points){return{id:crypto.randomUUID(),group:crypto.randomUUID(),kind,page:index,rect,viewport:viewport(d,index),points,color:colors[kind]?rgb(colors[kind].value):[.12,.35,.85]};}
@@ -179,6 +179,7 @@ export function installR2(api){
     });
     d.container.addEventListener('pointerdown',event=>{
       if(event.button!==0||api.busy||event.target.closest('.signature'))return;
+      if(event.target.closest('.annotationLayer input,.annotationLayer textarea,.annotationLayer select,.annotationLayer button')){setMode('select');return;}
       api.select(null);$('signOptions').hidden=true;api.render(d);
       if(mode==='select'||mode==='erase')return;
       if(mode==='pan'){event.preventDefault();const x=event.clientX,y=event.clientY,left=d.container.scrollLeft,top=d.container.scrollTop;const move=e=>{d.container.scrollLeft=left+x-e.clientX;d.container.scrollTop=top+y-e.clientY;};d.container.setPointerCapture(event.pointerId);d.container.addEventListener('pointermove',move);d.container.addEventListener('pointerup',()=>d.container.removeEventListener('pointermove',move),{once:true});return;}
@@ -191,13 +192,13 @@ export function installR2(api){
     },{capture:true,signal});
   }
   async function exportDocument(d){const viewportFor=async page=>(await d.pdf.getPage(page+1)).getViewport({scale:1});
-    if(d.placements.length&&!d.signatureWarningAccepted){const source=await window.PDFLib.PDFDocument.load(d.bytes,{updateMetadata:false});const signed=source.getForm().getFields().some(f=>f instanceof window.PDFLib.PDFSignature&&f.acroField.dict.has(window.PDFLib.PDFName.of('V')));if(signed){if(!confirm(t('PDF này có chữ ký số. Thay đổi bản sao có thể làm mất hiệu lực xác thực. Tiếp tục Lưu thành?')))throw Error('Đã hủy lưu để giữ trạng thái chữ ký số.');d.signatureWarningAccepted=true;}}
-    let bytes=d.bytes.slice();const annotations=d.placements.filter(p=>p.kind&&p.kind!=='text'),texts=d.placements.filter(p=>p.kind==='text'),signatures=d.placements.filter(p=>!p.kind);
+    if((d.placements.length||d.formDirty)&&!d.signatureWarningAccepted){const source=await window.PDFLib.PDFDocument.load(d.bytes,{updateMetadata:false});const signed=source.getForm().getFields().some(f=>f instanceof window.PDFLib.PDFSignature&&f.acroField.dict.has(window.PDFLib.PDFName.of('V')));if(signed){if(!confirm(t('PDF này có chữ ký số. Thay đổi bản sao có thể làm mất hiệu lực xác thực. Tiếp tục Lưu thành?')))throw Error('Đã hủy lưu để giữ trạng thái chữ ký số.');d.signatureWarningAccepted=true;}}
+    let bytes=d.pdf.annotationStorage.size?await d.pdf.saveDocument():d.bytes.slice();const annotations=d.placements.filter(p=>p.kind&&p.kind!=='text'),texts=d.placements.filter(p=>p.kind==='text'),signatures=d.placements.filter(p=>!p.kind);
     if(annotations.length)bytes=await A.save(bytes,annotations,viewportFor,window.PDFLib);if(texts.length)bytes=await saveText(bytes,texts,window.PDFLib);if(signatures.length)bytes=await Q.save(bytes,signatures,viewportFor,window.PDFLib);
     const check=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});if(check.getPageCount()!==d.pdf.numPages)throw Error('Kiểm tra lưu: số trang bị thay đổi.');return bytes;
   }
   document.addEventListener('keydown',event=>{if(!event.ctrlKey||!api.current()||event.target.closest('input,textarea,[contenteditable=true]'))return;if(event.key.toLowerCase()==='z'||event.key.toLowerCase()==='y'){event.preventDefault();undo(event.key.toLowerCase()==='y'||event.shiftKey);}});
   installReaderShell({...api,beforeClose(){for(const d of api.documents.values())flushBookmark(d);}},panel);
   setMode('select');
-  return{get mode(){return mode;},selection,opened,flushBookmark,editText,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
+  return{get mode(){return mode;},selection,opened,flushBookmark,editText,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);d.formDirty=false;d.pdf.annotationStorage.resetModified();},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
 }

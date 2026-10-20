@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod reader_open;
+mod document_handoff;
 
 use rand::RngCore;
 use std::{
@@ -722,15 +723,20 @@ fn stop_archive(app: &tauri::AppHandle) {
 }
 
 #[tauri::command]
-async fn desktop_open_reader(app: tauri::AppHandle) -> Result<(), String> {
+async fn desktop_open_reader(app: tauri::AppHandle, bytes: Option<Vec<u8>>, name: Option<String>) -> Result<(), String> {
+    if cfg!(feature = "reader-only") { return Err("Reader launch is available from Tools".into()); }
+    let transfer=if let Some(bytes)=bytes {Some(document_handoff::create(&handoff_root(&app)?,&random_token(),&bytes,name.as_deref().unwrap_or("document.pdf"))?)}else{None};
     let installed = app.path().local_data_dir().map_err(|e| e.to_string())?.join("sReader PDF").join("solyan-pdf-reader.exe");
     if installed.is_file() {
         let mut command = Command::new(installed);
+        if let Some(path)=transfer.as_ref(){command.arg(path);}
         #[cfg(windows)]
         command.creation_flags(0x08000000);
         return command.spawn().map(|_| ()).map_err(|e| e.to_string());
     }
+    if let Some(path)=transfer.as_ref(){app.state::<ReaderOpenState>().queue.lock().map_err(|_|"Reader queue unavailable")?.enqueue([path.clone()],Path::new("."));}
     if let Some(window) = app.get_webview_window("reader") {
+        let _=window.emit("reader-open-pending",());
         return window.set_focus().map_err(|e| e.to_string());
     }
     tauri::WebviewWindowBuilder::new(&app, "reader", tauri::WebviewUrl::App("reader.html".into()))
@@ -873,7 +879,9 @@ fn reader_next_open_request(window: tauri::WebviewWindow, state: State<'_, Reade
 async fn reader_read_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<Vec<u8>, String> {
     reader_window(&window)?;
     let path = state.queue.lock().map_err(|_| "Reader queue unavailable")?.take(&ticket)?;
-    reader_open::read_pdf(&path)
+    let bytes=reader_open::read_pdf(&path)?;
+    if let Ok(root)=handoff_root(&window.app_handle()){document_handoff::consume_reader_copy(&root,&path);}
+    Ok(bytes)
 }
 #[tauri::command]
 fn reader_discard_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<(), String> {
@@ -883,19 +891,28 @@ fn reader_discard_open_request(window: tauri::WebviewWindow, state: State<'_, Re
 }
 
 #[tauri::command]
-async fn desktop_switch_tools(app: tauri::AppHandle) -> Result<(), String> {
+async fn desktop_switch_tools(app: tauri::AppHandle, bytes: Option<Vec<u8>>, name: Option<String>) -> Result<(), String> {
+    let external=if cfg!(feature="reader-only"){let base=app.path().local_data_dir().map_err(|e|e.to_string())?;Some([base.join("sTool PDF").join("solyan-pdf-desktop.exe"),base.join("SolYan PDF").join("solyan-pdf-desktop.exe")].into_iter().find(|p|p.is_file()).ok_or("Chưa cài sTool PDF")?)}else{None};
+    let transfer=if let Some(bytes)=bytes {let token=random_token();document_handoff::create(&handoff_root(&app)?,&token,&bytes,name.as_deref().unwrap_or("document.pdf"))?;Some(token)}else{None};
     if !cfg!(feature = "reader-only") {
-        if let Some(window) = app.get_webview_window("main") { return window.set_focus().map_err(|e| e.to_string()); }
+        if let Some(token)=transfer.as_ref(){let window=tauri::WebviewWindowBuilder::new(&app,format!("tools-handoff-{token}"),tauri::WebviewUrl::App("handoff.html".into())).title("sTool PDF").inner_size(1440.0,920.0).build().map_err(|e|e.to_string())?;let url=window.url().map_err(|e|e.to_string())?.join(&format!("handoff.html?native={token}")).map_err(|e|e.to_string())?;window.navigate(url).map_err(|e|e.to_string())?;return window.set_focus().map_err(|e|e.to_string());}
+        if let Some(window) = app.get_webview_window("main") { if let Some(token)=transfer.as_ref(){let url=window.url().map_err(|e|e.to_string())?.join(&format!("handoff.html?native={token}")).map_err(|e|e.to_string())?;window.navigate(url).map_err(|e|e.to_string())?;}return window.set_focus().map_err(|e| e.to_string()); }
         return tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title("sTool PDF").inner_size(1440.0, 920.0).build().map(|_| ()).map_err(|e| e.to_string());
     }
-    let base = app.path().local_data_dir().map_err(|e| e.to_string())?;
-    let path = [base.join("sTool PDF").join("solyan-pdf-desktop.exe"), base.join("SolYan PDF").join("solyan-pdf-desktop.exe")].into_iter().find(|p| p.is_file()).ok_or("Chưa cài sTool PDF")?;
+    let path = external.ok_or("Tools executable unavailable")?;
     let mut command = Command::new(path);
+    if let Some(token)=transfer.as_ref(){command.args(["--solyan-handoff",token]);}
     #[cfg(windows)]
     command.creation_flags(0x08000000);
-    command.spawn().map(|_| ()).map_err(|e| e.to_string())
+    command.spawn().map_err(|e|e.to_string())?;
+    if let Some(token)=transfer {let folder=handoff_root(&app)?.join(token);tauri::async_runtime::spawn_blocking(move||{for _ in 0..150 {if !folder.exists(){return Ok(());}thread::sleep(Duration::from_millis(100));}Err("sTool chưa nhận PDF; hãy cài hai ứng dụng cùng phiên bản rồi thử lại".to_string())}).await.map_err(|e|e.to_string())??;}
+    Ok(())
 }
+
+fn handoff_root(app:&tauri::AppHandle)->Result<PathBuf,String>{Ok(app.path().local_data_dir().map_err(|e|e.to_string())?.join("SolYan-PDF-Transfer"))}
+#[tauri::command]
+fn desktop_take_handoff(app:tauri::AppHandle,window:tauri::WebviewWindow,token:String)->Result<(String,Vec<u8>),String>{if cfg!(feature="reader-only")||(window.label()!="main"&&!window.label().starts_with("tools-handoff-")){return Err("Tools inbox only".into());}document_handoff::take(&handoff_root(&app)?,&token)}
 
 fn main() {
     let mut requests = reader_open::OpenQueue::default();
@@ -930,7 +947,9 @@ fn main() {
         })
         .manage(CoreState::default())
         .setup(|app| {
+            if let Ok(root)=handoff_root(app.handle()){document_handoff::cleanup(&root);}
             if cfg!(feature = "reader-only") { return Ok(()); }
+            let args:Vec<_>=std::env::args().collect();if let Some(index)=args.iter().position(|a|a=="--solyan-handoff"){if let Some(token)=args.get(index+1){if token.len()==64&&token.bytes().all(|c|c.is_ascii_hexdigit()){if let Some(window)=app.get_webview_window("main"){let url=window.url()?.join(&format!("handoff.html?native={token}"))?;window.navigate(url)?;}}}}
             let state = app.state::<CoreState>();
             match start_office(app.handle()) {
                 Ok((mut office_process, office_endpoint)) => {
@@ -995,7 +1014,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

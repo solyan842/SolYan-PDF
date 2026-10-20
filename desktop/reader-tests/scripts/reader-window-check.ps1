@@ -17,6 +17,8 @@ public static class ReaderWindows {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder text, int count);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr hwnd, EnumProc callback, IntPtr state);
+    [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr hwnd, int id);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string kind, string title);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetWindowText(IntPtr hwnd, string text);
@@ -46,14 +48,21 @@ public static class ReaderWindows {
         }, IntPtr.Zero);
         return found;
     }
+    static IntPtr Descendant(IntPtr hwnd, int id) {
+        var result = GetDlgItem(hwnd,id); if(result != IntPtr.Zero) return result;
+        EnumChildWindows(hwnd,(child,state)=>{if(GetDlgCtrlID(child)==id){result=child;return false;}return true;},IntPtr.Zero);return result;
+    }
+    public static string[] Dialogs(uint processId) {
+        var result=new List<string>();EnumWindows((hwnd,state)=>{uint owner;GetWindowThreadProcessId(hwnd,out owner);var kind=new StringBuilder(256);GetClassName(hwnd,kind,256);if(owner!=processId||kind.ToString()!="#32770")return true;result.Add("dialog="+hwnd);EnumChildWindows(hwnd,(child,unused)=>{var c=new StringBuilder(256);GetClassName(child,c,256);result.Add("id="+GetDlgCtrlID(child)+" class="+c);return result.Count<150;},IntPtr.Zero);return true;},IntPtr.Zero);return result.ToArray();
+    }
     public static bool SaveAs(uint processId, string path) {
         bool found = false;
         EnumWindows((hwnd, state) => {
             uint owner; GetWindowThreadProcessId(hwnd, out owner);
             var kind = new StringBuilder(256); GetClassName(hwnd, kind, kind.Capacity);
             if (owner != processId || kind.ToString() != "#32770") return true;
-            var edit = GetDlgItem(hwnd, 1152);
-            if (edit == IntPtr.Zero) { var combo = GetDlgItem(hwnd, 1148); if (combo != IntPtr.Zero) { edit = FindWindowEx(combo,IntPtr.Zero,"Edit",null); if (edit == IntPtr.Zero) edit = combo; } }
+            var edit = Descendant(hwnd, 1152);
+            if (edit == IntPtr.Zero) { var combo = Descendant(hwnd, 1148); if (combo != IntPtr.Zero) { edit = FindWindowEx(combo,IntPtr.Zero,"Edit",null); if (edit == IntPtr.Zero) edit = combo; } }
             if (edit != IntPtr.Zero && SetWindowText(edit,path)) { found = PostMessage(hwnd,0x0111,new IntPtr(1),IntPtr.Zero); return false; }
             return true;
         }, IntPtr.Zero);
@@ -99,7 +108,7 @@ if ($Mode -eq 'SaveAs') {
     $testRoot = [IO.Path]::GetFullPath((Join-Path (Get-Location) 'desktop/reader-tests/test-results/native-activation'))
     $target = [IO.Path]::GetFullPath($FilePath)
     if (-not $target.StartsWith($testRoot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetExtension($target) -ne '.pdf') { throw 'Save test must stay inside synthetic native results' }
-    @{ submitted=[ReaderWindows]::SaveAs($apps[0].Id,$target) } | ConvertTo-Json -Compress
+    @{ submitted=[ReaderWindows]::SaveAs($apps[0].Id,$target); dialogs=@([ReaderWindows]::Dialogs($apps[0].Id)) } | ConvertTo-Json -Compress
     exit
 }
 if ($Mode -eq 'CancelOpen') {

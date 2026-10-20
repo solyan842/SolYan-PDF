@@ -49,6 +49,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm test --prefix desktop/reader-tests 2>&1 | Tee-Object artifacts/reader-node-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./desktop/reader-tests/scripts/test-save-dialog.ps1 2>&1 | Tee-Object artifacts/reader-save-dialog.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location desktop/reader-tests
           try {
             npx playwright install chromium 2>&1 | Tee-Object ../../artifacts/reader-browser-install.log
@@ -63,13 +65,13 @@ jobs:
         with:
           workspaces: 'desktop/src-tauri -> target'
           shared-key: standalone-reader
-      - name: Native Reader request queue tests
+      - name: Native Reader request queue and handoff tests
         working-directory: desktop/src-tauri
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $env:TAURI_CONFIG = Get-Content tauri.reader.conf.json -Raw
-          cargo test --features reader-only reader_open::tests -- --nocapture 2>&1 | Tee-Object ../../artifacts/reader-native-unit-tests.log
+          cargo test --features reader-only -- --nocapture 2>&1 | Tee-Object ../../artifacts/reader-native-unit-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build standalone Reader only
         working-directory: desktop/src-tauri

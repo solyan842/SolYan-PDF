@@ -3,6 +3,7 @@ import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor
 import { installR2 } from './reader-r2.js';
 import { connectNativeReader } from './reader-native.js';
 import { installLanguage,t,getLanguage } from './reader-language.js';
+import { installReaderActions } from './reader-actions.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
@@ -52,9 +53,10 @@ async function openFile(file, source = null) {
   const container = document.createElement('div'); container.className = 'readerContainer'; container.tabIndex = 0;
   const viewer = document.createElement('div'); viewer.className = 'pdfViewer'; container.append(viewer); $('documents').append(container);
   const bus = new EventBus(), link = new PDFLinkService({ eventBus: bus, externalLinkEnabled: false }), find = new PDFFindController({ eventBus: bus, linkService: link });
-  const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE, maxCanvasPixels: 12_000_000, enableScripting: false });
+  const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS, maxCanvasPixels: 12_000_000, enableScripting: false });
   const doc = { id: crypto.randomUUID(), name: file.name, source, bytes, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
+  pdf.annotationStorage.onSetModified=()=>{doc.formDirty=true;changed(doc);};
   r2?.opened(doc);
   bus.on('pagesinit', () => { view.currentScaleValue = 'page-width'; });
   // PDF.js resets custom page children before async raster rendering. Restore
@@ -249,8 +251,8 @@ document.addEventListener('dragover',e=>{e.preventDefault();});document.addEvent
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();$(e.shiftKey?'save':'saveCurrent').click();}});
 document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected&&!e.target.closest('input,textarea,select,[contenteditable=true]')&&!document.querySelector('dialog[open]')){e.preventDefault();removeSignature();}});
 window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
-$('tools').onclick=attempt(async e=>{if(window.__TAURI__?.core){e.preventDefault();await window.__TAURI__.core.invoke('desktop_switch_tools');}});
 r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},get busy(){return busy;}});
+installReaderActions({current,message,attempt,pdfjs,exportDocument:doc=>r2.exportDocument(doc),openFile,get busy(){return busy;}});
 installLanguage();
 document.addEventListener('reader-language-changed',()=>{if($('outline').dataset.empty==='true')$('outline').textContent=t('PDF này chưa có mục lục.');});
 $('open').disabled=false;

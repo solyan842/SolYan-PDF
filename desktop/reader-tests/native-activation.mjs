@@ -15,7 +15,7 @@ const helper=fileURLToPath(new URL('./scripts/reader-window-check.ps1',import.me
 const policyHelper=fileURLToPath(new URL('./scripts/webview2-test-policy.ps1',import.meta.url));
 await mkdir(join(root,'Tiếng Việt (1)'),{recursive:true});
 const a=join(root,'Tiếng Việt (1)','Tài liệu A (1).pdf'),b=join(root,'B.pdf'),c=join(root,'Tài liệu A (1).pdf'),bad=join(root,'broken.pdf');
-async function fixture(path,text){const pdf=await PDFDocument.create();for(let i=0;i<3;i++)pdf.addPage([600,800]).drawText(`${text} page ${i+1}`,{x:60,y:650});await writeFile(path,await pdf.save());}
+async function fixture(path,text){const pdf=await PDFDocument.create();for(let i=0;i<3;i++)pdf.addPage([600,800]).drawText(`${text} page ${i+1}`,{x:60,y:650});if(text==='NATIVE SOURCE A'){const field=pdf.getForm().createTextField('NativeName');field.setText('Initial');field.addToPage(pdf.getPage(1),{x:60,y:100,width:240,height:28});}await writeFile(path,await pdf.save());}
 await fixture(a,'NATIVE SOURCE A');await fixture(b,'NATIVE SOURCE B');await fixture(c,'NATIVE SOURCE C');await writeFile(bad,'not a PDF');
 const originalA=await readFile(a);
 const log=[],owned=new Set(),policies=new Set();let app,browser,page;
@@ -148,8 +148,9 @@ try{
   expect(await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'fullscreen-state'}))).toBe(false);
   await page.locator('#readerMenu').focus();await page.keyboard.press('Delete');await expect(page.locator('.signature')).toHaveCount(0);await command(page,'undo');await expect(page.locator('.signature')).toHaveCount(1);
   expect(await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('reader_save',{bytes:[37,80,68,70,45],document:'not-an-authorized-target'});return false;}catch{return true;}})).toBe(true);
-  const output=join(root,'working-copy.pdf');await page.locator('#saveCurrent').click();await expect.poll(async()=>(await windows('SaveAs',output)).submitted,{timeout:15000}).toBe(true);await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');
-  const firstSave=await readFile(output);expect(firstSave.subarray(0,5).toString()).toBe('%PDF-');await command(page,'fillCross');await page.keyboard.press('Control+s');await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');expect(await readFile(output)).not.toEqual(firstSave);expect(await readFile(a)).toEqual(originalA);
+  await page.locator('input[name=NativeName]').fill('Nguyễn Văn An');await expect(page.locator('#tabs .tab.active .title')).toContainText('●');
+  const output=join(root,'working-copy.pdf');await page.locator('#saveCurrent').click();await expect.poll(async()=>{const result=await windows('SaveAs',output);log.push({saveDialog:result});return result.submitted;},{timeout:15000}).toBe(true);await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');
+  const firstSave=await readFile(output);expect((await PDFDocument.load(firstSave)).getForm().getTextField('NativeName').getText()).toBe('Nguyễn Văn An');expect(firstSave.subarray(0,5).toString()).toBe('%PDF-');await command(page,'fillCross');await page.keyboard.press('Control+s');await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');expect(await readFile(output)).not.toEqual(firstSave);expect(await readFile(a)).toEqual(originalA);
   await command(page,'settings');await page.locator('#readerLanguage').selectOption('en');await page.keyboard.press('Escape');await expect(page.locator('#open')).toHaveAttribute('title','Open PDF (Ctrl+O)');await command(page,'about');await expect(page.locator('#aboutVersion')).toHaveText('0.1.0');await expect(page.locator('#readerAbout')).toContainText('yansign841@gmail.com');await page.keyboard.press('Escape');
   await page.screenshot({path:join(root,'installed-English-footer.png')});
   log.push({case:'F11-Delete-Save-English-About',nativeFullscreen:true,originalUnchanged:true,saveUpdatesChosenCopy:true,deleteUndo:true});
