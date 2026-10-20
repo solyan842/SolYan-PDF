@@ -1,0 +1,189 @@
+name: Windows Reader CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "ci/windows-reader-fast-*"
+      - "feat/windows-reader-r2"
+      - "feat/windows-reader-r2-company-continuation"
+    paths:
+      - "desktop/ui/**"
+      - "desktop/reader-tests/**"
+      - "desktop/branding/sReader_PDF/**"
+      - "desktop/src-tauri/**"
+      - ".github/workflows/windows-reader-ci.yml"
+  pull_request:
+    paths:
+      - "desktop/ui/**"
+      - "desktop/reader-tests/**"
+      - "desktop/branding/sReader_PDF/**"
+      - "desktop/src-tauri/**"
+      - ".github/workflows/windows-reader-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-reader-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reader-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout exact Reader source
+        uses: actions/checkout@v4
+
+      - name: Prepare isolated Reader diagnostics
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          "sha=${{ github.sha }}" | Set-Content artifacts/reader-commit.log
+
+      - name: Set up pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: desktop/reader-tests/package-lock.json
+
+      - name: Install and stage only Reader browser dependencies
+        shell: pwsh
+        run: |
+          npm ci --prefix desktop/reader-tests 2>&1 | Tee-Object artifacts/reader-npm-ci.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/reader-tests/stage.mjs 2>&1 | Tee-Object artifacts/reader-vendor-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reader Node and icon regression tests
+        shell: pwsh
+        run: |
+          npm test --prefix desktop/reader-tests 2>&1 | Tee-Object artifacts/reader-node-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test desktop/ui/tests/icon-contract.test.cjs 2>&1 | Tee-Object artifacts/reader-icon-contract.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Reader browser and UI contract tests
+        shell: pwsh
+        run: |
+          & ./desktop/ui/validate-contract.ps1 2>&1 | Tee-Object artifacts/reader-ui-contract.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location desktop/reader-tests
+          try {
+            npx playwright install chromium 2>&1 | Tee-Object ../../artifacts/reader-browser-install.log
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            npm run e2e 2>&1 | Tee-Object ../../artifacts/reader-browser-tests.log
+            $code = $LASTEXITCODE
+            if (Test-Path test-results) {
+              Copy-Item test-results ../../artifacts/reader-browser-results -Recurse -Force
+            }
+            if ($code -ne 0) { exit $code }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Install Rust stable (Reader only)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Reader Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop/src-tauri -> target"
+
+      - name: Enforce lightweight Reader-only installer configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $reader = Get-Content desktop/src-tauri/tauri.reader.conf.json -Raw | ConvertFrom-Json
+          $tools = Get-Content desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($null -ne $reader.bundle.resources) { throw "Reader resources must be null (no sidecar payload)" }
+          if ($reader.identifier -eq $tools.identifier) { throw "Reader and Toolbox must have distinct app identities" }
+          if ($reader.mainBinaryName -ne "solyan-pdf-reader") { throw "Unexpected Reader executable identity" }
+          "Reader resources=null; identity=$($reader.identifier); Toolbox identity=$($tools.identifier)" |
+            Set-Content artifacts/reader-resource-contract.log
+
+      - name: Build standalone Reader NSIS (no Toolbox)
+        shell: pwsh
+        working-directory: desktop/src-tauri
+        run: |
+          npx --yes @tauri-apps/cli@2.12.3 build --config tauri.reader.conf.json --features reader-only --bundles nsis 2>&1 |
+            Tee-Object ../../artifacts/reader-tauri-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect installer and checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = @(Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter "*Reader*.exe" -File)
+          if ($files.Count -ne 1) { throw "Expected exactly one Reader installer; got $($files.Count)" }
+          New-Item -ItemType Directory -Force artifacts/reader-installer | Out-Null
+          Copy-Item $files[0].FullName artifacts/reader-installer/
+          $sha = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  $($files[0].Name)" | Set-Content artifacts/reader-installer.sha256
+          "name=$($files[0].Name); bytes=$($files[0].Length)" | Set-Content artifacts/reader-installer-size.log
+
+      - name: Smoke installed lightweight Reader
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-ChildItem artifacts/reader-installer -Filter "*.exe" -File | Select-Object -First 1
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Reader installer failed: $($install.ExitCode)" }
+          $root = Join-Path $env:LOCALAPPDATA "sReader PDF"
+          $appExe = Join-Path $root "solyan-pdf-reader.exe"
+          if (-not (Test-Path -LiteralPath $appExe -PathType Leaf)) {
+            throw "Standalone Reader executable was not installed at expected path: $appExe"
+          }
+          foreach ($engine in @("core", "office", "ocr", "sign", "archive")) {
+            if (Test-Path -LiteralPath (Join-Path $root $engine)) {
+              throw "Reader unexpectedly contains Toolbox engine resource: $engine"
+            }
+          }
+          $app = Start-Process -FilePath $appExe -PassThru
+          try {
+            Start-Sleep -Seconds 5
+            if ($app.HasExited) { throw "Standalone Reader exited before startup smoke" }
+            $engines = @(Get-Process -Name solyan-core,solyan-office,solyan-ocr,solyan-sign,solyan-archive -ErrorAction SilentlyContinue)
+            if ($engines.Count -ne 0) { throw "Reader started Toolbox sidecar(s)" }
+            "reader_running=true; tools_engines=0" | Set-Content artifacts/reader-installed-smoke.log
+          } finally {
+            if (-not $app.HasExited) {
+              Stop-Process -Id $app.Id -Force -ErrorAction Stop
+              $app.WaitForExit()
+            }
+          }
+          if (Get-Process -Name solyan-pdf-reader -ErrorAction SilentlyContinue) {
+            throw "Reader process remains after close"
+          }
+          $uninstall = Join-Path $root "uninstall.exe"
+          if (Test-Path -LiteralPath $uninstall) {
+            $result = Start-Process -FilePath $uninstall -ArgumentList "/S" -Wait -PassThru
+            if ($result.ExitCode -ne 0) { throw "Reader uninstall failed: $($result.ExitCode)" }
+            "uninstall_exit=0" | Add-Content artifacts/reader-installed-smoke.log
+          } else {
+            "uninstall_not_found=$uninstall" | Add-Content artifacts/reader-installed-smoke.log
+          }
+
+      - name: Upload standalone Reader installer
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolYan-PDF-Reader-Windows-x64
+          path: |
+            artifacts/reader-installer/*.exe
+            artifacts/reader-installer.sha256
+            artifacts/reader-installer-size.log
+            artifacts/reader-installed-smoke.log
+          if-no-files-found: error
+
+      - name: Preserve Reader diagnostics on any outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-reader-diagnostics
+          path: |
+            artifacts/reader-*.log
+            artifacts/reader-browser-results/
+          if-no-files-found: warn
