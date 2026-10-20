@@ -1,5 +1,6 @@
 // Recompose existing Reader commands. No PDF engine or edit/export code lives here.
 import { t } from './reader-language.js';
+import {defaultPdfCheckEnabled,setDefaultPdfCheckEnabled,openPdfDefaultSettings} from './reader-default-app.js';
 const $=id=>document.getElementById(id);
 const node=(tag,props={})=>Object.assign(document.createElement(tag),props);
 export function installReaderShell(api,panels){
@@ -96,8 +97,19 @@ export function installReaderShell(api,panels){
   for(const [value,label]of [['light','Sáng'],['dark','Tối']])theme.append(node('option',{value,textContent:label}));
   const themeLabel=node('label',{textContent:'Giao diện'}),invertLabel=node('label',{textContent:'Đảo màu trang'});themeLabel.append(theme);invertLabel.append(invert);
   theme.onchange=()=>{if(theme.value!==document.documentElement.dataset.theme)take('theme').click();};invert.onchange=()=>night.click();
-  const done=node('button',{textContent:'Đóng'});done.onclick=()=>settings.close();settings.append(node('h2',{textContent:'Tùy chọn hiển thị'}),themeLabel,invertLabel,node('p',{textContent:'Màu giao diện được nhớ trên máy. Đảo màu trang chỉ đổi cách hiển thị; PDF lưu và chữ ký vẫn giữ màu gốc.'}),done);document.body.append(settings);
-  const settingsButton=node('button',{id:'settings',textContent:'Tùy chọn hiển thị…'});settingsButton.onclick=()=>{theme.value=document.documentElement.dataset.theme;invert.checked=document.body.classList.contains('page-night');settings.showModal();};menu.append(settingsButton);
+  const defaultCheck=node('input',{id:'readerSettingsCheckDefault',type:'checkbox'});
+  const checkLabel=node('label',{textContent:'Luôn kiểm tra ứng dụng PDF mặc định khi mở sReader'});checkLabel.append(defaultCheck);
+  defaultCheck.onchange=()=>setDefaultPdfCheckEnabled(defaultCheck.checked);
+  const chooseDefault=node('button',{id:'readerSettingsChooseDefault',textContent:'Chọn sReader làm ứng dụng mở PDF mặc định…'});
+  chooseDefault.onclick=api.attempt(()=>openPdfDefaultSettings());
+  const defaultSection=node('div',{className:'reader-default-setting'});
+  defaultSection.append(checkLabel,chooseDefault);
+  defaultSection.hidden=!window.__TAURI__?.core;
+  const done=node('button',{textContent:'Đóng'});done.onclick=()=>settings.close();
+  settings.append(node('h2',{textContent:'Tùy chọn hiển thị'}),themeLabel,invertLabel,node('p',{textContent:'Màu giao diện được nhớ trên máy. Đảo màu trang chỉ đổi cách hiển thị; PDF lưu và chữ ký vẫn giữ màu gốc.'}),defaultSection,done);
+  document.body.append(settings);
+  const settingsButton=node('button',{id:'settings',textContent:'Tùy chọn hiển thị…'});
+  settingsButton.onclick=()=>{theme.value=document.documentElement.dataset.theme;invert.checked=document.body.classList.contains('page-night');defaultCheck.checked=defaultPdfCheckEnabled();settings.showModal();};menu.append(settingsButton);
   const about=node('dialog',{id:'readerAbout'}),logo=node('img',{src:'./vendor/sReader_PDF.png',alt:'sReader PDF',className:'about-logo'}),version=node('span',{id:'aboutVersion',textContent:'…'});
   about.append(logo,node('h2',{textContent:'sReader PDF'}));
   const email=node('a',{href:'mailto:yansign841@gmail.com',textContent:'yansign841@gmail.com'});
