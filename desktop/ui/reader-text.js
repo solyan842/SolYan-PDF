@@ -1,4 +1,31 @@
 export const textFonts={sans:{name:'Noto Sans',file:'NotoSans-Regular.ttf',family:'Reader Noto Sans'},serif:{name:'Noto Serif',file:'NotoSerif-Regular.ttf',family:'Reader Noto Serif'},mono:{name:'Noto Sans Mono',file:'NotoSansMono-Regular.ttf',family:'Reader Noto Mono'}};
+export const windowsFontChoices={
+  'win-arial':{name:'Arial',family:'Arial'},
+  'win-times':{name:'Times New Roman',family:'Times New Roman'},
+  'win-calibri':{name:'Calibri',family:'Calibri'},
+  'win-tahoma':{name:'Tahoma',family:'Tahoma'},
+  'win-verdana':{name:'Verdana',family:'Verdana'},
+  'win-georgia':{name:'Georgia',family:'Georgia'},
+  'win-segoe':{name:'Segoe UI',family:'Segoe UI'},
+  'win-consolas':{name:'Consolas',family:'Consolas'},
+  'win-courier':{name:'Courier New',family:'Courier New'},
+  'win-trebuchet':{name:'Trebuchet MS',family:'Trebuchet MS'},
+  'win-candara':{name:'Candara',family:'Candara'},
+  'win-corbel':{name:'Corbel',family:'Corbel'},
+  'win-constantia':{name:'Constantia',family:'Constantia'}
+};
+let windowsFontPending=null;
+// Only query the machine when the Typewriter dialog is opened, never at startup.
+export async function discoverWindowsFonts(){
+  if(!globalThis.__TAURI__?.core)return [];
+  if(!windowsFontPending)windowsFontPending=globalThis.__TAURI__.core.invoke('reader_windows_fonts')
+    .then(ids=>{
+      if(!Array.isArray(ids))throw Error('Danh sách font Windows không hợp lệ.');
+      for(const id of ids){if(windowsFontChoices[id])textFonts[id]={...windowsFontChoices[id],system:true};}
+      return ids.filter(id=>Boolean(textFonts[id]?.system));
+    }).catch(error=>{windowsFontPending=null;throw error;});
+  return windowsFontPending;
+}
 const cache=new Map();
 let fontkitPending=null;
 // Unicode text editing is optional; keep its large font engine off the PDF reading startup path.
@@ -19,9 +46,13 @@ async function ensureFontkit(){
 async function loadFont(id){
   const font=textFonts[id];if(!font)throw Error('Font không hợp lệ.');
   if(!cache.has(id))cache.set(id,(async()=>{
-    const [kit,response]=await Promise.all([ensureFontkit(),fetch('./vendor/reader-fonts/'+font.file)]);
-    if(!response.ok)throw Error('Không tải được font.');
-    const bytes=new Uint8Array(await response.arrayBuffer());
+    const [kit,bytes]=await Promise.all([ensureFontkit(),font.system
+      ?globalThis.__TAURI__.core.invoke('reader_windows_font',{id}).then(value=>Uint8Array.from(value))
+      :fetch('./vendor/reader-fonts/'+font.file).then(async response=>{
+        if(!response.ok)throw Error('Không tải được font.');
+        return new Uint8Array(await response.arrayBuffer());
+      })]);
+    // Windows fonts are kept on the machine. Only the selected font is ever read.
     const face=new FontFace(font.family,bytes);
     await face.load();document.fonts.add(face);
     return {bytes,metrics:kit.create(bytes)};
@@ -44,7 +75,7 @@ export function textVisual(item){
   Object.assign(content.style,{fontFamily:`"${textFonts[item.font].family}"`,fontSize:`${item.fontSize}px`,lineHeight:`${item.lineHeight}px`,color:item.color,padding:'2px',width:`${item.baseWidth}px`,height:`${item.baseHeight}px`,transformOrigin:'0 0',transform:`scale(${item.rect.w*item.viewport.width/item.baseWidth},${item.rect.h*item.viewport.height/item.baseHeight})`});outer.append(content);return outer;
 }
 export async function saveText(bytes,items,lib,{fontkit=globalThis.fontkit,loadBytes=async id=>(await loadFont(id)).bytes,point=globalThis.ReaderEdits.point}={}){
-  const pdf=await lib.PDFDocument.load(bytes,{updateMetadata:false});pdf.registerFontkit(fontkit);const embedded=new Map();
+  const pdf=await lib.PDFDocument.load(bytes,{updateMetadata:false});pdf.registerFontkit(fontkit||await ensureFontkit());const embedded=new Map();
   for(const item of items){
     if(!embedded.has(item.font))embedded.set(item.font,await pdf.embedFont(await loadBytes(item.font),{subset:true}));
     const font=embedded.get(item.font),page=pdf.getPage(item.page),v=item.viewport;
