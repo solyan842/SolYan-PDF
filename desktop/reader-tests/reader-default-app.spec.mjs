@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {PDFDocument} from 'pdf-lib';
 test('default PDF prompt obeys opt-out and settings opt-in without changing Windows defaults',async({page})=>{
   await page.addInitScript(()=>{
     window.__defaultAppCalls=[];
@@ -42,7 +43,7 @@ test('default PDF prompt obeys opt-out and settings opt-in without changing Wind
 });
 test('no prompt when already default, unknown or a PDF is currently open',async({page})=>{
   await page.addInitScript(()=>{
-    window.__status='default';
+    window.__status=sessionStorage.getItem('mockPdfDefaultState')||'default';
     window.__TAURI__={
       core:{invoke:async name=>{
         if(name==='reader_window_control')return true;
@@ -57,15 +58,17 @@ test('no prompt when already default, unknown or a PDF is currently open',async(
   await expect(page.locator('body')).toHaveAttribute('data-ready','true');
   await page.waitForTimeout(2050);
   await expect(page.locator('#readerDefaultPdfPrompt')).toBeHidden();
-  await page.evaluate(()=>{window.__status='other';});
+  await page.evaluate(()=>{sessionStorage.setItem('mockPdfDefaultState','other');});
   await page.reload();
   await expect(page.locator('body')).toHaveAttribute('data-ready','true');
   // Browser fixture data can be opened without blocking native test startup.
   // sReader must prioritize the PDF being read over a marketing prompt.
+  const pdf=await PDFDocument.create();pdf.addPage([600,800]).drawText('Read first');
   await page.locator('#pdfFiles').setInputFiles({
     name:'Read-first.pdf',mimeType:'application/pdf',
-    buffer:Buffer.from('JVBERi0xLjQKJSVFT0YK','base64')
+    buffer:Buffer.from(await pdf.save())
   });
+  await expect(page.locator('#tabs .tab')).toHaveCount(1);
   await page.waitForTimeout(2050);
   await expect(page.locator('#readerDefaultPdfPrompt')).toBeHidden();
 });
