@@ -1159,3 +1159,16 @@ fn main() {
         }
     });
 }
+
+#[cfg(test)]
+mod reader_about_link_tests {
+    use super::reader_about_target;
+    #[test]
+    fn only_about_links_may_be_launched_externally() {
+        assert_eq!(reader_about_target("website"), Some("https://www.youtube.com/@SolYan-Music"));
+        assert_eq!(reader_about_target("email"), Some("mailto:yansign841@gmail.com"));
+        for untrusted in ["https://example.com", "javascript:alert(1)", "file:///C:/Windows/win.ini", "", "Website"] {
+            assert_eq!(reader_about_target(untrusted), None);
+        }
+    }
+}
