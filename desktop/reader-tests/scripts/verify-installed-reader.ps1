@@ -9,6 +9,12 @@ try {
     $install = Start-Process -FilePath (Resolve-Path -LiteralPath $Installer).Path -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
     if ($install.ExitCode -ne 0) { throw "Reader install failed: $($install.ExitCode)" }
     if (-not (Test-Path -LiteralPath $exe)) { throw 'Reader executable missing' }
+    $registered = (Get-Item -LiteralPath 'HKCU:\Software\RegisteredApplications').GetValue('sReader PDF',$null)
+    if ($registered -ne 'Software\SolYan\sReader PDF\Capabilities') { throw 'sReader Default Apps entry not registered for current user' }
+    $capabilities = Get-Item -LiteralPath 'HKCU:\Software\SolYan\sReader PDF\Capabilities\FileAssociations'
+    if ($capabilities.GetValue('.pdf',$null) -ne 'SolYan.sReader.PDF') { throw 'sReader PDF capabilities not registered' }
+    if (-not (Test-Path -LiteralPath 'HKCU:\Software\Classes\SolYan.sReader.PDF\shell\open\command')) { throw 'sReader PDF ProgID missing' }
+    'reader_default_candidate_registered=true; userchoice_unchanged=true'
     foreach ($engine in @('core','office','ocr','sign','archive')) {
         if (Test-Path -LiteralPath (Join-Path $root $engine)) { throw "Unexpected Tools resource: $engine" }
     }
@@ -41,6 +47,9 @@ try {
         $deadline = (Get-Date).AddSeconds(30)
         while ((Test-Path -LiteralPath $exe) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
         if (Test-Path -LiteralPath $exe) { throw 'Reader executable remains after uninstall' }
+        if ((Get-Item -LiteralPath 'HKCU:\Software\RegisteredApplications').GetValue('sReader PDF',$null)) { throw 'Reader default-app registration remains after uninstall' }
+        if (Test-Path -LiteralPath 'HKCU:\Software\Classes\SolYan.sReader.PDF') { throw 'Reader PDF ProgID remains after uninstall' }
+        'reader_default_candidate_unregistered=true'
         'reader_uninstalled=true'
     } elseif (Test-Path -LiteralPath $root) { throw 'Reader uninstaller missing' }
 }
