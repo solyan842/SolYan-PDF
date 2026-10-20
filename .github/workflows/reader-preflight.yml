@@ -1,0 +1,42 @@
+name: Reader Preflight Contract
+
+on:
+  push:
+    branches:
+      - 'chore/reader-preflight-*'
+    paths:
+      - 'scripts/reader-preflight.mjs'
+      - 'scripts/reader-preflight.test.mjs'
+      - '.github/workflows/reader-preflight.yml'
+  pull_request:
+    paths:
+      - 'scripts/reader-preflight.mjs'
+      - 'scripts/reader-preflight.test.mjs'
+      - '.github/workflows/reader-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify Reader guard syntax and deterministic regressions
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          node --check scripts/reader-preflight.mjs 2>&1 | tee artifacts/reader-preflight-syntax.log
+          node --test scripts/reader-preflight.test.mjs 2>&1 | tee artifacts/reader-preflight-tests.log
+      - name: Preserve preflight logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reader-preflight-diagnostics
+          path: artifacts/reader-preflight-*.log
+          if-no-files-found: warn
