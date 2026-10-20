@@ -94,3 +94,23 @@ header #tools img{width:19px;height:19px;object-fit:contain;flex:none}
 .reader-default-setting[hidden]{display:none}
 .reader-default-setting label{display:flex;gap:8px;align-items:center;font-size:13px}
 .reader-default-setting button{font-size:13px}
+
+/* Default Reader tool: hand-pan. Selecting text remains a separate explicit tool. */
+body[data-tool="pan"] .readerContainer{cursor:grab}
+body[data-tool="pan"] .readerContainer:active{cursor:grabbing}
+body[data-tool="pan"] .pdfViewer .textLayer{pointer-events:none}
+body[data-tool="select"] .pdfViewer .textLayer{pointer-events:auto}
+
+/* Fine Windows-style footer zoom rail; keep usable keyboard focus and hit area. */
+#readerFooter #zoomRange{
+  -webkit-appearance:none;appearance:none;width:92px;height:20px;
+  background:transparent;border:0;outline-offset:2px;cursor:pointer;
+}
+#readerFooter #zoomRange::-webkit-slider-runnable-track{height:2px;border-radius:2px;background:#929aa6}
+#readerFooter #zoomRange::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:10px;height:10px;
+  margin-top:-4px;border:1px solid #747e8b;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 1px #ffffff80;
+}
+#readerFooter #zoomRange::-moz-range-track{height:2px;border-radius:2px;background:#929aa6}
+#readerFooter #zoomRange::-moz-range-thumb{width:9px;height:9px;border:1px solid #747e8b;border-radius:50%;background:#fff}

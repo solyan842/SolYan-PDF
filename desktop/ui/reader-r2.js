@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id),A=window.ReaderEdits,Q=window.QuickSign;
 const element=(tag,text,props={})=>Object.assign(document.createElement(tag),{textContent:text,...props});
 const snapshot=doc=>JSON.stringify(doc.placements);
 export function installR2(api){
-  let mode='select';
+  let mode='pan';
   const panels=element('div'),panel={};
   for(const id of ['home','comment','sign','view']){panel[id]=element('section');panels.append(panel[id]);}
   function button(group,id,label,icon,fn){const b=element('button',label,{id});if(icon){const image=element('img','',{src:`./reader-icons/${icon}-outline.svg`,alt:''});b.prepend(image);}b.onclick=api.attempt(fn);panel[group].append(b);return b;}
@@ -217,6 +217,6 @@ export function installR2(api){
   }
   document.addEventListener('keydown',event=>{if(!event.ctrlKey||!api.current()||event.target.closest('input,textarea,[contenteditable=true]'))return;if(event.key.toLowerCase()==='z'||event.key.toLowerCase()==='y'){event.preventDefault();undo(event.key.toLowerCase()==='y'||event.shiftKey);}});
   installReaderShell({...api,beforeClose(){for(const d of api.documents.values())flushBookmark(d);}},panel);
-  setMode('select');
+  setMode('pan');
   return{get mode(){return mode;},selection,opened,flushBookmark,editText,activated(d){selection(d.placements.find(p=>p.id===d.selectedId));renderBookmarks(d);},checkpoint,visual,exportDocument,saved:d=>{d.savedState=snapshot(d);d.formDirty=false;d.pdf.annotationStorage.resetModified();},rememberSignature(image){const all=signatures();if(!all.some(s=>s.image===image)){all.push({id:crypto.randomUUID(),name:`Chữ ký ${all.length+1}`,image});writeSignatures(all);}},showLibrary};
 }
