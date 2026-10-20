@@ -37,3 +37,24 @@ test('Reader initial HTML does not eagerly load the Unicode font engine',()=>{
  assert.match(editor,/ensureFontkit\(/);
  assert.match(editor,/fontkitPending/);
 });
+
+test('optional Windows font catalog is bounded and loaded only on demand',async()=>{
+ const {textFonts,windowsFontChoices,discoverWindowsFonts}=await import('../ui/reader-text.js');
+ assert.equal(Object.keys(windowsFontChoices).length,13);
+ assert.deepEqual(Object.keys(textFonts),['sans','serif','mono']);
+ const before=globalThis.__TAURI__,calls=[];
+ try{
+  globalThis.__TAURI__={core:{invoke:async command=>{
+   calls.push(command);
+   if(command==='reader_windows_fonts')return ['win-arial','win-times','../forbidden','win-consolas'];
+   throw Error('Unknown command');
+  }}};
+  const ids=await discoverWindowsFonts();
+  assert.deepEqual(ids,['win-arial','win-times','win-consolas']);
+  assert.equal(textFonts['win-arial'].family,'Arial');
+  assert.equal(textFonts['win-times'].family,'Times New Roman');
+  assert.equal(textFonts['../forbidden'],undefined);
+  await discoverWindowsFonts();
+  assert.deepEqual(calls,['reader_windows_fonts']);
+ }finally{if(before===undefined)delete globalThis.__TAURI__;else globalThis.__TAURI__=before;}
+});
