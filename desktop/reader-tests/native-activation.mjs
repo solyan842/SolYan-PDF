@@ -65,7 +65,37 @@ async function start(files,earlyFiles){
   await expect.poll(()=>browser.contexts()[0]?.pages().some(p=>p.url().includes('reader.html')),{timeout:30000}).toBe(true);
   page=browser.contexts()[0].pages().find(p=>p.url().includes('reader.html'));
   page.on('pageerror',error=>log.push({pageerror:error.message}));
-  await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  // Preserve the strict startup acceptance while collecting the native-only cause.
+  page.on('console',entry=>{
+    if(entry.type()==='error')log.push({webviewConsoleError:entry.text().slice(0,1200)});
+  });
+  const devtools=await page.context().newCDPSession(page);
+  await devtools.send('Log.enable');
+  devtools.on('Log.entryAdded',entry=>{
+    if(entry.entry.level==='error')log.push({webviewLogError:String(entry.entry.text).slice(0,1500),url:entry.entry.url});
+  });
+  try {
+    await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  } catch(error) {
+    let diagnostic;
+    try {
+      diagnostic=await page.evaluate(async()=>{
+        const scripts=[...document.scripts].map(script=>({src:script.src,type:script.type}));
+        let moduleProbe;
+        try {
+          await import(new URL('./reader.js',location.href).href);
+          moduleProbe={loaded:true,ready:document.body.dataset.ready??null};
+        } catch(problem) {
+          moduleProbe={loaded:false,name:problem?.name??'',message:String(problem?.message??problem),stack:String(problem?.stack??'').slice(0,2200)};
+        }
+        return {origin:location.origin,ready:document.body?.dataset.ready??null,hasTauri:!!window.__TAURI__,hasQuickSign:!!window.QuickSign,hasPdfLib:!!window.PDFLib,scripts,moduleProbe};
+      });
+    }catch(problem){diagnostic={probeError:String(problem?.stack??problem)};}
+    log.push({readerBootstrapFailure:diagnostic});
+    console.error('Reader native bootstrap diagnostics: '+JSON.stringify(diagnostic));
+    console.error('WebView2 bootstrap errors: '+JSON.stringify(log.filter(e=>e.webviewConsoleError||e.webviewLogError||e.pageerror)));
+    throw error;
+  } finally {await devtools.detach().catch(()=>{});}
 }
 async function stop(){
   try {
