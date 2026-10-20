@@ -118,6 +118,22 @@ async function stop(){
 const activeText=()=>page.locator('.readerContainer:not([hidden]) .textLayer');
 try{
   await start([a]);await expect(page.locator('#tabs .tab')).toHaveCount(1);
+  // Windows font IPC is scoped to an installed, Reader-owned WebView. A caller
+  // cannot pass filesystem paths; fonts are opt-in and never part of startup.
+  const fonts=await page.evaluate(()=>window.__TAURI__.core.invoke('reader_windows_fonts'));
+  expect(Array.isArray(fonts)).toBe(true);
+  expect(fonts.every(id=>/^win-[a-z]+$/.test(id))).toBe(true);
+  const unauthorized=await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('reader_windows_font',{id:'../win.ini'});return false;}catch{return true;}});
+  expect(unauthorized).toBe(true);
+  if(fonts.length){
+    const sample=await page.evaluate(async id=>{
+      const bytes=await window.__TAURI__.core.invoke('reader_windows_font',{id});
+      return {size:bytes.length,magic:bytes.slice(0,4)};
+    },fonts[0]);
+    expect(sample.size).toBeGreaterThan(128);
+    expect([[0,1,0,0],[79,84,84,79]].some(m=>m.every((n,i)=>sample.magic[i]===n))).toBe(true);
+  }
+  log.push({case:'Windows-font-on-demand-allowlist',available:fonts});
   await expect(activeText()).toContainText(['NATIVE SOURCE A']);
   const originalWindow=await assertSingle();
   await expect(page.locator('#windowControls')).toBeVisible();
