@@ -22,8 +22,24 @@ const log=[],owned=new Set(),policies=new Set();let app,browser,page;
 async function policy(mode,stateFile,cdp,profile){
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',policyHelper,'-Mode',mode,'-StateFile',stateFile];
   if(mode==='Setup')args.push('-Port',String(cdp),'-UserDataFolder',profile);
-  const {stdout}=await exec('powershell.exe',args,{windowsHide:true,timeout:20000});
-  return JSON.parse(stdout.trim());
+  // A Windows Actions runner occasionally needs >20s to initialize the
+  // elevated WebView2 policy registry during a cold PS 5 startup (CI #17).
+  // Retry is unsafe here because Setup may have partially applied policy.
+  // Allow one bounded startup; preserve the original strict native gate.
+  const started=Date.now();
+  try{
+    const {stdout}=await exec('powershell.exe',args,{windowsHide:true,timeout:mode==='Setup'?60000:30000});
+    const result=JSON.parse(stdout.trim());
+    log.push({policyPhase:mode,durationMs:Date.now()-started});
+    return result;
+  }catch(error){
+    const details={phase:mode,durationMs:Date.now()-started,code:error.code??null,
+      killed:Boolean(error.killed),signal:error.signal??null,
+      stdout:String(error.stdout||'').slice(-1500),stderr:String(error.stderr||'').slice(-1500)};
+    log.push({policyFailure:details});
+    console.error('Reader WebView2 test policy diagnostic: '+JSON.stringify(details));
+    throw error;
+  }
 }
 async function windows(mode='Inspect',file){
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-Mode',mode,'-Exe',exe];
