@@ -4,6 +4,7 @@ import { installR2 } from './reader-r2.js';
 import { connectNativeReader } from './reader-native.js';
 import { installLanguage,t,getLanguage } from './reader-language.js';
 import { installReaderActions } from './reader-actions.js';
+import { installDefaultPdfPrompt } from './reader-default-app.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
@@ -263,6 +264,7 @@ installLanguage();
 document.addEventListener('reader-language-changed',()=>{if($('outline').dataset.empty==='true')$('outline').textContent=t('PDF này chưa có mục lục.');});
 $('open').disabled=false;
 document.body.dataset.ready='true';
+installDefaultPdfPrompt({native:window.__TAURI__,message});
 attempt(async()=>{
   await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,message});
 })();
