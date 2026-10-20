@@ -149,6 +149,9 @@ test('Windows touchpad pinch targets PDF zoom; two-finger scroll keeps natural s
     return plain.defaultPrevented;
   },{x,y});
   expect(scrolling).toBe(false);
+  // Dispatched untrusted WheelEvent does not necessarily perform native scroll
+  // in Chromium; Playwright's real input emulation checks the scroll pathway.
+  await page.mouse.move(x,y);await page.mouse.wheel(0,110);
   await expect.poll(async()=>viewer.evaluate(el=>el.scrollTop)).toBeGreaterThan(initial.top);
   await page.evaluate(({x,y})=>{
     const target=document.elementFromPoint(x,y);

@@ -155,6 +155,21 @@ try{
   }
   log.push({case:'Windows-font-on-demand-allowlist',available:fonts});
   await expect(activeText()).toContainText(['NATIVE SOURCE A']);
+  // Installed Windows WebView2: Ctrl+wheel is also how Precision Touchpad
+  // pinch is delivered by Chromium. Verify it changes PDF.js zoom only, not
+  // the entire native shell. The laptop's physical pad still needs field QA.
+  const nativeViewer=page.locator('.readerContainer:not([hidden])');
+  const readerZoomBefore=await nativeViewer.evaluate(el=>parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor')));
+  const winShellBefore=await page.locator('header').boundingBox();
+  const surface=await nativeViewer.boundingBox();
+  await page.mouse.move(surface.x+Math.min(surface.width/2,185),surface.y+Math.min(surface.height/2,185));
+  await page.keyboard.down('Control');await page.mouse.wheel(0,-85);await page.keyboard.up('Control');
+  await expect.poll(async()=>nativeViewer.evaluate(el=>parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor'))))
+    .toBeGreaterThan(readerZoomBefore);
+  const winShellAfter=await page.locator('header').boundingBox();
+  expect(winShellAfter.width).toBeCloseTo(winShellBefore.width,1);
+  expect(winShellAfter.height).toBeCloseTo(winShellBefore.height,1);
+  log.push({case:'WebView2-touchpad-ctrl-wheel-pdf-only',scaleBefore:readerZoomBefore,scaleAfter:await nativeViewer.evaluate(el=>parseFloat(getComputedStyle(el.querySelector('.page')).getPropertyValue('--scale-factor')))});
   const originalWindow=await assertSingle();
   await expect(page.locator('#windowControls')).toBeVisible();
   const originalMaximized=originalWindow.maximized;
