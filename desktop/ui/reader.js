@@ -83,7 +83,7 @@ function activate(id) {
   $('welcome').hidden = true; $('pageCount').textContent = `/ ${doc.pdf.numPages}`; $('pageNumber').max = doc.pdf.numPages; $('pageNumber').value = doc.view.currentPageNumber;
   $('save').disabled = false; $('saveCurrent').disabled = false; $('query').value = doc.query; $('matches').textContent = doc.matches; $('signOptions').hidden = !selected;
   if($('presentation'))$('presentation').disabled=false;
-  renderTabs(); doc.view.update(); thumbnails(doc); outline(doc); renderSignatures(doc); r2?.activated(doc);
+  renderTabs(); doc.view.update(); session?.activated(doc); thumbnails(doc); outline(doc); renderSignatures(doc); r2?.activated(doc);
   syncView(doc);
   document.dispatchEvent(new Event('reader-document-activated'));
   session?.touch();

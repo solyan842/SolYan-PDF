@@ -20,10 +20,15 @@ export function installReaderSession({native,documents,current,activate,message,
   dialog.append(heading,note,list,actions);document.body.append(dialog);
   const button=el('button',{id:'recentFiles',textContent:'Tệp PDF gần đây…'});
   $('readerMenuPanel').append(button);
-  const viewOf=d=>[d.source,Math.max(1,Math.round(d.view?.currentPageNumber||1)),
-    Math.max(.25,Math.min(4,Number(d.view?.currentScale)||1)),
-    Math.max(0,Math.round(d.container?.scrollLeft||0)),
-    Math.max(0,Math.round(d.container?.scrollTop||0))];
+  const viewOf=d=>{
+    // A hidden tab can still be awaiting PDF.js pagesinit. Never replace its
+    // saved page/zoom with the uninitialized viewer defaults during a flush.
+    if(d.readerPendingRestore)return [...d.readerPendingRestore];
+    return [d.source,Math.max(1,Math.round(d.view?.currentPageNumber||1)),
+      Math.max(.25,Math.min(4,Number(d.view?.currentScale)||1)),
+      Math.max(0,Math.round(d.container?.scrollLeft||0)),
+      Math.max(0,Math.round(d.container?.scrollTop||0))];
+  };
   function touch(){
     if(!ready)return;
     clearTimeout(timer);
@@ -73,28 +78,39 @@ export function installReaderSession({native,documents,current,activate,message,
       if(Array.isArray(row)&&typeof row[0]==='string')restoring.set(row[0],row);
     }
   }
-  function opened(doc){
-    doc.container.addEventListener('scroll',touch,{passive:true});
-    const restored=restoring.get(doc.source);
-    if(restored){
-      const [,page,zoom,left,top]=restored;
-      doc.bus.on('pagesinit',()=>{
-        if(!doc.container.isConnected)return;
-        doc.view.currentPageNumber=Math.min(doc.pdf.numPages,Math.max(1,page));
-        // PDF.js needs its page location refreshed before changing zoom;
-        // otherwise rapid page->zoom can jump back to the previous page.
-        doc.view.update();
-        doc.view.currentScaleValue=String(Math.max(.25,Math.min(4,zoom)));
-        requestAnimationFrame(()=>requestAnimationFrame(()=>{
-          if(doc.container.isConnected){
-            doc.container.scrollLeft=Math.max(0,left);
-            doc.container.scrollTop=Math.max(0,top);
-          }
-        }));
-      });
-    }
+  function applyRestore(doc){
+    const row=doc?.readerPendingRestore;
+    if(!row||!doc.readerPagesReady||current()?.id!==doc.id||!doc.container.isConnected)return;
+    const [,page,zoom,left,top]=row;
+    const requestedPage=Math.min(doc.pdf.numPages,Math.max(1,Number(page)||1));
+    doc.readerPendingRestore=null;
+    // A PDFViewer initialized while its tab was hidden can reset the page to
+    // one on activation. Restore only when the tab is visible and pagesinit
+    // has fired; keep other tabs' saved positions until first activation.
+    doc.view.currentPageNumber=requestedPage;
+    doc.view.update();
+    doc.view.currentScaleValue=String(Math.max(.25,Math.min(4,Number(zoom)||1)));
+    doc.view.update();
+    doc.view.currentPageNumber=requestedPage;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(doc.container.isConnected&&current()?.id===doc.id){
+        doc.container.scrollLeft=Math.max(0,Number(left)||0);
+        doc.container.scrollTop=Math.max(0,Number(top)||0);
+      }
+    }));
     touch();
   }
+  function opened(doc){
+    doc.container.addEventListener('scroll',touch,{passive:true});
+    doc.readerPendingRestore=restoring.get(doc.source)||null;
+    doc.readerPagesReady=false;
+    doc.bus.on('pagesinit',()=>{
+      doc.readerPagesReady=true;
+      applyRestore(doc);
+    });
+    touch();
+  }
+  function activated(doc){applyRestore(doc);}
   function focus(key){
     const doc=[...documents.values()].find(d=>d.source===key);
     if(doc)activate(doc.id);
@@ -103,5 +119,5 @@ export function installReaderSession({native,documents,current,activate,message,
     ready=true;restoring.clear();touch();
     if(skipped>0)message(t('Đã bỏ qua PDF không còn tồn tại: ')+skipped);
   }
-  return {opened,touch,flush,prepare,focus,finish,refresh};
+  return {opened,activated,touch,flush,prepare,focus,finish,refresh};
 }

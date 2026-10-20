@@ -75,6 +75,9 @@ test('recent PDFs and full tab session restore after reload, including missing p
   await page.reload();
   await expect(page.locator('#tabs .tab')).toHaveCount(2);
   await expect(page.locator('#tabs .tab.active .title')).toContainText('<unsafe>.pdf');
+  // Restoring inactive A must not flush an uninitialized page=1 back to disk
+  // before its tab is activated (which would permanently lose reading state).
+  await expect.poll(()=>saved.tabs[0][1]).toBe(3);
   await page.locator('#tabs .tab .title').first().click();
   await expect(page.locator('#pageNumber')).toHaveValue('3');
   await expect.poll(async()=>page.locator('.readerContainer:not([hidden]) .page').first().evaluate(n=>parseFloat(getComputedStyle(n).getPropertyValue('--scale-factor')))).toBeCloseTo(2,1);
