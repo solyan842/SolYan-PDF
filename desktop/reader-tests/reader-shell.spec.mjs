@@ -21,6 +21,21 @@ test('compact shell, popovers, night display and real UI review captures',async(
   await page.locator('.readerContainer:not([hidden]) .page').first().click({position:{x:35,y:220}});
   const viewIcons=await page.locator('#readerFooter .footer-views img,#readerFooter #presentation img').evaluateAll(images=>images.map(img=>({src:img.getAttribute('src'),loaded:img.complete&&img.naturalWidth>0})));expect(viewIcons).toHaveLength(4);expect(new Set(viewIcons.map(x=>x.src)).size).toBe(4);expect(viewIcons.every(x=>x.loaded&&x.src.endsWith('-outline.svg'))).toBe(true);
   for(const image of await page.locator('.toolbar img').all())await expect(image).toHaveAttribute('src',/-outline\.svg$/);
+  // Distinct pinned icons: Typewriter is text cursor; Fill & Sign is a note/pencil.
+  await expect(page.locator('#typewriter img')).toHaveAttribute('src','./reader-icons/cursor-text-outline.svg');
+  await expect(page.locator('#fillMenu img')).toHaveAttribute('src','./reader-icons/note-pencil-outline.svg');
+  // WebView's default PDF-image menu misleadingly offers Save As for a page
+  // raster rather than the PDF. Only document Save As / Ctrl+Shift+S is valid.
+  const context=await page.evaluate(()=>{
+    const canvas=document.querySelector('.pdfViewer .page canvas');
+    const menu=new MouseEvent('contextmenu',{bubbles:true,cancelable:true});
+    canvas.dispatchEvent(menu);
+    const field=document.getElementById('query');
+    const inputMenu=new MouseEvent('contextmenu',{bubbles:true,cancelable:true});
+    field.dispatchEvent(inputMenu);
+    return {pdfBlocked:menu.defaultPrevented,textFieldUntouched:!inputMenu.defaultPrevented};
+  });
+  expect(context).toEqual({pdfBlocked:true,textFieldUntouched:true});
   const state=await page.locator('.signature').getAttribute('data-signature');
   await page.locator('#zoom').selectOption('page-fit');
   if(await page.locator('html').getAttribute('data-theme')==='dark')await page.locator('#theme').click();
@@ -47,4 +62,41 @@ test('compact shell, popovers, night display and real UI review captures',async(
   await command(page,'settings');await expect(page.locator('#readerSettings')).toBeVisible();await page.locator('#readerTheme').selectOption('light');await expect(page.locator('html')).toHaveAttribute('data-theme','light');await page.locator('#readerInvert').check();await expect(page.locator('body')).toHaveClass('page-night');await page.keyboard.press('Escape');
   await page.keyboard.press('F9');await expect(page.locator('#sidebar')).toBeHidden();await page.keyboard.press('F9');await expect(page.locator('#sidebar')).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('native caption double-click toggles maximize without starting a drag; About links invoke Windows shell',async({page})=>{
+  await page.addInitScript(()=>{
+    window.__shellCalls=[];
+    window.__TAURI__={
+      core:{invoke:async(command,args)=>{
+        window.__shellCalls.push({command,args});
+        if(command==='reader_window_control')return true;
+        if(command==='reader_version')return '0.1.0';
+        if(command==='reader_next_open_request')return null;
+        if(command==='reader_open_external')return true;
+        return null;
+      }},
+      event:{listen:async()=>()=>{}}
+    };
+  });
+  await page.goto('/reader.html');
+  await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await expect(page.locator('#windowControls')).toBeVisible();
+  const title=page.locator('.title-drag');
+  await title.dblclick();
+  await expect.poll(()=>page.evaluate(()=>window.__shellCalls.filter(c=>c.command==='reader_window_control'&&c.args.action==='maximize').length)).toBe(1);
+  expect(await page.evaluate(()=>window.__shellCalls.some(c=>c.command==='reader_window_control'&&c.args.action==='drag'))).toBe(false);
+  await title.dblclick();
+  await expect.poll(()=>page.evaluate(()=>window.__shellCalls.filter(c=>c.command==='reader_window_control'&&c.args.action==='maximize').length)).toBe(2);
+  const rect=await title.boundingBox();
+  await page.mouse.move(rect.x+8,rect.y+rect.height/2);
+  await page.mouse.down();
+  await page.mouse.move(rect.x+25,rect.y+rect.height/2,{steps:3});
+  await page.mouse.up();
+  await expect.poll(()=>page.evaluate(()=>window.__shellCalls.filter(c=>c.command==='reader_window_control'&&c.args.action==='drag').length)).toBe(1);
+  await command(page,'about');
+  const links=page.locator('#readerAbout a');
+  await links.filter({hasText:'https://www.youtube.com/@SolYan-Music'}).click();
+  await links.filter({hasText:'yansign841@gmail.com'}).click();
+  expect(await page.evaluate(()=>window.__shellCalls.filter(c=>c.command==='reader_open_external').map(c=>c.args.kind))).toEqual(['website','email']);
 });
