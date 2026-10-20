@@ -1,7 +1,9 @@
 param(
-    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs')][string]$Mode = 'Inspect',
+    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs','Resize')][string]$Mode = 'Inspect',
     [Parameter(Mandatory)][string]$Exe,
-    [string]$FilePath
+    [string]$FilePath,
+    [int]$Width,
+    [int]$Height
 )
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Disposable Actions runner required' }
@@ -35,6 +37,13 @@ public static class ReaderWindows {
         Rect rect;
         if (!GetWindowRect(hwnd, out rect)) return new int[0];
         return new [] { rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top };
+    }
+    [DllImport("user32.dll", SetLastError=true)]
+    static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
+    public static void Resize(IntPtr hwnd, int width, int height) {
+        // SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE.
+        if (!SetWindowPos(hwnd, IntPtr.Zero, 0, 0, width, height, 0x0016))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
@@ -167,6 +176,15 @@ if ($Mode -eq 'SaveAs') {
 if ($Mode -eq 'CancelOpen') {
     if ($apps.Count -ne 1) { throw 'Expected one Reader process' }
     @{ cancelled=[ReaderWindows]::CancelOpen($apps[0].Id) } | ConvertTo-Json -Compress
+    exit
+}
+if ($Mode -eq 'Resize') {
+    if ($apps.Count -ne 1) { throw 'Expected one installed Reader process' }
+    if ($Width -lt 1024 -or $Width -gt 2500 -or $Height -lt 700 -or $Height -gt 1600) { throw 'Unsafe Reader test window dimensions' }
+    $windows = [ReaderWindows]::Windows($apps[0].Id)
+    if ($windows.Count -ne 1) { throw 'Expected one Reader main window' }
+    [ReaderWindows]::Resize([IntPtr]$windows[0],$Width,$Height)
+    @{ requested=@($Width,$Height); bounds=@([ReaderWindows]::WindowBounds([IntPtr]$windows[0])); hwnd=$windows[0] } | ConvertTo-Json -Compress
     exit
 }
 if ($Mode -eq 'Minimize') {
