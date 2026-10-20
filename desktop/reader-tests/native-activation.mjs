@@ -41,9 +41,13 @@ async function policy(mode,stateFile,cdp,profile){
     throw error;
   }
 }
-async function windows(mode='Inspect',file){
+async function windows(mode='Inspect',file,dimensions){
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-Mode',mode,'-Exe',exe];
   if(file)args.push('-FilePath',file);
+  if(mode==='Resize'){
+    if(!dimensions||!Number.isInteger(dimensions.width)||!Number.isInteger(dimensions.height))throw Error('Invalid native test dimensions');
+    args.push('-Width',String(dimensions.width),'-Height',String(dimensions.height));
+  }
   const host=mode==='SaveAs'?'pwsh.exe':'powershell.exe';
   const {stdout}=await exec(host,args,{windowsHide:true,timeout:20000});
   return JSON.parse(stdout.trim());
@@ -185,6 +189,32 @@ try{
   await page.locator('.title-drag').dblclick();
   await expect.poll(async()=>(await assertSingle()).maximized).toBe(originalMaximized);
   await expect.poll(async()=>(await assertSingle()).bounds).toEqual(originalWindow.bounds);
+  // An actual Win32 resize, not browser viewport emulation: test installed
+  // WebView2 at minimum supported Reader size and restore original geometry.
+  const compact=await windows('Resize',null,{width:1024,height:700});
+  expect(compact.hwnd).toBe(originalWindow.windows[0]);
+  await expect.poll(async()=>(await assertSingle()).bounds.slice(2)).toEqual([1024,700]);
+  const geometry=await page.evaluate(()=>{
+    const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};};
+    return {
+      viewport:{width:document.documentElement.clientWidth,height:document.documentElement.clientHeight},
+      header:rect('header'),toolbar:rect('.toolbar'),main:rect('main'),
+      footer:rect('#readerFooter'),menu:rect('#readerMenu'),
+      left:rect('.toolbar-left'),center:rect('.toolbar-center'),right:rect('.toolbar-right')
+    };
+  });
+  expect(geometry.viewport.width).toBeGreaterThanOrEqual(1000);
+  expect(geometry.viewport.width).toBeLessThanOrEqual(1024);
+  expect(geometry.header.right).toBeLessThanOrEqual(geometry.viewport.width+1);
+  expect(geometry.menu.right).toBeLessThanOrEqual(geometry.viewport.width+1);
+  expect(geometry.toolbar.bottom).toBeLessThanOrEqual(geometry.main.y+1);
+  expect(geometry.left.right).toBeLessThanOrEqual(geometry.center.x+1);
+  expect(geometry.center.right).toBeLessThanOrEqual(geometry.right.x+1);
+  expect(geometry.footer.bottom).toBeLessThanOrEqual(geometry.viewport.height+1);
+  await page.screenshot({path:join(root,'installed-window-1024x700.png')});
+  await windows('Resize',null,{width:originalWindow.bounds[2],height:originalWindow.bounds[3]});
+  await expect.poll(async()=>(await assertSingle()).bounds).toEqual(originalWindow.bounds);
+  log.push({case:'native-Win32-window-resize-1024x700-and-restore',compact,geometry});
   const blockedLink=await page.evaluate(async()=>{
     try{await window.__TAURI__.core.invoke('reader_open_external',{kind:'https://example.com'});return false;}
     catch{return true;}
