@@ -29,3 +29,11 @@ test('Native Reader bootstrap has no eager browser-only transfer dependency',()=
  assert.doesNotMatch(module,/^import\s+.*document-transfer\.js/m,'document-transfer must not block app startup');
  assert.match(module,/await import\('\.\/document-transfer\.js'\)/,'browser transfer must remain accessible on demand');
 });
+
+test('Reader initial HTML does not eagerly load the Unicode font engine',()=>{
+ const html=read('../ui/reader.html').toString();
+ assert.doesNotMatch(html,/<script[^>]+src=["']\.\/vendor\/fontkit\.umd\.min\.js["']/i);
+ const editor=read('../ui/reader-text.js').toString();
+ assert.match(editor,/ensureFontkit\(/);
+ assert.match(editor,/fontkitPending/);
+});

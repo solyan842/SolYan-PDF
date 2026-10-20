@@ -1,8 +1,31 @@
 export const textFonts={sans:{name:'Noto Sans',file:'NotoSans-Regular.ttf',family:'Reader Noto Sans'},serif:{name:'Noto Serif',file:'NotoSerif-Regular.ttf',family:'Reader Noto Serif'},mono:{name:'Noto Sans Mono',file:'NotoSansMono-Regular.ttf',family:'Reader Noto Mono'}};
 const cache=new Map();
+let fontkitPending=null;
+// Unicode text editing is optional; keep its large font engine off the PDF reading startup path.
+async function ensureFontkit(){
+  if(globalThis.fontkit?.create)return globalThis.fontkit;
+  if(!fontkitPending)fontkitPending=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='./vendor/fontkit.umd.min.js';
+    script.onload=()=>{
+      if(globalThis.fontkit?.create)resolve(globalThis.fontkit);
+      else reject(Error('Bộ xử lý font không sẵn sàng.'));
+    };
+    script.onerror=()=>reject(Error('Không tải được bộ xử lý font cục bộ.'));
+    document.head.append(script);
+  }).catch(error=>{fontkitPending=null;throw error;});
+  return fontkitPending;
+}
 async function loadFont(id){
   const font=textFonts[id];if(!font)throw Error('Font không hợp lệ.');
-  if(!cache.has(id))cache.set(id,(async()=>{const response=await fetch('./vendor/reader-fonts/'+font.file);if(!response.ok)throw Error('Không tải được font.');const bytes=new Uint8Array(await response.arrayBuffer());const face=new FontFace(font.family,bytes);await face.load();document.fonts.add(face);return {bytes,metrics:window.fontkit.create(bytes)};})().catch(error=>{cache.delete(id);throw error;}));
+  if(!cache.has(id))cache.set(id,(async()=>{
+    const [kit,response]=await Promise.all([ensureFontkit(),fetch('./vendor/reader-fonts/'+font.file)]);
+    if(!response.ok)throw Error('Không tải được font.');
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    const face=new FontFace(font.family,bytes);
+    await face.load();document.fonts.add(face);
+    return {bytes,metrics:kit.create(bytes)};
+  })().catch(error=>{cache.delete(id);throw error;}));
   return cache.get(id);
 }
 export async function prepareText({text,font='sans',fontSize=14,color='#182d46'}){

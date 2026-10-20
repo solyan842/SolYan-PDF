@@ -68,3 +68,27 @@ test('Save uses a chosen copy; Save As chooses another target and cancellation k
   await page.evaluate(()=>window.__target='C:/Saved/copy.pdf');await page.locator('#saveCurrent').click();await expect(page.locator('#tabs .title')).not.toContainText('●');await command(page,'fillCross');await page.keyboard.press('Control+s');await expect.poll(()=>page.evaluate(()=>window.__calls.at(-1).name)).toBe('reader_save');
   await page.keyboard.press('Control+Shift+s');await expect.poll(()=>page.evaluate(()=>window.__calls.at(-1).name)).toBe('reader_save_as');expect(await page.evaluate(()=>window.__calls[1].args.document===window.__calls[2].args.document)).toBe(true);
 });
+
+test('optional Unicode font engine loads only for Typewriter and only once',async({page})=>{
+  const fontkitRequests=[];
+  page.on('request',request=>{if(request.url().endsWith('/vendor/fontkit.umd.min.js'))fontkitRequests.push(request.url());});
+  const pdf=await PDFDocument.create();
+  pdf.addPage([600,800]).drawText('Reader opens without fontkit');
+  await page.goto('/reader.html');
+  await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  expect(fontkitRequests).toHaveLength(0);
+  await page.locator('#pdfFiles').setInputFiles({name:'Read-only.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  expect(fontkitRequests).toHaveLength(0);
+  await page.locator('#typewriter').click();
+  await page.locator('#fillTextInput').fill('Mở PDF thật nhanh');
+  await page.locator('#typewriterPlace').click();
+  await expect(page.locator('.signature.selected')).toContainText('Mở PDF thật nhanh');
+  expect(fontkitRequests).toHaveLength(1);
+  await page.locator('#typewriter').click();
+  await page.locator('#typewriterFont').selectOption('serif');
+  await page.locator('#fillTextInput').fill('Tiếng Việt vẫn đúng');
+  await page.locator('#typewriterPlace').click();
+  await expect(page.locator('.signature.selected')).toContainText('Tiếng Việt vẫn đúng');
+  expect(fontkitRequests).toHaveLength(1);
+});
