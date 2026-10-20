@@ -266,3 +266,11 @@ Forbidden:
 - treating a single upstream tool as mandatory when orchestration would be simpler;
 - researching the same upstream alternatives again because the decision was never written into the repo;
 - expanding scope merely to make one engine universal.
+
+## 13. sTool FAST STARTUP + ISOLATED BUILD GATE (USER APPROVED, 2026-10-21)
+
+MANDATORY: sTool Windows Home must be responsive before any heavy sidecar initialization. Never start Core, Office/LibreOffice, OCR/Paddle, pyHanko or archive/OCRmyPDF on app launch. Each engine starts only when its selected tool runs; isolate startup failures to that tool. Reuse the existing services and Windows Job Objects.
+
+Keep sTool feature work on its own feat/windows-stool-* branch and lightweight Windows sTool Fast CI. Build Reader separately in Windows Reader CI. Do not run heavyweight Windows Desktop D6 installer CI for a Reader-only change or sTool UI iteration; keep D6 release checks as a separately invoked full acceptance gate, without weakening or removing the original smoke tests. Do not merge sTool + Reader until sTool is field-PASS and the user authorizes integration.
+
+UI and tool icons are a product lock: reuse the existing exact Phosphor Duotone ID-to-SVG mapping and MIT-licensed offline asset pack from the newer desktop Reader UI, plus its selected control/sliders and spacing refinements. Never revert to the stale Unicode glyph UI from the original D6 baseline. Follow docs/WINDOWS-STOOL-FAST-LAZY-ISOLATED.md and current repo-wide Actions before every further change.

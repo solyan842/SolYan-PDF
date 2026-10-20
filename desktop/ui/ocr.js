@@ -55,7 +55,7 @@
   async function getSession() {
     const invoke = window.__TAURI__?.core?.invoke;
     if (!invoke) throw new Error('Tauri desktop API chưa sẵn sàng.');
-    const raw = await invoke('desktop_core_session');
+    const raw = (await invoke('desktop_service_ready',{service:'ocr'}),await invoke('desktop_core_session'));
     const [endpoint, token] = String(raw).split('\n');
     if (!endpoint || !token) throw new Error('Không có phiên Core API cục bộ.');
     return {endpoint, token};

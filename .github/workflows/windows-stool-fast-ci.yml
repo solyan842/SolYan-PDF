@@ -1,0 +1,60 @@
+name: Windows sTool Fast CI
+
+on:
+  push:
+    branches:
+      - 'feat/windows-stool-*'
+    paths:
+      - 'desktop/src-tauri/**'
+      - 'desktop/ui/**'
+      - 'desktop/backend/**'
+      - 'desktop/tests/stool-lazy.contract.mjs'
+      - '.github/workflows/windows-stool-fast-ci.yml'
+      - 'docs/WINDOWS-STOOL-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-stool-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stool-fast:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'desktop/src-tauri -> target'
+      - name: Create diagnostics
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force artifacts | Out-Null
+      - name: Check sTool cold-start and service mapping contracts
+        shell: pwsh
+        run: |
+          node --test desktop/tests/stool-lazy.contract.mjs 2>&1 | Tee-Object artifacts/stool-lazy-contract.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check UI contracts, not the Reader build
+        shell: pwsh
+        run: |
+          & ./desktop/ui/validate-contract.ps1 2>&1 | Tee-Object artifacts/stool-ui-contract.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check Tauri sTool Rust independently, no NSIS or sidecars
+        shell: pwsh
+        working-directory: desktop/src-tauri
+        run: |
+          cargo check --locked --no-default-features 2>&1 | Tee-Object ../../artifacts/stool-cargo-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Keep sTool diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stool-fast-diagnostics
+          path: artifacts/stool-*.log
+          if-no-files-found: warn

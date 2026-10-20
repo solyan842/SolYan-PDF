@@ -20,7 +20,7 @@
   async function getSession() {
     const invoke=window.__TAURI__?.core?.invoke;
     if(!invoke)throw new Error('Chỉ chạy trong SolYan PDF Windows.');
-    const [endpoint,token]=String(await invoke('desktop_core_session')).split('\n');
+    const [endpoint,token]=String((await invoke('desktop_service_ready',{service:'archive'}),await invoke('desktop_core_session'))).split('\n');
     if(!endpoint||!token)throw new Error('Dịch vụ cục bộ chưa sẵn sàng.');
     return {endpoint,token};
   }

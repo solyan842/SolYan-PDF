@@ -117,8 +117,43 @@ struct ArchiveProcess {
     _job: WindowsJob,
 }
 
+// Lightweight shell owns no sidecar on startup. Each service is started at
+// most once, when a user explicitly invokes the corresponding tool.
+#[derive(Clone)]
+struct ServicePlan {
+    office_port: u16,
+    ocr_port: u16,
+    ocr_token: String,
+    sign_port: u16,
+    sign_token: String,
+    archive_port: u16,
+    archive_token: String,
+}
+impl ServicePlan {
+    fn create() -> Result<Self, String> {
+        let mut used=std::collections::HashSet::new();
+        let mut next=|| -> Result<u16,String> {
+            for _ in 0..16 {
+                let port=free_loopback_port()?;
+                if used.insert(port) {return Ok(port);}
+            }
+            Err("Cannot allocate distinct service loopback ports".into())
+        };
+        Ok(Self{
+            office_port:next()?,ocr_port:next()?,ocr_token:random_token(),
+            sign_port:next()?,sign_token:random_token(),
+            archive_port:next()?,archive_token:random_token()
+        })
+    }
+    fn url(port:u16)->String {format!("http://127.0.0.1:{port}")}
+}
+
 #[derive(Default)]
 struct CoreState {
+    // Protects first-use planning and all start/stop transitions against
+    // concurrent tool clicks. Heavy work runs on blocking worker threads.
+    launch_lock: Mutex<()>,
+    plan: Mutex<Option<ServicePlan>>,
     process: Mutex<Option<CoreProcess>>,
     office_process: Mutex<Option<OfficeProcess>>,
     ocr_process: Mutex<Option<OcrProcess>>,
@@ -127,26 +162,64 @@ struct CoreState {
     session: Mutex<Option<CoreSession>>,
     startup_error: Mutex<Option<String>>,
 }
-
-#[tauri::command]
-fn desktop_core_session(state: State<'_, CoreState>) -> Result<String, String> {
-    if let Some(error) = state
-        .startup_error
-        .lock()
-        .map_err(|_| "core startup state is unavailable".to_string())?
-        .clone()
-    {
-        return Err(error);
+fn service_plan(state:&CoreState)->Result<ServicePlan,String>{
+    let mut slot=state.plan.lock().map_err(|_|"sTool service plan lock unavailable")?;
+    if slot.is_none(){*slot=Some(ServicePlan::create()?);}
+    slot.clone().ok_or("sTool service plan unavailable".into())
+}
+fn ensure_core(app:&tauri::AppHandle,state:&CoreState,plan:&ServicePlan)->Result<String,String>{
+    if let Some(existing)=state.session.lock().map_err(|_|"sTool core session lock unavailable")?.as_ref(){
+        return Ok(format!("{}\n{}",existing.endpoint,existing.token));
     }
-
-    let session = state
-        .session
-        .lock()
-        .map_err(|_| "core session state is unavailable".to_string())?
-        .clone()
-        .ok_or_else(|| "local core is not ready".to_string())?;
-
-    Ok(format!("{}\n{}", session.endpoint, session.token))
+    let (process,session)=start_core(
+        app,&ServicePlan::url(plan.office_port),
+        &ServicePlan::url(plan.ocr_port),&plan.ocr_token,
+        &ServicePlan::url(plan.sign_port),&plan.sign_token,
+        &ServicePlan::url(plan.archive_port),&plan.archive_token)?;
+    let result=format!("{}\n{}",session.endpoint,session.token);
+    *state.process.lock().map_err(|_|"sTool core process lock unavailable")?=Some(process);
+    *state.session.lock().map_err(|_|"sTool core session lock unavailable")?=Some(session);
+    Ok(result)
+}
+#[tauri::command]
+async fn desktop_core_session(app:tauri::AppHandle)->Result<String,String>{
+    tauri::async_runtime::spawn_blocking(move||{
+        let state=app.state::<CoreState>();
+        let _lock=state.launch_lock.lock().map_err(|_|"sTool launch lock unavailable")?;
+        let plan=service_plan(&state)?;
+        ensure_core(&app,&state,&plan)
+    }).await.map_err(|e|format!("sTool core startup worker failed: {e}"))?
+}
+#[tauri::command]
+async fn desktop_service_ready(app:tauri::AppHandle,service:String)->Result<bool,String>{
+    if !matches!(service.as_str(),"office"|"ocr"|"sign"|"archive"){
+        return Err("Unsupported sTool service".into());
+    }
+    tauri::async_runtime::spawn_blocking(move||{
+        let state=app.state::<CoreState>();
+        let _lock=state.launch_lock.lock().map_err(|_|"sTool launch lock unavailable")?;
+        let plan=service_plan(&state)?;
+        match service.as_str(){
+            "office"=>{
+                let mut slot=state.office_process.lock().map_err(|_|"Office process lock unavailable")?;
+                if slot.is_none(){let (process,_)=start_office(&app,plan.office_port)?;*slot=Some(process);}
+            }
+            "ocr"=>{
+                let mut slot=state.ocr_process.lock().map_err(|_|"OCR process lock unavailable")?;
+                if slot.is_none(){let (process,_,_)=start_ocr(&app,plan.ocr_port,&plan.ocr_token)?;*slot=Some(process);}
+            }
+            "sign"=>{
+                let mut slot=state.sign_process.lock().map_err(|_|"Signing process lock unavailable")?;
+                if slot.is_none(){let (process,_,_)=start_sign(&app,plan.sign_port,&plan.sign_token)?;*slot=Some(process);}
+            }
+            "archive"=>{
+                let mut slot=state.archive_process.lock().map_err(|_|"Archive process lock unavailable")?;
+                if slot.is_none(){let (process,_,_)=start_archive(&app,plan.archive_port,&plan.archive_token)?;*slot=Some(process);}
+            }
+            _=>unreachable!()
+        }
+        Ok(true)
+    }).await.map_err(|e|format!("sTool service worker failed: {e}"))?
 }
 
 fn random_token() -> String {
@@ -321,7 +394,7 @@ fn prepend_paths(directories: &[&Path]) -> Result<OsString, String> {
     std::env::join_paths(paths).map_err(|error| format!("could not compose sidecar PATH: {error}"))
 }
 
-fn start_office(app: &tauri::AppHandle) -> Result<(OfficeProcess, String), String> {
+fn start_office(app: &tauri::AppHandle, port: u16) -> Result<(OfficeProcess, String), String> {
     let office_exe = app
         .path()
         .resolve("office/solyan-office.exe", BaseDirectory::Resource)
@@ -341,7 +414,6 @@ fn start_office(app: &tauri::AppHandle) -> Result<(OfficeProcess, String), Strin
         return Err(format!("local Office sidecar executable is missing: {}", office_exe.display()));
     }
 
-    let port = free_loopback_port()?;
     let mut command = Command::new(&office_exe);
     command
         .arg("--port")
@@ -386,7 +458,7 @@ fn start_office(app: &tauri::AppHandle) -> Result<(OfficeProcess, String), Strin
 }
 
 
-fn start_ocr(app: &tauri::AppHandle) -> Result<(OcrProcess, String, String), String> {
+fn start_ocr(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(OcrProcess, String, String), String> {
     let ocr_exe = app
         .path()
         .resolve("ocr/solyan-ocr.exe", BaseDirectory::Resource)
@@ -412,8 +484,6 @@ fn start_ocr(app: &tauri::AppHandle) -> Result<(OcrProcess, String, String), Str
     let tesseract_bin = tesseract_exe
         .parent()
         .ok_or_else(|| "Tesseract binary directory is unavailable".to_string())?;
-    let port = free_loopback_port()?;
-    let token = random_token();
     let mut command = Command::new(&ocr_exe);
     command
         .arg("--port")
@@ -462,11 +532,11 @@ fn start_ocr(app: &tauri::AppHandle) -> Result<(OcrProcess, String, String), Str
             _job: job,
         },
         format!("http://127.0.0.1:{port}"),
-        token,
+        token.to_owned(),
     ))
 }
 
-fn start_sign(app: &tauri::AppHandle) -> Result<(SignProcess, String, String), String> {
+fn start_sign(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(SignProcess, String, String), String> {
     let exe = app
         .path()
         .resolve("sign/solyan-sign.exe", BaseDirectory::Resource)
@@ -474,8 +544,6 @@ fn start_sign(app: &tauri::AppHandle) -> Result<(SignProcess, String, String), S
     if !exe.is_file() {
         return Err(format!("bundled signing sidecar missing: {}", exe.display()));
     }
-    let port = free_loopback_port()?;
-    let token = random_token();
     let mut command = Command::new(&exe);
     command
         .arg("--port")
@@ -516,11 +584,11 @@ fn start_sign(app: &tauri::AppHandle) -> Result<(SignProcess, String, String), S
             _job: job,
         },
         format!("http://127.0.0.1:{port}"),
-        token,
+        token.to_owned(),
     ))
 }
 
-fn start_archive(app: &tauri::AppHandle) -> Result<(ArchiveProcess, String, String), String> {
+fn start_archive(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(ArchiveProcess, String, String), String> {
     let exe = app
         .path()
         .resolve("archive/solyan-archive.exe", BaseDirectory::Resource)
@@ -539,8 +607,6 @@ fn start_archive(app: &tauri::AppHandle) -> Result<(ArchiveProcess, String, Stri
     if !tessdata.is_dir() {
         return Err("pinned Tesseract language resources missing for archive sidecar".to_string());
     }
-    let port = free_loopback_port()?;
-    let token = random_token();
     let mut command = Command::new(&exe);
     command
         .arg("--port")
@@ -581,7 +647,7 @@ fn start_archive(app: &tauri::AppHandle) -> Result<(ArchiveProcess, String, Stri
             _job: job,
         },
         format!("http://127.0.0.1:{port}"),
-        token,
+        token.to_owned(),
     ))
 }
 
@@ -720,79 +786,17 @@ fn stop_archive(app: &tauri::AppHandle) {
 }
 
 fn main() {
-    let app = tauri::Builder::default()
+    let app=tauri::Builder::default()
         .manage(CoreState::default())
-        .setup(|app| {
-            let state = app.state::<CoreState>();
-            match start_office(app.handle()) {
-                Ok((mut office_process, office_endpoint)) => {
-                    match start_ocr(app.handle()) {
-                        Ok((mut ocr_process, ocr_endpoint, ocr_token)) => {
-                            match start_sign(app.handle()) {
-                                Ok((mut sign_process, sign_endpoint, sign_token)) => {
-                                    match start_archive(app.handle()) {
-                                        Ok((mut archive_process, archive_endpoint, archive_token)) => {
-                                            match start_core(app.handle(), &office_endpoint, &ocr_endpoint, &ocr_token, &sign_endpoint, &sign_token, &archive_endpoint, &archive_token) {
-                                                Ok((core_process, session)) => {
-                                                    *state.office_process.lock().map_err(|_| "office process state poisoned")? = Some(office_process);
-                                                    *state.ocr_process.lock().map_err(|_| "ocr process state poisoned")? = Some(ocr_process);
-                                                    *state.sign_process.lock().map_err(|_| "sign process state poisoned")? = Some(sign_process);
-                                                    *state.archive_process.lock().map_err(|_| "archive process state poisoned")? = Some(archive_process);
-                                                    *state.process.lock().map_err(|_| "core process state poisoned")? = Some(core_process);
-                                                    *state.session.lock().map_err(|_| "core session state poisoned")? = Some(session);
-                                                }
-                                                Err(error) => {
-                                                    let _ = archive_process.child.kill();
-                                                    let _ = archive_process.child.wait();
-                                                    let _ = sign_process.child.kill();
-                                                    let _ = sign_process.child.wait();
-                                                    let _ = ocr_process.child.kill();
-                                                    let _ = ocr_process.child.wait();
-                                                    let _ = office_process.child.kill();
-                                                    let _ = office_process.child.wait();
-                                                    *state.startup_error.lock().map_err(|_| "core error state poisoned")? = Some(error);
-                                                }
-                                            }
-                                        }
-                                        Err(error) => {
-                                            let _ = sign_process.child.kill();
-                                            let _ = sign_process.child.wait();
-                                            let _ = ocr_process.child.kill();
-                                            let _ = ocr_process.child.wait();
-                                            let _ = office_process.child.kill();
-                                            let _ = office_process.child.wait();
-                                            *state.startup_error.lock().map_err(|_| "archive error state poisoned")? = Some(error);
-                                        }
-                                    }
-                                }
-                                Err(error) => {
-                                    let _ = ocr_process.child.kill();
-                                    let _ = ocr_process.child.wait();
-                                    let _ = office_process.child.kill();
-                                    let _ = office_process.child.wait();
-                                    *state.startup_error.lock().map_err(|_| "sign error state poisoned")? = Some(error);
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            let _ = office_process.child.kill();
-                            let _ = office_process.child.wait();
-                            *state.startup_error.lock().map_err(|_| "ocr error state poisoned")? = Some(error);
-                        }
-                    }
-                }
-                Err(error) => {
-                    *state.startup_error.lock().map_err(|_| "office error state poisoned")? = Some(error);
-                }
-            }
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![desktop_core_session])
+        // No PyInstaller/Paddle/LibreOffice/pyHanko/OCRmyPDF launched while
+        // the Home window is displayed. Core starts on first tool execution;
+        // specialized services start only for their matching tool.
+        .invoke_handler(tauri::generate_handler![desktop_core_session,desktop_service_ready])
         .build(tauri::generate_context!())
-        .expect("error while building SolYan PDF Desktop");
+        .expect("error while building sTool PDF Windows");
 
-    app.run(|app_handle, event| {
-        if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
+    app.run(|app_handle,event|{
+        if matches!(event,tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit){
             stop_core(app_handle);
             stop_ocr(app_handle);
             stop_sign(app_handle);

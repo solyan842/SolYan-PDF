@@ -50,7 +50,7 @@
   async function session() {
     const invoke=window.__TAURI__?.core?.invoke;
     if(!invoke)throw new Error('Chỉ sử dụng trong ứng dụng SolYan PDF Windows.');
-    const [endpoint,token]=String(await invoke('desktop_core_session')).split('\n');
+    const [endpoint,token]=String((await invoke('desktop_service_ready',{service:'sign'}),await invoke('desktop_core_session'))).split('\n');
     if(!endpoint||!token)throw new Error('Dịch vụ PDF cục bộ chưa sẵn sàng.');
     return {endpoint,token};
   }
