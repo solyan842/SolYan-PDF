@@ -105,7 +105,7 @@ body[data-tool="select"] .pdfViewer .textLayer{pointer-events:auto}
    tool panels. Keep one slider implementation, not a separate style per tool.
    The 20px hit target keeps the 2px rail and 10px round thumb easy to use. */
 :root{--reader-range-track:#929aa6;--reader-range-border:#747e8b;
-  --reader-range-thumb:#fff;--reader-control-height:32px;
+  --reader-range-thumb:#fff;--reader-range-thumb-size:10px;--reader-control-height:32px;
   --reader-control-gap:7px;--reader-control-label-height:28px}
 html[data-theme=dark]{--reader-range-track:#929daa;--reader-range-border:#8395a9;
   --reader-range-thumb:#e8edf4}
@@ -121,14 +121,16 @@ input[type=range]::-webkit-slider-runnable-track{
 }
 input[type=range]::-webkit-slider-thumb{
   -webkit-appearance:none;appearance:none;box-sizing:border-box;
-  width:10px;height:10px;margin-top:-4px;border:1px solid var(--reader-range-border);
+  width:var(--reader-range-thumb-size);height:var(--reader-range-thumb-size);
+  margin-top:-4px;border:1px solid var(--reader-range-border);
   border-radius:50%;background:var(--reader-range-thumb);
 }
 input[type=range]::-moz-range-track{
   height:2px;border:0;border-radius:2px;background:var(--reader-range-track);
 }
 input[type=range]::-moz-range-thumb{
-  box-sizing:border-box;width:10px;height:10px;
+  box-sizing:border-box;width:var(--reader-range-thumb-size);
+  height:var(--reader-range-thumb-size);
   border:1px solid var(--reader-range-border);border-radius:50%;
   background:var(--reader-range-thumb);
 }

@@ -273,8 +273,11 @@ test('all Reader sliders share one fine rail and Typewriter controls line up in 
           appearance:getComputedStyle(el).webkitAppearance,
           background:getComputedStyle(el).backgroundColor,
           trackHeight:getComputedStyle(el,'::-webkit-slider-runnable-track').height,
-          thumbWidth:getComputedStyle(el,'::-webkit-slider-thumb').width,
-          thumbHeight:getComputedStyle(el,'::-webkit-slider-thumb').height
+          // Chromium may report host <input> width for ::-webkit-slider-thumb
+          // (95px footer / 160px Format), even when the thumb is really 10px.
+          // Inspect the shared design token and the live 2px track instead.
+          thumbSize:getComputedStyle(el).getPropertyValue('--reader-range-thumb-size').trim(),
+          trackColor:getComputedStyle(el).getPropertyValue('--reader-range-track').trim()
         }));
       });
       expect(sliders.map(s=>s.id).sort()).toEqual(['formatOpacity','zoomRange']);
@@ -286,8 +289,10 @@ test('all Reader sliders share one fine rail and Typewriter controls line up in 
       // Cross-check both tracks against the same design tokens. Blink may
       // expose host-input bounds rather than pseudo-element dimensions.
       expect(sliders[0].trackHeight).toBe(sliders[1].trackHeight);
-      expect(sliders[0].thumbHeight).toBe(sliders[1].thumbHeight);
-      expect(sliders[0].thumbWidth).toBe(sliders[1].thumbWidth);
+      for(const slider of sliders){
+        expect(slider.thumbSize).toBe('10px');
+        expect(slider.trackColor).toBe(sliders[0].trackColor);
+      }
       await page.locator('#typewriter').click();
       await expect(page.locator('#readerTextFormat')).toBeVisible();
       const fields=await page.evaluate(()=>{

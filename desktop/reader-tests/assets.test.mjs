@@ -94,7 +94,9 @@ test('Reader has exactly one shared rail/thumb style and one aligned text-contro
  assert.match(shared,/input\[type=range\]::\-webkit-slider-runnable-track/);
  assert.match(shared,/input\[type=range\]::\-webkit-slider-thumb/);
  assert.match(shared,/height:2px/);
- assert.match(shared,/width:10px;height:10px/);
+ assert.match(shared,/--reader-range-thumb-size:10px/);
+ assert.match(shared,/width:var\(--reader-range-thumb-size\)/);
+ assert.match(shared,/height:var\(--reader-range-thumb-size\)/);
  assert.match(stylesheet,/--reader-control-height:32px/);
  assert.match(stylesheet,/--reader-control-label-height:28px/);
  assert.match(stylesheet,/grid-template-columns:minmax\(0,1fr\) 74px 62px/);
