@@ -1,0 +1,2 @@
+# Reader asset fingerprints are byte-exact on Windows and other hosts.
+desktop/ui/reader-icons/*.svg text eol=lf

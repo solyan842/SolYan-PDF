@@ -6,6 +6,7 @@ on:
     branches:
       - 'feat/windows-reader-fast-*'
     paths:
+      - '.gitattributes'
       - 'desktop/ui/reader*'
       - 'desktop/ui/reader-icons/**'
       - 'desktop/ui/quick-sign.js'
