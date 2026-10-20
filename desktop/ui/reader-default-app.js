@@ -31,7 +31,10 @@ export function installDefaultPdfPrompt({native=globalThis.__TAURI__,message=()=
   const yes=document.createElement('button');yes.type='button';yes.id='readerDefaultPdfYes';yes.className='primary';yes.textContent='Có';
   actions.append(no,yes);dialog.append(heading,description,note,label,actions);document.body.append(dialog);
   dialog.addEventListener('close',()=>setDefaultPdfCheckEnabled(checkbox.checked));
-  no.onclick=()=>dialog.close();
+  // Persist synchronously before closing: the native <dialog> "close" event
+  // fires asynchronously, so immediately querying preference could still see
+  // the old value after the dialog is visually hidden (Reader CI #21).
+  no.onclick=()=>{setDefaultPdfCheckEnabled(checkbox.checked);dialog.close();};
   yes.onclick=async()=>{
     setDefaultPdfCheckEnabled(checkbox.checked);dialog.close();
     try{await openPdfDefaultSettings(native);}
