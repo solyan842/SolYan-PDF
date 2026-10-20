@@ -1,7 +1,7 @@
 import { installReaderShell } from './reader-shell.js';
 import { installPresentation } from './reader-presentation.js';
 import { t } from './reader-language.js';
-import { textFonts,prepareText,textVisual,saveText } from './reader-text.js';
+import { textFonts,discoverWindowsFonts,prepareText,textVisual,saveText } from './reader-text.js';
 const $=id=>document.getElementById(id),A=window.ReaderEdits,Q=window.QuickSign;
 const element=(tag,text,props={})=>Object.assign(document.createElement(tag),{textContent:text,...props});
 const snapshot=doc=>JSON.stringify(doc.placements);
@@ -59,7 +59,25 @@ export function installR2(api){
     api.message('Đã đặt '+label.toLowerCase()+'. Kéo để điều chỉnh trước khi Lưu thành.');
   }
   let textTarget=null;
-  function editText(d,item){textTarget={document:d.id,item:item?.id||null};if(item){fillInput.value=item.text;fontSelect.value=item.font;sizeInput.value=item.fontSize;textColor.value=item.color;}previewText();fillDialog.showModal();fillInput.focus();}
+  let fontCatalogReady=false;
+  async function editText(d,item){
+    // Windows system font discovery is deferred to Typewriter, not app startup.
+    if(!fontCatalogReady){
+      try{
+        const available=await discoverWindowsFonts();
+        if(available.length){
+          const group=element('optgroup','',{label:'Font Windows trên máy'});
+          for(const id of available){const face=textFonts[id];const option=element('option',face.name,{value:id});option.style.fontFamily=face.family;group.append(option);}
+          fontSelect.append(group);
+          if(!item&&available.includes('win-arial'))fontSelect.value='win-arial';
+        }
+        fontCatalogReady=true;
+      }catch(error){api.message('Không đọc được font Windows: '+String(error?.message||error));}
+    }
+    textTarget={document:d.id,item:item?.id||null};
+    if(item){fillInput.value=item.text;fontSelect.value=item.font;sizeInput.value=item.fontSize;textColor.value=item.color;}
+    previewText();fillDialog.showModal();fillInput.focus();
+  }
   button('sign','fillText','Chèn chữ (Typewriter)','cursor-text',()=>editText(doc(),null));
   button('sign','typewriter','Chèn chữ (Typewriter)','cursor-text',()=>$('fillText').click());
   fillPlace.onclick=api.attempt(async()=>{const d=doc();if(textTarget?.document!==d.id)throw Error('Tài liệu đã thay đổi; mở lại công cụ chèn chữ.');const previous=d.placements.find(p=>p.id===textTarget.item),index=previous?.page??d.view.currentPageNumber-1,v=previous?.viewport||viewport(d,index),item=await prepareText({text:fillInput.value,font:fontSelect.value,fontSize:Number(sizeInput.value),color:textColor.value});
