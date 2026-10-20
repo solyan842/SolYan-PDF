@@ -24,6 +24,12 @@
     "longDescription": "sReader PDF: đọc, chú thích và ký nhanh PDF offline.",
     "icon": [
       "../branding/sReader_PDF/app.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "./windows/reader-default-app-hooks.nsi"
+      }
+    }
   }
 }
