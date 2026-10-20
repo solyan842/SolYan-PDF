@@ -134,6 +134,10 @@ async function stop(){
 const activeText=()=>page.locator('.readerContainer:not([hidden]) .textLayer');
 try{
   await start([a]);await expect(page.locator('#tabs .tab')).toHaveCount(1);
+  const defaultPdf=await page.evaluate(()=>window.__TAURI__.core.invoke('reader_pdf_default_state'));
+  expect(['default','other','unknown']).toContain(defaultPdf);
+  await expect(page.locator('#readerDefaultPdfPrompt')).toBeHidden();
+  log.push({case:'Windows-default-PDF-readonly',state:defaultPdf,promptDidNotInterruptExplorerLaunch:true});
   // Windows font IPC is scoped to an installed, Reader-owned WebView. A caller
   // cannot pass filesystem paths; fonts are opt-in and never part of startup.
   const fonts=await page.evaluate(()=>window.__TAURI__.core.invoke('reader_windows_fonts'));
