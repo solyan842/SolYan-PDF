@@ -936,7 +936,7 @@ fn reader_about_target(kind: &str) -> Option<&'static str> {
     match kind {
         "website" => Some("https://www.youtube.com/@SolYan-Music"),
         "email" => Some("mailto:yansign841@gmail.com"),
-        "pdf-default-settings" => Some("ms-settings:defaultapps"),
+        "pdf-default-settings" => Some("ms-settings:defaultapps?registeredAppUser=sReader%20PDF"),
         _ => None,
     }
 }
@@ -1223,7 +1223,7 @@ mod reader_about_link_tests {
     fn only_about_links_may_be_launched_externally() {
         assert_eq!(reader_about_target("website"), Some("https://www.youtube.com/@SolYan-Music"));
         assert_eq!(reader_about_target("email"), Some("mailto:yansign841@gmail.com"));
-        assert_eq!(reader_about_target("pdf-default-settings"), Some("ms-settings:defaultapps"));
+        assert_eq!(reader_about_target("pdf-default-settings"), Some("ms-settings:defaultapps?registeredAppUser=sReader%20PDF"));
         for untrusted in ["https://example.com", "javascript:alert(1)", "file:///C:/Windows/win.ini", "", "Website"] {
             assert_eq!(reader_about_target(untrusted), None);
         }
