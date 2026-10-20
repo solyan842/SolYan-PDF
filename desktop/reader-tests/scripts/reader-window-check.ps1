@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs')][string]$Mode = 'Inspect',
+    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs','Memory')][string]$Mode = 'Inspect',
     [Parameter(Mandatory)][string]$Exe,
     [string]$FilePath
 )
@@ -189,4 +189,26 @@ do {
 $webviews = @($all | Where-Object { $_.ProcessId -in $tracked -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object {
     @{ pid=$_.ProcessId; executable=$_.ExecutablePath; commandLine=$_.CommandLine }
 })
+if ($Mode -eq 'Memory') {
+    # Diagnostic ONLY; all PIDs come from this Reader's tracked process tree.
+    # Sum of WorkingSet may double-count shared pages; private bytes is more
+    # useful for broad comparisons. Neither number is a pass/fail threshold.
+    $processes = @($tracked | Sort-Object -Unique | ForEach-Object {
+        Get-Process -Id $_ -ErrorAction SilentlyContinue
+    } | Where-Object { $null -ne $_ } | ForEach-Object {
+        @{ pid=[int]$_.Id; name=$_.ProcessName;
+           workingSetBytes=[long]$_.WorkingSet64;
+           privateBytes=[long]$_.PrivateMemorySize64 }
+    })
+    $ws=[long](($processes | Measure-Object -Property workingSetBytes -Sum).Sum)
+    $private=[long](($processes | Measure-Object -Property privateBytes -Sum).Sum)
+    @{ scope='Reader process and tracked descendants; includes WebView2 only if owned';
+       measuredAtUtc=(Get-Date).ToUniversalTime().ToString('o');
+       rootPids=@($apps | Select-Object -ExpandProperty Id);
+       processCount=$processes.Count;
+       webview2ProcessCount=@($processes | Where-Object { $_.name -eq 'msedgewebview2' }).Count;
+       workingSetSumBytes=$ws; privateBytesSum=$private; processes=$processes
+    } | ConvertTo-Json -Depth 5 -Compress
+    exit
+}
 @{ apps=$result; engines=$engines.Count; descendants=$tracked; livePids=@($all | Select-Object -ExpandProperty ProcessId); webviews=$webviews } | ConvertTo-Json -Depth 5 -Compress

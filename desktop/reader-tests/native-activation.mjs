@@ -66,6 +66,8 @@ async function start(files,earlyFiles){
   const setup=await policy('Setup',stateFile,cdp,profile);
   log.push({webview2Setup:setup});console.log('WebView2 test bootstrap '+JSON.stringify(setup));
   app=spawn(exe,files,{windowsHide:true,stdio:'ignore',env:{...process.env,WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-address=127.0.0.1 --remote-debugging-port=${cdp}`,WEBVIEW2_USER_DATA_FOLDER:profile}});
+  app.__readerStartedMs=performance.now();
+  app.__launchKind=earlyFiles?'fresh-profile-process-with-early-activation':'fresh-profile-process';
   owned.add(app.pid);
   app.on('error',e=>{log.push({spawnError:e.message});});
   const child=app;child.on('exit',(code,signal)=>log.push({readerExit:{pid:child.pid,code,signal}}));
@@ -113,6 +115,20 @@ async function start(files,earlyFiles){
     console.error('WebView2 bootstrap errors: '+JSON.stringify(log.filter(e=>e.webviewConsoleError||e.webviewLogError||e.pageerror)));
     throw error;
   } finally {await devtools.detach().catch(()=>{});}
+  log.push({case:'native-ui-ready-diagnostic',scenario:app.__launchKind,
+    spawnToUiReadyMs:Math.round(performance.now()-app.__readerStartedMs),
+    note:'Includes CDP WebView attachment/polling overhead; not a cold-start SLA'});
+}
+async function recordWindowsMemory(label){
+  try{
+    const snapshot=await windows('Memory');
+    log.push({case:'native-process-memory-diagnostic',label,snapshot});
+    return snapshot;
+  }catch(error){
+    // Diagnostics must not weaken or accidentally block functional acceptance.
+    log.push({case:'native-memory-diagnostic-unavailable',label,error:String(error?.message||error)});
+    return null;
+  }
 }
 async function stop(){
   try {
@@ -155,6 +171,10 @@ try{
   }
   log.push({case:'Windows-font-on-demand-allowlist',available:fonts});
   await expect(activeText()).toContainText(['NATIVE SOURCE A']);
+  log.push({case:'native-first-readable-text-diagnostic',scenario:app.__launchKind,
+    spawnToTextReadyMs:Math.round(performance.now()-app.__readerStartedMs),
+    note:'Synthetic 3-page PDF; includes CDP attach/test polling, not precise first-paint time'});
+  await recordWindowsMemory('1-tab-after-first-text');
   // Installed Windows WebView2: Ctrl+wheel is also how Precision Touchpad
   // pinch is delivered by Chromium. Verify it changes PDF.js zoom only, not
   // the entire native shell. The laptop's physical pad still needs field QA.
@@ -263,9 +283,30 @@ try{
   log.push({case:'F11-Delete-Save-English-About',nativeFullscreen:true,originalUnchanged:true,saveUpdatesChosenCopy:true,deleteUndo:true});
   await stop();
   await start([a],[b]);await expect(page.locator('#tabs .tab')).toHaveCount(2);await expect(activeText()).toContainText(['NATIVE SOURCE B']);await assertSingle();
+  log.push({case:'native-first-readable-text-diagnostic',scenario:'second-process-after-native-restart-with-fresh-profile',
+    spawnToTextReadyMs:Math.round(performance.now()-app.__readerStartedMs),
+    note:'Same disposable Windows runner; OS caches may be warm, WebView profile remains fresh'});
   expect(await readFile(a)).toEqual(originalA);
   expect(log.filter(entry=>entry.pageerror)).toEqual([]);
   log.push({case:'restart-and-early-second-launch',tabs:2});
+  // Native installed 10-tab diagnostic on the same process. The small PDFs
+  // are synthetic, and this is a functional ten-tab gate, not a RAM SLA.
+  const extraTabs=[];
+  for(let index=0;index<8;index++){
+    const synthetic=await PDFDocument.create();
+    synthetic.addPage([612,792]).drawText('Reader diagnostic tab '+(index+3),{x:54,y:700});
+    extraTabs.push({name:'Reader-benchmark-'+(index+3)+'.pdf',
+      mimeType:'application/pdf',buffer:Buffer.from(await synthetic.save())});
+  }
+  await page.locator('#pdfFiles').setInputFiles(extraTabs);
+  await expect(page.locator('#tabs .tab')).toHaveCount(10,{timeout:30000});
+  const switchStart=performance.now();
+  await page.locator('#tabs .tab').first().locator('.title').click();
+  await expect(activeText()).toContainText(['NATIVE SOURCE A']);
+  log.push({case:'native-10-tabs-diagnostic',tabCount:10,
+    switchFirstTabToReadableMs:Math.round(performance.now()-switchStart),
+    corpus:'2 native files and 8 generated 1-page PDF buffers'});
+  await recordWindowsMemory('10-tabs-after-switch');
   const closingTree=(await windows()).descendants;
   await page.locator('#window-close').click();
   await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
