@@ -58,3 +58,20 @@ test('optional Windows font catalog is bounded and loaded only on demand',async(
   assert.deepEqual(calls,['reader_windows_fonts']);
  }finally{if(before===undefined)delete globalThis.__TAURI__;else globalThis.__TAURI__=before;}
 });
+
+test('Reader default PDF registration is per-user and never overrides Windows UserChoice',()=>{
+ const reader=JSON.parse(read('../src-tauri/tauri.reader.conf.json'));
+ const tools=JSON.parse(read('../src-tauri/tauri.conf.json'));
+ assert.equal(reader.bundle.windows.nsis.installMode,'currentUser');
+ assert.equal(reader.bundle.windows.nsis.installerHooks,'./windows/reader-default-app-hooks.nsi');
+ assert.equal(tools.bundle.windows.nsis?.installerHooks,undefined,'Toolbox is not modified');
+ const hook=read('../src-tauri/windows/reader-default-app-hooks.nsi').toString();
+ assert.match(hook,/NSIS_HOOK_POSTINSTALL/);
+ assert.match(hook,/NSIS_HOOK_PREUNINSTALL/);
+ assert.match(hook,/WriteRegStr HKCU "Software\\RegisteredApplications" "sReader PDF"/);
+ assert.match(hook,/WriteRegStr HKCU "Software\\SolYan\\sReader PDF\\Capabilities\\FileAssociations" "\.pdf"/);
+ assert.doesNotMatch(hook,/^\s*(?:WriteReg\w*|DeleteReg\w*)\s+\w+\s+"[^"]*UserChoice/m,'Never write Windows protected defaults');
+ const rust=read('../src-tauri/src/main.rs').toString();
+ assert.match(rust,/reader_pdf_default_state/);
+ assert.match(rust,/ms-settings:defaultapps\?registeredAppUser=sReader%20PDF/);
+});
