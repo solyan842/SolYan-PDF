@@ -916,6 +916,63 @@ fn reader_windows_font(window: tauri::WebviewWindow, id: String) -> Result<Vec<u
     { let _ = id; Err("Font Windows chỉ có trên máy Windows".into()) }
 }
 
+// Reader About links must be opened in the user's DEFAULT Windows browser
+// (not as a blocked target=_blank popup inside the WebView).
+// No shell command/argument parsing and no arbitrary URL input.
+#[cfg(windows)]
+#[link(name = "shell32")]
+extern "system" {
+    fn ShellExecuteW(
+        hwnd: *mut std::ffi::c_void,
+        lpoperation: *const u16,
+        lpfile: *const u16,
+        lpparameters: *const u16,
+        lpdirectory: *const u16,
+        nshowcmd: i32,
+    ) -> *mut std::ffi::c_void;
+}
+
+fn reader_about_target(kind: &str) -> Option<&'static str> {
+    match kind {
+        "website" => Some("https://www.youtube.com/@SolYan-Music"),
+        "email" => Some("mailto:yansign841@gmail.com"),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+fn reader_open_external(window: tauri::WebviewWindow, kind: String) -> Result<(), String> {
+    reader_window(&window)?;
+    if !cfg!(feature = "reader-only") {
+        return Err("Chỉ ứng dụng sReader được mở liên kết ngoài".into());
+    }
+    let target = reader_about_target(&kind).ok_or("Liên kết không được hỗ trợ")?;
+    #[cfg(windows)]
+    {
+        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        let address: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                operation.as_ptr(),
+                address.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
+        };
+        if (result as isize) <= 32 {
+            return Err(format!("Windows không mở được liên kết ({})", result as isize));
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = target;
+        Err("Liên kết này cần trình duyệt mặc định của Windows".into())
+    }
+}
+
 fn reader_window(window: &tauri::WebviewWindow) -> Result<(), String> {
     let label = if cfg!(feature = "reader-only") { "main" } else { "reader" };
     if window.label() != label { return Err("Chỉ cửa sổ Reader được nhận tệp.".into()); }
@@ -1088,7 +1145,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 
