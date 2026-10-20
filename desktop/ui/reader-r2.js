@@ -100,7 +100,7 @@ export function installR2(api){
   }
   let textTarget=null;
   let fontCatalogReady=false;
-  async function editText(d,item){
+  async function editText(d,item,{focus=true}={}){
     // Windows system font discovery is deferred to Typewriter, not app startup.
     if(!fontCatalogReady){
       try{
@@ -117,7 +117,7 @@ export function installR2(api){
     textTarget={document:d.id,item:item?.id||null};
     if(item){fillInput.value=item.text;fontSelect.value=item.font;sizeInput.value=item.fontSize;textColor.value=item.color;}
     formatter.loadTextStyles(item?.textStyle||{});
-    previewText();formatter.show('text',item);fillInput.focus();
+    previewText();formatter.show('text',item);if(focus)fillInput.focus();
   }
   button('sign','fillText','Chèn chữ (Typewriter)','cursor-text',()=>editText(doc(),null));
   button('sign','typewriter','Chèn chữ (Typewriter)','cursor-text',()=>$('fillText').click());

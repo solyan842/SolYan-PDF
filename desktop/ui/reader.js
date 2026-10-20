@@ -143,7 +143,7 @@ function renderSignatures(doc = current()) {
       selected = doc.selectedId = item.id;
       $('signOptions').hidden=['ink','highlight','text'].includes(item.kind);
       r2.selection(item);
-      if(item.kind==='text')void r2.editText(doc,item).catch(error=>message('Không mở được định dạng chữ: '+String(error?.message||error)));
+      if(item.kind==='text')void r2.editText(doc,item,{focus:false}).catch(error=>message('Không mở được định dạng chữ: '+String(error?.message||error)));
       doc.container.querySelectorAll('.signature').forEach(el => { el.classList.toggle('selected', el === node); el.querySelectorAll('.handle').forEach(h => h.hidden = el !== node); });
       const start = { ...item.rect }, x = e.clientX, y = e.clientY, bounds = layer.getBoundingClientRect(), handle = e.target.dataset.h;
       node.setPointerCapture(e.pointerId);
