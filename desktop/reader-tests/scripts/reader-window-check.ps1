@@ -24,6 +24,7 @@ public static class ReaderWindows {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetWindowText(IntPtr hwnd, string text);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetFocus();
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint attach, uint attachTo, bool connect);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
@@ -78,10 +79,10 @@ public static class ReaderWindows {
             bool attached = thread != ours && AttachThreadInput(ours,thread,true);
             if(thread != ours && !attached) return true;
             try {
-                ShowWindow(hwnd,5); // SW_SHOW: the real modal dialog
+                ShowWindow(hwnd,5);
                 SetForegroundWindow(hwnd);
                 SetFocus(edit);
-                found = GetForegroundWindow() == hwnd;
+                found = GetForegroundWindow() == hwnd && GetFocus() == edit;
             } finally {
                 if(attached) AttachThreadInput(ours,thread,false);
             }
@@ -129,20 +130,12 @@ if ($Mode -eq 'SaveAs') {
     $testRoot = [IO.Path]::GetFullPath((Join-Path (Get-Location) 'desktop/reader-tests/test-results/native-activation'))
     $target = [IO.Path]::GetFullPath($FilePath)
     if (-not $target.StartsWith($testRoot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetExtension($target) -ne '.pdf') { throw 'Save test must stay inside synthetic native results' }
-    # Only native, physically focused keyboard interaction can notify the
-    # Explorer-style filename combo. SetWindowText + WM_COMMAND alone returned
-    # success while silently saving the original default name in CI #13.
+    # Send input only after verifying both the PID-owned modal foreground and
+    # its filename Edit focus. Actual output existence is asserted by Node.
+    . (Join-Path $PSScriptRoot 'save-dialog-input.ps1')
     $sentInput = $false
     if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-        $sentInput = [ReaderWindows]::FocusSaveAs($apps[0].Id)
-        if ($sentInput) {
-            Add-Type -AssemblyName System.Windows.Forms
-            $escaped = -join @($target.ToCharArray() | ForEach-Object {
-                $character = [string]$_
-                if ('+^%~(){}[]'.Contains($character)) { '{' + $character + '}' } else { $character }
-            })
-            [System.Windows.Forms.SendKeys]::SendWait('^a' + $escaped + '{ENTER}')
-        }
+        $sentInput = Send-ReaderSavePath -ProcessId $apps[0].Id -Target $target
     }
     @{ submitted=$sentInput; saved=(Test-Path -LiteralPath $target -PathType Leaf); dialogs=@([ReaderWindows]::Dialogs($apps[0].Id)) } | ConvertTo-Json -Compress
     exit
