@@ -280,3 +280,19 @@ Forbidden:
 ## 14. ACTIVE sReader NEXT EXECUTION — 2026-10-19
 
 After Reader-only CI #1 SUCCESS on `feat/windows-reader-fast-ci`, the next Codex task is **not more CI plumbing**. Read `docs/CODEX-SREADER-NEXT-AFTER-CI1-2026-10-19.md` and execute immediately: P1 Explorer launches the second PDF into a new TAB of the SAME Reader window; P2 compact Rune-inspired Reader UI with screenshots for owner; P3 real F5 presentation; P4 remaining functional gaps. Preserve full Toolbox, Quick Sign and Reader-only CI, and do not rerun full Toolbox for incremental Reader work. GitHub current HEAD overrides old SHAs or this dated note.
+
+## 15. READER PRE-WRITE FAIL-CLOSED GATE — 2026-10-20
+
+A previous continuation mistakenly worked from a stale branch, ignored 66 newer Reader commits, recreated an existing Reader CI, and produced duplicate PR #140 (closed, never merged). Reading this document without completing the gate is **not compliance**.
+
+Before starting a new sReader code change, obtain an explicit active feature branch and exact 40-character HEAD from live GitHub, inspect all repository-wide latest Actions **without a branch filter**, then prove exact-HEAD Reader CI and inspect the proposed edit path. Use the read-only guard:
+
+```bash
+node scripts/reader-preflight.mjs --branch feat/windows-reader-fast-unified-controls --head <LIVE-40-CHAR-SHA> --edit desktop/ui/reader.css
+# For a proposed new file, use --create <repo/path> instead of --edit.
+node --test scripts/reader-preflight.test.mjs
+```
+
+The literal branch in this example is illustrative and must be replaced by the current user-selected development branch on every continuation. **Do not infer the active branch from the newest CI run:** another/stale branch may have a newer run. This guard refuses stale HEAD, missing global Actions, exact-head CI not PASS, missing edit file or duplicate create path. Then read exact source and existing tests for semantic duplicates; the guard cannot detect feature-level duplication on its own.
+
+If the local shell/network cannot execute the script, perform the same independent, unfiltered repository Actions + explicit branch/HEAD + exact-HEAD CI + existing-file checks through the available GitHub connector. If either route is unavailable, **STOP without writing** and report the exact unavailable source. Run this gate once against the active base for a coherent task batch, use a dedicated branch for changes, check every subsequent write's branch HEAD, and require new exact-head CI before claiming a Windows fix. No releases/main changes are authorized by passing preflight.
