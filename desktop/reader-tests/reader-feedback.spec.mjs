@@ -9,7 +9,18 @@ for(const deviceScaleFactor of [1,1.25])test.describe(`refined selection ${devic
   await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');const before=await page.locator('#open').boundingBox();await open(page);expect((await page.locator('#open').boundingBox()).x).toBe(before.x);
   await expect(page.locator('header #saveCurrent')).toBeVisible();await expect(page.locator('header #save')).toBeVisible();await expect(page.locator('header #tools')).toBeVisible();
   await stamp(page);await page.locator('#zoom').selectOption('1.5');const mark=page.locator('.signature.selected'),id=await mark.getAttribute('data-signature');
-  await expect(mark.locator('.handle:not([hidden])')).toHaveCount(8);expect(await mark.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  await expect(mark.locator('.handle:not([hidden])')).toHaveCount(8);
+  // PDF.js may replace the selected signature overlay after a zoom. An element
+  // resolved by Playwright can detach before its computed style is read, and
+  // getComputedStyle(detachedNode).backgroundColor returns an empty string.
+  // Requery the live, attached overlay and validate identity + transparency in
+  // one browser task; never weaken the expected visual or geometry assertions.
+  await expect.poll(() => page.evaluate(() => {
+    const node = document.querySelector('.readerContainer:not([hidden]) .signature.selected');
+    if (!node?.isConnected || !node.closest('.page')) return null;
+    return {id: node.dataset.signature, background: getComputedStyle(node).backgroundColor};
+  }), {message: 'selected signature remains transparent after zoom redraw'})
+    .toEqual({id, background: 'rgba(0, 0, 0, 0)'});
   for(const h of await mark.locator('.handle').all())expect((await h.boundingBox()).width).toBeCloseTo(14,0);
   await page.locator('#query').fill('keep');await page.locator('#query').press('Delete');await expect(mark).toHaveAttribute('data-signature',id);
   await page.locator('#readerMenu').focus();await page.keyboard.press('Delete');await expect(page.locator('.signature')).toHaveCount(0);await command(page,'undo');await expect(page.locator('.signature')).toHaveCount(1);
