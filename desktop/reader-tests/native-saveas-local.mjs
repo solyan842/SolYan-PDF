@@ -18,7 +18,8 @@ const log=[];let app,browser,page,passed=false;
 async function windows(mode,target){
  const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-Mode',mode,'-ReaderPid',String(app?.pid||0),'-Exe',exe];
  if(target)args.push('-Target',target);
- const {stdout}=await exec('powershell.exe',args,{windowsHide:true,timeout:20000});
+ const host=mode==='SaveAs'?'pwsh.exe':'powershell.exe';
+ const {stdout}=await exec(host,args,{windowsHide:true,timeout:20000});
  return JSON.parse(stdout.trim());
 }
 async function port(){const server=net.createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const value=server.address().port;await new Promise(r=>server.close(r));return value;}

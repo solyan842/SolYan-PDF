@@ -69,3 +69,32 @@ Actions and exact HEAD. If failed, read that job's actual log once and use its
 diagnostic artifact if needed. Do not call Save As fixed before exact-head
 native acceptance PASS. After PASS continue the lean Rune-like Reader work;
 do not merge optional lazy-fontkit changes or touch main/stable automatically.
+
+## CI #14 diagnosis and transport consistency correction
+
+Exact SHA 5ba3e42, run 39388464508, failed job 118513939447. Raw log
+read once and artifact 12248493351 inspected. Real common-dialog smoke
+passed all three cases on CI; Rust/build passed. Installed-app Save As
+failed at native-activation.mjs:188: submitted=true but saved=false and
+expected PDF absent after 15 seconds. This is not a proven product export
+failure; it is also not a Save As PASS.
+
+The previous smoke exercised same-process PowerShell 7 input, while the
+installed helper used another process and Windows PowerShell 5/.NET
+Framework WinForms 4. The verified local assemblies differ (Core WinForms
+10 versus Framework WinForms 4). Microsoft documents two SendKeys
+implementations and cross-application timing differences:
+https://learn.microsoft.com/en-us/dotnet/desktop/winforms/input-keyboard/how-to-simulate-events
+
+Correction: installed and focused-local Save As now explicitly use pwsh,
+and shared input refuses legacy PowerShell. The fast smoke sends input
+from a separate pwsh process to match the app helper process boundary.
+Every installed Save As poll is recorded, including failed focus attempts;
+input evidence includes runtime/assembly and actual filename before/after.
+Exact-file/Unicode-form/Ctrl+S/source/cancel gates remain unchanged.
+
+Local syntax, combined C# compile, escaping and diff checks PASS. The
+new cross-process smoke cannot execute interactively inside the Codex
+private desktop; CI must prove it and the full installed-app PDF flow.
+Do not call the runtime mismatch the confirmed sole root cause until
+the installed application acceptance passes. No application source changed.

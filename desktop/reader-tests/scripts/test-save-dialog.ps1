@@ -90,7 +90,10 @@ foreach ($name in @('working-copy.pdf', 'Tiếng Việt (1) + ^ % ~ {a} [b].pdf'
         $deadline = [DateTime]::UtcNow.AddSeconds(10)
         $submitted = $false
         do {
-            $submitted = Send-ReaderSavePath -ProcessId $PID -Target $target
+            $raw = & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'test-save-dialog-input.ps1') -FixturePid $PID -Target $target
+            if ($LASTEXITCODE -ne 0) { throw 'Cross-process dialog input helper failed' }
+            $inputResult = $raw | ConvertFrom-Json
+            $submitted = $inputResult.submitted
             if (-not $submitted) { Start-Sleep -Milliseconds 100 }
         } while (-not $submitted -and [DateTime]::UtcNow -lt $deadline)
         if ([DialogFixture]::Failure) { throw [DialogFixture]::Failure }

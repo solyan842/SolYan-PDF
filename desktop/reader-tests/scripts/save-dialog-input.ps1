@@ -8,9 +8,20 @@ function ConvertTo-ReaderSaveKeys([string]$Target) {
 }
 
 function Send-ReaderSavePath([uint32]$ProcessId, [string]$Target) {
+    if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'Save As input requires PowerShell 7; do not fall back to legacy SendKeys' }
     Add-Type -AssemblyName System.Windows.Forms
+    $script:ReaderSaveInputEvidence=@{
+        powershell=$PSVersionTable.PSVersion.ToString()
+        forms=[System.Windows.Forms.SendKeys].Assembly.FullName
+        before=[ReaderWindows]::SaveAsFilename($ProcessId)
+    }
     $escaped = ConvertTo-ReaderSaveKeys $Target
-    if (-not [ReaderWindows]::FocusSaveAs($ProcessId)) { return $false }
+    if (-not [ReaderWindows]::FocusSaveAs($ProcessId)) {
+        $script:ReaderSaveInputEvidence.focused=$false
+        return $false
+    }
+    $script:ReaderSaveInputEvidence.focused=$true
     [System.Windows.Forms.SendKeys]::SendWait('^a' + $escaped + '{ENTER}')
+    $script:ReaderSaveInputEvidence.after=[ReaderWindows]::SaveAsFilename($ProcessId)
     return $true
 }

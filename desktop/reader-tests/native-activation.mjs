@@ -28,7 +28,8 @@ async function policy(mode,stateFile,cdp,profile){
 async function windows(mode='Inspect',file){
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-Mode',mode,'-Exe',exe];
   if(file)args.push('-FilePath',file);
-  const {stdout}=await exec('powershell.exe',args,{windowsHide:true,timeout:20000});
+  const host=mode==='SaveAs'?'pwsh.exe':'powershell.exe';
+  const {stdout}=await exec(host,args,{windowsHide:true,timeout:20000});
   return JSON.parse(stdout.trim());
 }
 async function assertSingle(){
@@ -187,7 +188,7 @@ try{
   await page.locator('#saveCurrent').click();
   await expect.poll(async()=>{
     const result=await windows('SaveAs',output);
-    if(result.submitted || result.saved)log.push({saveDialog:result});
+    log.push({saveDialog:result});
     return result.saved;
   },{timeout:15000,message:'native Save As writes the selected test path, not the default Documents folder'}).toBe(true);
   await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');

@@ -60,6 +60,23 @@ public static class ReaderWindows {
     public static string[] Dialogs(uint processId) {
         var result=new List<string>();EnumWindows((hwnd,state)=>{uint owner;GetWindowThreadProcessId(hwnd,out owner);var kind=new StringBuilder(256);GetClassName(hwnd,kind,256);if(owner!=processId||kind.ToString()!="#32770")return true;result.Add("dialog="+hwnd);EnumChildWindows(hwnd,(child,unused)=>{var c=new StringBuilder(256);GetClassName(child,c,256);result.Add("id="+GetDlgCtrlID(child)+" class="+c);return result.Count<150;},IntPtr.Zero);return true;},IntPtr.Zero);return result.ToArray();
     }
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,SetLastError=true)]
+    static extern IntPtr SendMessageTimeout(IntPtr hwnd,uint message,IntPtr wparam,StringBuilder text,uint flags,uint timeout,out IntPtr result);
+    public static string SaveAsFilename(uint processId) {
+        string result=null;
+        EnumWindows((hwnd,state)=>{
+            uint owner;GetWindowThreadProcessId(hwnd,out owner);
+            var kind=new StringBuilder(256);GetClassName(hwnd,kind,256);
+            if(owner!=processId||kind.ToString()!="#32770")return true;
+            var edit=Descendant(hwnd,1001);if(edit==IntPtr.Zero)return true;
+            var editClass=new StringBuilder(256);GetClassName(edit,editClass,256);
+            if(editClass.ToString()!="Edit")return true;
+            var text=new StringBuilder(32768);IntPtr copied;
+            result=SendMessageTimeout(edit,0x000D,new IntPtr(text.Capacity),text,2,1000,out copied)!=IntPtr.Zero?text.ToString():"<unavailable>";
+            return false;
+        },IntPtr.Zero);
+        return result;
+    }
     public static bool FocusSaveAs(uint processId) {
         bool found = false;
         EnumWindows((hwnd, state) => {
@@ -137,7 +154,7 @@ if ($Mode -eq 'SaveAs') {
     if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
         $sentInput = Send-ReaderSavePath -ProcessId $apps[0].Id -Target $target
     }
-    @{ submitted=$sentInput; saved=(Test-Path -LiteralPath $target -PathType Leaf); dialogs=@([ReaderWindows]::Dialogs($apps[0].Id)) } | ConvertTo-Json -Compress
+    @{ submitted=$sentInput; input=$script:ReaderSaveInputEvidence; saved=(Test-Path -LiteralPath $target -PathType Leaf); dialogs=@([ReaderWindows]::Dialogs($apps[0].Id)) } | ConvertTo-Json -Compress
     exit
 }
 if ($Mode -eq 'CancelOpen') {
