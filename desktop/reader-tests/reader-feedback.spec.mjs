@@ -3,10 +3,22 @@ import {PDFDocument,degrees} from 'pdf-lib';
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {readFile} from 'node:fs/promises';
 import {command} from './reader-command.mjs';
-async function open(page){const pdf=await PDFDocument.create();for(const [i,size]of [[600,800],[800,600],[14400,14400]].entries()){const p=pdf.addPage(size);p.drawText('Ghi chú SOURCE '+(i+1),{x:60,y:size[1]-100});if(i===1)p.setRotation(degrees(90));}const buffer=Buffer.from(await pdf.save());await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#pdfFiles').setInputFiles({name:'Mở PDF.pdf',mimeType:'application/pdf',buffer});await expect(page.locator('.page canvas').first()).toBeVisible();return buffer;}
+async function open(page,{navigate=true}={}){const pdf=await PDFDocument.create();for(const [i,size]of [[600,800],[800,600],[14400,14400]].entries()){const p=pdf.addPage(size);p.drawText('Ghi chú SOURCE '+(i+1),{x:60,y:size[1]-100});if(i===1)p.setRotation(degrees(90));}const buffer=Buffer.from(await pdf.save());if(navigate){await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');}await page.locator('#pdfFiles').setInputFiles({name:'Mở PDF.pdf',mimeType:'application/pdf',buffer});await expect(page.locator('.page canvas').first()).toBeVisible();return buffer;}
 async function stamp(page){await page.locator('#sign').click();await page.locator('#signatureName').fill('SolYan');await page.locator('#typeName').click();await page.locator('#useSign').click();await expect(page.locator('.signature.selected')).toBeVisible();}
 for(const deviceScaleFactor of [1,1.25])test.describe(`refined selection ${deviceScaleFactor}`,()=>{test.use({deviceScaleFactor});test('small handles, transparent artwork, Delete guard, fixed file buttons and Ctrl-wheel',async({page})=>{
-  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');const before=await page.locator('#open').boundingBox();await open(page);expect((await page.locator('#open').boundingBox()).x).toBe(before.x);
+  await page.goto('/reader.html');
+  await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  // Compare the same WebView document before and after opening the PDF. The
+  // old helper navigated a SECOND time, making its zero-tolerance header
+  // measurement depend on asynchronous Windows font initialization.
+  await page.evaluate(()=>document.fonts.ready);
+  const before=await page.locator('#open').boundingBox();
+  await open(page,{navigate:false});
+  // Keep EXACT toolbar geometry acceptance, with font loading settled.
+  await expect.poll(async()=>{
+    await page.evaluate(()=>document.fonts.ready);
+    return (await page.locator('#open').boundingBox()).x;
+  },{message:'PDF opening must not shift the Open button'}).toBe(before.x);
   await expect(page.locator('header #saveCurrent')).toBeVisible();await expect(page.locator('header #save')).toBeVisible();await expect(page.locator('header #tools')).toBeVisible();
   await stamp(page);await page.locator('#zoom').selectOption('1.5');const mark=page.locator('.signature.selected'),id=await mark.getAttribute('data-signature');
   // PDF.js rebuilds the signature overlay during zoom. A Locator.all() array
