@@ -158,6 +158,20 @@ try{
   await expect.poll(async()=>(await assertSingle()).maximized).toBe(!originalMaximized);
   await page.locator('#window-maximize').click();
   await expect.poll(async()=>(await assertSingle()).maximized).toBe(originalMaximized);
+  // User acceptance: double-click the BLANK draggable titlebar to maximize;
+  // a second double-click must restore the exact native x/y/width/height.
+  expect(originalWindow.bounds).toHaveLength(4);
+  await page.locator('.title-drag').dblclick();
+  await expect.poll(async()=>(await assertSingle()).maximized).toBe(!originalMaximized);
+  await page.locator('.title-drag').dblclick();
+  await expect.poll(async()=>(await assertSingle()).maximized).toBe(originalMaximized);
+  await expect.poll(async()=>(await assertSingle()).bounds).toEqual(originalWindow.bounds);
+  const blockedLink=await page.evaluate(async()=>{
+    try{await window.__TAURI__.core.invoke('reader_open_external',{kind:'https://example.com'});return false;}
+    catch{return true;}
+  });
+  expect(blockedLink).toBe(true);
+  log.push({case:'titlebar-double-click-Win32-geometry-and-allowlisted-external',bounds:originalWindow.bounds});
   // Native IPC cannot be used as an arbitrary filesystem reader.
   expect(await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('reader_read_open_request',{ticket:'C:/Windows/win.ini'});return false;}catch{return true;}})).toBe(true);
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
