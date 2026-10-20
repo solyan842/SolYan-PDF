@@ -25,7 +25,29 @@ export function installReaderShell(api,panels){
     const b=node('button',{id:'window-'+action,textContent:glyph,title:label});b.setAttribute('aria-label',label);
     b.onclick=api.attempt(async()=>{if(action==='close'){if([...api.documents.values()].some(d=>d.dirty)&&!confirm(t('Đóng cửa sổ và bỏ thay đổi chưa lưu?')))return;api.beforeClose();}await invoke(action);});caption.append(b);
   }
-  drag.onpointerdown=api.attempt(e=>{if(e.button===0&&!caption.hidden)return invoke(e.detail===2?'maximize':'drag');});
+  // Native start_dragging on the FIRST pointerdown consumes the second click,
+  // so WebView2 never delivers a usable dblclick. Start a drag only after the
+  // pointer has actually moved; a true double-click toggles OS maximize/restore.
+  let pendingDrag=null;
+  drag.addEventListener('pointerdown',event=>{
+    if(event.button!==0||caption.hidden)return;
+    pendingDrag={id:event.pointerId,x:event.clientX,y:event.clientY};
+  });
+  drag.addEventListener('pointermove',api.attempt(async event=>{
+    if(!pendingDrag||event.pointerId!==pendingDrag.id||caption.hidden)return;
+    if(Math.hypot(event.clientX-pendingDrag.x,event.clientY-pendingDrag.y)<6)return;
+    pendingDrag=null;
+    await invoke('drag');
+  }));
+  for(const eventName of ['pointerup','pointercancel','pointerleave']){
+    drag.addEventListener(eventName,()=>{pendingDrag=null;});
+  }
+  drag.addEventListener('dblclick',api.attempt(async event=>{
+    if(event.button!==0||caption.hidden)return;
+    event.preventDefault();
+    pendingDrag=null;
+    await invoke('maximize');
+  }));
   if(window.__TAURI__?.core)invoke('available').then(on=>{caption.hidden=!on;}).catch(()=>{});
   const left=node('div',{className:'toolbar-left'}),center=node('div',{className:'toolbar-center'}),right=node('div',{className:'toolbar-right'});
   toolbar.replaceChildren(left,center,right);
@@ -43,7 +65,7 @@ export function installReaderShell(api,panels){
   const styles=popup('toolStyle','Màu bút / tô sáng','pen',center);styles.append(take('annotationStyles'));
   markup.append(node('h3',{textContent:'Chú thích'}));
   for(const b of [...panels.comment.children])markup.append(b);
-  const fill=popup('fillMenu','Điền & ký','cursor-text',center);
+  const fill=popup('fillMenu','Điền & ký','note-pencil',center);
   fill.append(node('h3',{textContent:'Điền & ký'}));for(const b of [...panels.sign.children])fill.append(b);
   for(const id of ['query','findPrevious','findNext','matches'])move(id,right);
   icon(move('theme',right));
@@ -78,7 +100,18 @@ export function installReaderShell(api,panels){
   const settingsButton=node('button',{id:'settings',textContent:'Tùy chọn hiển thị…'});settingsButton.onclick=()=>{theme.value=document.documentElement.dataset.theme;invert.checked=document.body.classList.contains('page-night');settings.showModal();};menu.append(settingsButton);
   const about=node('dialog',{id:'readerAbout'}),logo=node('img',{src:'./vendor/sReader_PDF.png',alt:'sReader PDF',className:'about-logo'}),version=node('span',{id:'aboutVersion',textContent:'…'});
   about.append(logo,node('h2',{textContent:'sReader PDF'}));
-  for(const [label,value]of [['Phiên bản',version],['Tác giả','Hoang Minh Anh / SolYan84'],['Email',node('a',{href:'mailto:yansign841@gmail.com',textContent:'yansign841@gmail.com'})],['Website',node('a',{href:'https://www.youtube.com/@SolYan-Music',textContent:'https://www.youtube.com/@SolYan-Music',target:'_blank',rel:'noopener noreferrer'})]]){const row=node('p');row.append(node('strong',{textContent:label+': '}),typeof value==='string'?document.createTextNode(value):value);about.append(row);}
+  const email=node('a',{href:'mailto:yansign841@gmail.com',textContent:'yansign841@gmail.com'});
+  const website=node('a',{href:'https://www.youtube.com/@SolYan-Music',textContent:'https://www.youtube.com/@SolYan-Music',target:'_blank',rel:'noopener noreferrer'});
+  for(const [link,kind]of [[email,'email'],[website,'website']]){
+    link.addEventListener('click',api.attempt(async event=>{
+      if(!window.__TAURI__?.core)return; // Normal browser: keep native link navigation.
+      event.preventDefault();
+      // WebView2 does not automatically forward target=_blank to the user's
+      // default browser. The native command opens only fixed About URLs.
+      await window.__TAURI__.core.invoke('reader_open_external',{kind});
+    }));
+  }
+  for(const [label,value]of [['Phiên bản',version],['Tác giả','Hoang Minh Anh / SolYan84'],['Email',email],['Website',website]]){const row=node('p');row.append(node('strong',{textContent:label+': '}),typeof value==='string'?document.createTextNode(value):value);about.append(row);}
   const aboutClose=node('button',{textContent:'Đóng'});aboutClose.onclick=()=>about.close();about.append(aboutClose);document.body.append(about);
   const aboutButton=node('button',{id:'about',textContent:'Giới thiệu…'});aboutButton.onclick=api.attempt(async()=>{about.showModal();let value;try{value=await window.__TAURI__?.core?.invoke('reader_version');}catch{}if(typeof value!=='string')value=(await(await fetch('./vendor/reader-version.json')).json()).version;version.textContent=value;});menu.append(aboutButton);
   document.addEventListener('keydown',e=>{const editing=e.target.closest('input,textarea,[contenteditable=true]');if(e.key==='F1'){e.preventDefault();if(!help.open)help.showModal();}if(e.key==='F9'){e.preventDefault();$('sideToggle').click();}if(e.ctrlKey&&!editing&&e.key.toLowerCase()==='b'){e.preventDefault();take('bookmarkAdd').click();}});
