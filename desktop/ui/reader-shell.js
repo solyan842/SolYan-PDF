@@ -79,6 +79,59 @@ export function installReaderShell(api,panels){
   const view=node('details'),summary=node('summary',{textContent:'Chế độ xem'});view.append(summary);menu.append(view);
   for(const b of [...panels.view.children])view.append(b);
   shortcut('Trình chiếu tài liệu (F11)','presentation');
+  // Read metadata from the existing PDF.js document, never from a native
+  // unrestricted path and never update the input PDF or pending annotations.
+  const properties=node('dialog',{id:'readerProperties'});
+  properties.setAttribute('aria-labelledby','readerPropertiesTitle');
+  const propertiesTitle=node('h2',{id:'readerPropertiesTitle',textContent:'Thuộc tính tài liệu'});
+  const propertiesDetails=node('dl',{id:'readerPropertiesDetails'});
+  const propertiesClose=node('button',{id:'readerPropertiesClose',textContent:'Đóng'});
+  propertiesClose.onclick=()=>properties.close();
+  properties.append(propertiesTitle,propertiesDetails,propertiesClose);
+  document.body.append(properties);
+  const propertiesButton=node('button',{id:'documentProperties',textContent:'Thuộc tính tài liệu…'});
+  propertiesButton.onclick=api.attempt(async()=>{
+    const selected=api.current();
+    if(!selected){api.message(t('Mở PDF trước.'));return;}
+    const [metadata,page]=await Promise.all([selected.pdf.getMetadata(),selected.pdf.getPage(1)]);
+    // A document may be closed or another tab activated while metadata loads.
+    if(!api.documents.has(selected.id)||api.current()!==selected)return;
+    const info=metadata?.info||{};
+    const format=value=>{
+      if(value===null||value===undefined||value==='')return t('Không có thông tin');
+      // Metadata is untrusted PDF text: textContent only, no HTML.
+      return String(value).replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,500)||t('Không có thông tin');
+    };
+    const pageWidth=Math.abs(page.view[2]-page.view[0]);
+    const pageHeight=Math.abs(page.view[3]-page.view[1]);
+    const formatPoint=value=>Number(value.toFixed(2)).toLocaleString(document.documentElement.lang==='en'?'en-US':'vi-VN');
+    const size=(selected.bytes.byteLength/1024).toLocaleString(document.documentElement.lang==='en'?'en-US':'vi-VN',{maximumFractionDigits:1});
+    const fields=[
+      ['file','Tên tệp',selected.name],
+      ['pages','Số trang',selected.pdf.numPages],
+      ['size','Dung lượng',size+' KB'],
+      ['firstPage','Kích thước trang đầu',formatPoint(pageWidth)+' × '+formatPoint(pageHeight)+' pt'],
+      ['version','Phiên bản PDF',info.PDFFormatVersion],
+      ['title','Tiêu đề',info.Title],
+      ['author','Tác giả',info.Author],
+      ['subject','Chủ đề',info.Subject],
+      ['keywords','Từ khóa',info.Keywords],
+      ['creator','Ứng dụng tạo',info.Creator],
+      ['producer','Phần mềm PDF',info.Producer],
+      ['created','Ngày tạo',info.CreationDate],
+      ['modified','Ngày sửa',info.ModDate]
+    ];
+    propertiesDetails.replaceChildren();
+    for(const [key,label,value]of fields){
+      const term=node('dt',{textContent:t(label)}),description=node('dd',{textContent:format(value)});
+      description.dataset.property=key;
+      propertiesDetails.append(term,description);
+    }
+    propertiesTitle.textContent=t('Thuộc tính tài liệu');
+    propertiesClose.textContent=t('Đóng');
+    properties.showModal();
+  });
+  menu.append(propertiesButton);
   const footer=node('footer',{id:'readerFooter'}),navigation=node('div',{className:'footer-navigation'}),views=node('div',{className:'footer-views'}),zoom=node('div',{className:'zoom-pill',ariaLabel:'Thu phóng'});
   const first=node('button',{id:'firstPage',textContent:'«',title:'Trang đầu'}),last=node('button',{id:'lastPage',textContent:'»',title:'Trang cuối'});first.setAttribute('aria-label','Trang đầu');last.setAttribute('aria-label','Trang cuối');first.onclick=()=>{if(api.current())api.current().view.currentPageNumber=1;};last.onclick=()=>{if(api.current())api.current().view.currentPageNumber=api.current().pdf.numPages;};
   take('previous').textContent='‹';take('next').textContent='›';navigation.append(first);for(const id of ['previous','pageNumber','pageCount','next'])navigation.append(take(id));navigation.append(last);

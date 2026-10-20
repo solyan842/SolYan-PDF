@@ -233,3 +233,13 @@ html[data-theme=dark] #readerFormatPanel button{color:inherit}
 body:has(#readerFormatPanel:not([hidden])) #signOptions{display:none!important}
 @media(max-width:1100px){#readerFormatPanel{width:290px;min-width:270px;max-width:34vw}
   #readerFormatPanel .format-scroll{padding:5px 10px}}
+
+/* Read-only document properties. Text from an untrusted PDF never becomes HTML. */
+#readerProperties{width:min(610px,calc(100vw - 32px));max-width:none;max-height:80vh;overflow:auto;padding:22px}
+#readerProperties h2{font-size:18px;margin:0 0 16px}
+#readerPropertiesDetails{display:grid;grid-template-columns:minmax(130px,34%) minmax(0,1fr);
+  column-gap:18px;row-gap:11px;margin:0 0 20px;font-size:12px;line-height:1.5}
+#readerPropertiesDetails dt{color:var(--muted);font-weight:600}
+#readerPropertiesDetails dd{margin:0;min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
+#readerPropertiesClose{display:block;margin-left:auto}
+@media(max-width:450px){#readerPropertiesDetails{grid-template-columns:minmax(95px,37%) minmax(0,1fr);gap:8px}}

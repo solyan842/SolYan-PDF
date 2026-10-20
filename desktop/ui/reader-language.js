@@ -2,6 +2,11 @@
 let language='vi';try{if(localStorage.getItem('sreader.language')==='en')language='en';}catch{}
 const strings={
   'Điền biểu mẫu PDF':'Fill PDF forms','PDF này không có trường biểu mẫu có thể điền.':'This PDF has no fillable form fields.','Nhấn vào trường trên trang để điền; dùng Tab để chuyển trường.':'Click a field on the page; use Tab to move between fields.',
+  'Thuộc tính tài liệu':'Document properties','Thuộc tính tài liệu…':'Document properties…',
+  'Tên tệp':'File name','Số trang':'Pages','Dung lượng':'File size','Kích thước trang đầu':'First page size',
+  'Phiên bản PDF':'PDF version','Tiêu đề':'Title','Chủ đề':'Subject','Từ khóa':'Keywords',
+  'Ứng dụng tạo':'Creator application','Phần mềm PDF':'PDF producer','Ngày tạo':'Created','Ngày sửa':'Modified',
+  'Không có thông tin':'Not specified',
   'In PDF':'Print PDF','In PDF…    Ctrl+P':'Print PDF…    Ctrl+P','In…':'Print…','Trang cần in':'Pages to print','Độ phân giải bản in':'Print resolution','Trang cần in (all hoặc 1,3-5)':'Pages to print (all or 1,3-5)',
   'In bản làm việc gồm biểu mẫu và phần đã chèn. PDF nguồn không thay đổi.':'Print the working copy including forms and inserted content. The source PDF stays unchanged.',
   'Tối đa 50 trang và 80 triệu điểm ảnh mỗi đợt. Chọn khoảng nhỏ hơn khi tài liệu lớn.':'Up to 50 pages and 80 million pixels per job. Choose a smaller range for large documents.',
