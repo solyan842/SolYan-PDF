@@ -9,19 +9,27 @@ for(const deviceScaleFactor of [1,1.25])test.describe(`refined selection ${devic
   await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');const before=await page.locator('#open').boundingBox();await open(page);expect((await page.locator('#open').boundingBox()).x).toBe(before.x);
   await expect(page.locator('header #saveCurrent')).toBeVisible();await expect(page.locator('header #save')).toBeVisible();await expect(page.locator('header #tools')).toBeVisible();
   await stamp(page);await page.locator('#zoom').selectOption('1.5');const mark=page.locator('.signature.selected'),id=await mark.getAttribute('data-signature');
-  await expect(mark.locator('.handle:not([hidden])')).toHaveCount(8);
-  // PDF.js may replace the selected signature overlay after a zoom. An element
-  // resolved by Playwright can detach before its computed style is read, and
-  // getComputedStyle(detachedNode).backgroundColor returns an empty string.
-  // Requery the live, attached overlay and validate identity + transparency in
-  // one browser task; never weaken the expected visual or geometry assertions.
+  // PDF.js rebuilds the signature overlay during zoom. A Locator.all() array
+  // can hold eight handles from an obsolete DOM generation; boundingBox()
+  // correctly returns null for those detached nodes. Sample everything from
+  // ONE connected generation and poll until PDF.js finishes the redraw.
+  // All original checks are retained: same signature ID, transparent artwork,
+  // exactly eight visible handles, each 14px wide (toBeCloseTo(14, 0) tolerance).
   await expect.poll(() => page.evaluate(() => {
     const node = document.querySelector('.readerContainer:not([hidden]) .signature.selected');
-    if (!node?.isConnected || !node.closest('.page')) return null;
-    return {id: node.dataset.signature, background: getComputedStyle(node).backgroundColor};
-  }), {message: 'selected signature remains transparent after zoom redraw'})
-    .toEqual({id, background: 'rgba(0, 0, 0, 0)'});
-  for(const h of await mark.locator('.handle').all())expect((await h.boundingBox()).width).toBeCloseTo(14,0);
+    if (!node?.isConnected || !node.closest('.page')?.isConnected) return null;
+    const handles = [...node.querySelectorAll('.handle:not([hidden])')];
+    const widths = handles.map(handle => handle.getBoundingClientRect().width);
+    return {
+      id: node.dataset.signature,
+      background: getComputedStyle(node).backgroundColor,
+      handleCount: handles.length,
+      handles14px: widths.length === 8 && widths.every(width =>
+        Number.isFinite(width) && Math.abs(width - 14) < 0.5
+      )
+    };
+  }), {message: 'stable selected signature with eight 14px handles after zoom redraw'})
+    .toEqual({id, background: 'rgba(0, 0, 0, 0)', handleCount: 8, handles14px: true});
   await page.locator('#query').fill('keep');await page.locator('#query').press('Delete');await expect(mark).toHaveAttribute('data-signature',id);
   await page.locator('#readerMenu').focus();await page.keyboard.press('Delete');await expect(page.locator('.signature')).toHaveCount(0);await command(page,'undo');await expect(page.locator('.signature')).toHaveCount(1);
   const canvas=page.locator('.readerContainer:not([hidden]) .page').first(),box=await canvas.boundingBox(),container=await page.locator('.readerContainer:not([hidden])').boundingBox();const point={x:Math.max(box.x,container.x)+100,y:Math.max(box.y,container.y)+100};
