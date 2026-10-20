@@ -22,6 +22,10 @@ public static class ReaderWindows {
     [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr hwnd, int id);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string kind, string title);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetWindowText(IntPtr hwnd, string text);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint attach, uint attachTo, bool connect);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -55,28 +59,34 @@ public static class ReaderWindows {
     public static string[] Dialogs(uint processId) {
         var result=new List<string>();EnumWindows((hwnd,state)=>{uint owner;GetWindowThreadProcessId(hwnd,out owner);var kind=new StringBuilder(256);GetClassName(hwnd,kind,256);if(owner!=processId||kind.ToString()!="#32770")return true;result.Add("dialog="+hwnd);EnumChildWindows(hwnd,(child,unused)=>{var c=new StringBuilder(256);GetClassName(child,c,256);result.Add("id="+GetDlgCtrlID(child)+" class="+c);return result.Count<150;},IntPtr.Zero);return true;},IntPtr.Zero);return result.ToArray();
     }
-    public static bool SaveAs(uint processId, string path) {
+    public static bool FocusSaveAs(uint processId) {
         bool found = false;
         EnumWindows((hwnd, state) => {
             uint owner; GetWindowThreadProcessId(hwnd, out owner);
             var kind = new StringBuilder(256); GetClassName(hwnd, kind, kind.Capacity);
             if (owner != processId || kind.ToString() != "#32770") return true;
-            // Modern Windows Explorer-style GetSaveFileNameW uses an Edit with
-            // control ID 1001 (confirmed by Reader CI #11 real dialog census).
-            // The previous 1152/1148-only lookup never found the file-name box.
-            var edit = Descendant(hwnd, 1001);
-            if (edit == IntPtr.Zero) edit = Descendant(hwnd, 1152);
-            if (edit == IntPtr.Zero) { var combo = Descendant(hwnd, 1148); if (combo != IntPtr.Zero) edit = FindWindowEx(combo,IntPtr.Zero,"Edit",null); }
-            if (edit != IntPtr.Zero) {
-                var editClass = new StringBuilder(256);
-                GetClassName(edit, editClass, editClass.Capacity);
-                if (editClass.ToString() == "Edit" && SetWindowText(edit,path)) {
-                    found = PostMessage(hwnd,0x0111,new IntPtr(1),IntPtr.Zero);
-                    return false;
-                }
+            // Control 1001 was confirmed to be the filename Edit on the
+            // installed GitHub Actions Windows dialog. Do not target the
+            // breadcrumb Edit (41477) or trigger IDOK with stale filename.
+            var edit = Descendant(hwnd,1001);
+            if(edit == IntPtr.Zero) return true;
+            var editClass = new StringBuilder(256);
+            GetClassName(edit,editClass,editClass.Capacity);
+            if(editClass.ToString() != "Edit") return true;
+            uint editOwner; uint thread = GetWindowThreadProcessId(edit,out editOwner);
+            uint ours = GetCurrentThreadId();
+            bool attached = thread != ours && AttachThreadInput(ours,thread,true);
+            if(thread != ours && !attached) return true;
+            try {
+                ShowWindow(hwnd,5); // SW_SHOW: the real modal dialog
+                SetForegroundWindow(hwnd);
+                SetFocus(edit);
+                found = GetForegroundWindow() == hwnd;
+            } finally {
+                if(attached) AttachThreadInput(ours,thread,false);
             }
-            return true;
-        }, IntPtr.Zero);
+            return !found;
+        },IntPtr.Zero);
         return found;
     }
     [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
@@ -119,7 +129,22 @@ if ($Mode -eq 'SaveAs') {
     $testRoot = [IO.Path]::GetFullPath((Join-Path (Get-Location) 'desktop/reader-tests/test-results/native-activation'))
     $target = [IO.Path]::GetFullPath($FilePath)
     if (-not $target.StartsWith($testRoot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetExtension($target) -ne '.pdf') { throw 'Save test must stay inside synthetic native results' }
-    @{ submitted=[ReaderWindows]::SaveAs($apps[0].Id,$target); dialogs=@([ReaderWindows]::Dialogs($apps[0].Id)) } | ConvertTo-Json -Compress
+    # Only native, physically focused keyboard interaction can notify the
+    # Explorer-style filename combo. SetWindowText + WM_COMMAND alone returned
+    # success while silently saving the original default name in CI #13.
+    $sentInput = $false
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        $sentInput = [ReaderWindows]::FocusSaveAs($apps[0].Id)
+        if ($sentInput) {
+            Add-Type -AssemblyName System.Windows.Forms
+            $escaped = -join @($target.ToCharArray() | ForEach-Object {
+                $character = [string]$_
+                if ('+^%~(){}[]'.Contains($character)) { '{' + $character + '}' } else { $character }
+            })
+            [System.Windows.Forms.SendKeys]::SendWait('^a' + $escaped + '{ENTER}')
+        }
+    }
+    @{ submitted=$sentInput; saved=(Test-Path -LiteralPath $target -PathType Leaf); dialogs=@([ReaderWindows]::Dialogs($apps[0].Id)) } | ConvertTo-Json -Compress
     exit
 }
 if ($Mode -eq 'CancelOpen') {

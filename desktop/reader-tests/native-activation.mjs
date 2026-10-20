@@ -4,7 +4,7 @@ import {chromium,expect} from '@playwright/test';
 import {PDFDocument} from 'pdf-lib';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import net from 'node:net';
@@ -179,7 +179,18 @@ try{
   await page.locator('#readerMenu').focus();await page.keyboard.press('Delete');await expect(page.locator('.signature')).toHaveCount(0);await command(page,'undo');await expect(page.locator('.signature')).toHaveCount(1);
   expect(await page.evaluate(async()=>{try{await window.__TAURI__.core.invoke('reader_save',{bytes:[37,80,68,70,45],document:'not-an-authorized-target'});return false;}catch{return true;}})).toBe(true);
   await page.locator('input[name=NativeName]').fill('Nguyễn Văn An');await expect(page.locator('#tabs .tab.active .title')).toContainText('●');
-  const output=join(root,'working-copy.pdf');await page.locator('#saveCurrent').click();await expect.poll(async()=>{const result=await windows('SaveAs',output);log.push({saveDialog:result});return result.submitted;},{timeout:15000}).toBe(true);await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');
+  const output=join(root,'working-copy.pdf');
+  // A successful WM_COMMAND/keyboard submission is NOT proof of the chosen
+  // destination. CI #13 saved to Documents while the helper claimed submitted.
+  // Assert the actual file exists at the exact requested sandbox path.
+  await rm(output,{force:true});
+  await page.locator('#saveCurrent').click();
+  await expect.poll(async()=>{
+    const result=await windows('SaveAs',output);
+    if(result.submitted || result.saved)log.push({saveDialog:result});
+    return result.saved;
+  },{timeout:15000,message:'native Save As writes the selected test path, not the default Documents folder'}).toBe(true);
+  await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');
   const firstSave=await readFile(output);expect((await PDFDocument.load(firstSave)).getForm().getTextField('NativeName').getText()).toBe('Nguyễn Văn An');expect(firstSave.subarray(0,5).toString()).toBe('%PDF-');await command(page,'fillCross');await page.keyboard.press('Control+s');await expect(page.locator('#tabs .tab.active .title')).not.toContainText('●');expect(await readFile(output)).not.toEqual(firstSave);expect(await readFile(a)).toEqual(originalA);
   await command(page,'settings');await page.locator('#readerLanguage').selectOption('en');await page.keyboard.press('Escape');await expect(page.locator('#open')).toHaveAttribute('title','Open PDF (Ctrl+O)');await command(page,'about');await expect(page.locator('#aboutVersion')).toHaveText('0.1.0');await expect(page.locator('#readerAbout')).toContainText('yansign841@gmail.com');await page.keyboard.press('Escape');
   await page.screenshot({path:join(root,'installed-English-footer.png')});
