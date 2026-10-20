@@ -45,6 +45,8 @@ export function installDefaultPdfPrompt({native=globalThis.__TAURI__,message=()=
     try{state=await native.core.invoke('reader_pdf_default_state');}
     catch{return;}
     if(state!=='other'||!defaultPdfCheckEnabled())return;
+    // File opened from Explorer: don't interrupt reading or automated file acceptance.
+    if(document.querySelector('#tabs .tab'))return;
     // Don't interrupt a native Save As, signature dialog or active form edit.
     if(document.querySelector('dialog[open]')){
       checked=false;
