@@ -22,3 +22,10 @@ test('Reader displays unshaded icons and distinct layout/fullscreen symbols',()=
  for(const name of Object.keys(source.assets)){const original=read('../ui/reader-icons/'+name).toString().replace(/\r\n/g,'\n');assert.equal(read('../ui/reader-icons/'+name.replace('-duotone','-outline')).toString(),original.replace(/<path\b[^>]*\bopacity="0\.2"[^>]*\/>/g,''));}
  assert.equal(new Set(Object.values(source.local.assets)).size,4);
 });
+
+
+test('Native Reader bootstrap has no eager browser-only transfer dependency',()=>{
+ const module=read('../ui/reader-actions.js').toString();
+ assert.doesNotMatch(module,/^import\s+.*document-transfer\.js/m,'document-transfer must not block app startup');
+ assert.match(module,/await import\('\.\/document-transfer\.js'\)/,'browser transfer must remain accessible on demand');
+});
