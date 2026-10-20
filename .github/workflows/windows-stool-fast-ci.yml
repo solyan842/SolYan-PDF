@@ -49,7 +49,7 @@ jobs:
         shell: pwsh
         working-directory: desktop/src-tauri
         run: |
-          cargo check --locked --no-default-features 2>&1 | Tee-Object ../../artifacts/stool-cargo-check.log
+          cargo check --no-default-features 2>&1 | Tee-Object ../../artifacts/stool-cargo-check.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Keep sTool diagnostics even on failure
         if: always()
