@@ -61,9 +61,20 @@ public static class ReaderWindows {
             uint owner; GetWindowThreadProcessId(hwnd, out owner);
             var kind = new StringBuilder(256); GetClassName(hwnd, kind, kind.Capacity);
             if (owner != processId || kind.ToString() != "#32770") return true;
-            var edit = Descendant(hwnd, 1152);
-            if (edit == IntPtr.Zero) { var combo = Descendant(hwnd, 1148); if (combo != IntPtr.Zero) { edit = FindWindowEx(combo,IntPtr.Zero,"Edit",null); if (edit == IntPtr.Zero) edit = combo; } }
-            if (edit != IntPtr.Zero && SetWindowText(edit,path)) { found = PostMessage(hwnd,0x0111,new IntPtr(1),IntPtr.Zero); return false; }
+            // Modern Windows Explorer-style GetSaveFileNameW uses an Edit with
+            // control ID 1001 (confirmed by Reader CI #11 real dialog census).
+            // The previous 1152/1148-only lookup never found the file-name box.
+            var edit = Descendant(hwnd, 1001);
+            if (edit == IntPtr.Zero) edit = Descendant(hwnd, 1152);
+            if (edit == IntPtr.Zero) { var combo = Descendant(hwnd, 1148); if (combo != IntPtr.Zero) edit = FindWindowEx(combo,IntPtr.Zero,"Edit",null); }
+            if (edit != IntPtr.Zero) {
+                var editClass = new StringBuilder(256);
+                GetClassName(edit, editClass, editClass.Capacity);
+                if (editClass.ToString() == "Edit" && SetWindowText(edit,path)) {
+                    found = PostMessage(hwnd,0x0111,new IntPtr(1),IntPtr.Zero);
+                    return false;
+                }
+            }
             return true;
         }, IntPtr.Zero);
         return found;
