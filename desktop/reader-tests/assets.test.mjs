@@ -87,3 +87,17 @@ test('Reader-only native WebView2 enables touchpad gestures without altering Too
  assert.match(js,/if\(!event\.ctrlKey\)return/);
  assert.match(js,/event\.preventDefault\(\)/);
 });
+
+test('Reader has exactly one shared rail/thumb style and one aligned text-control grid',()=>{
+ const stylesheet=read('../ui/reader.css').toString();
+ const shared=stylesheet.slice(stylesheet.indexOf('/* sReader control standard'),stylesheet.indexOf('/* Foxit-inspired docked'));
+ assert.match(shared,/input\[type=range\]::\-webkit-slider-runnable-track/);
+ assert.match(shared,/input\[type=range\]::\-webkit-slider-thumb/);
+ assert.match(shared,/height:2px/);
+ assert.match(shared,/width:10px;height:10px/);
+ assert.match(stylesheet,/--reader-control-height:32px/);
+ assert.match(stylesheet,/--reader-control-label-height:28px/);
+ assert.match(stylesheet,/grid-template-columns:minmax\(0,1fr\) 74px 62px/);
+ assert.doesNotMatch(stylesheet,/#readerFormatPanel \.format-inline>input\[type=range\][^{]*\{[^}]*accent-color/);
+ assert.doesNotMatch(stylesheet,/#readerFooter #zoomRange::\-webkit-slider-thumb/);
+});
