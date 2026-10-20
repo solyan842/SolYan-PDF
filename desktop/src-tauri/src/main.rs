@@ -936,6 +936,7 @@ fn reader_about_target(kind: &str) -> Option<&'static str> {
     match kind {
         "website" => Some("https://www.youtube.com/@SolYan-Music"),
         "email" => Some("mailto:yansign841@gmail.com"),
+        "pdf-default-settings" => Some("ms-settings:defaultapps"),
         _ => None,
     }
 }
@@ -971,6 +972,61 @@ fn reader_open_external(window: tauri::WebviewWindow, kind: String) -> Result<()
         let _ = target;
         Err("Liên kết này cần trình duyệt mặc định của Windows".into())
     }
+}
+
+// Read the EFFECTIVE per-user Windows .pdf "open" association, not a
+// hardcoded ProgID or an installer-created association registry entry.
+#[cfg(windows)]
+#[link(name = "Shlwapi")]
+extern "system" {
+    fn AssocQueryStringW(
+        flags: u32, kind: u32, association: *const u16, verb: *const u16,
+        output: *mut u16, output_chars: *mut u32,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+fn reader_default_pdf_executable() -> Result<PathBuf, String> {
+    let association: Vec<u16> = ".pdf".encode_utf16().chain(std::iter::once(0)).collect();
+    let verb: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+    // ASSOCSTR_EXECUTABLE = 2. No user-controlled registry path or command.
+    let mut buffer = vec![0u16; 32768];
+    let mut count = buffer.len() as u32;
+    let result = unsafe {
+        AssocQueryStringW(0, 2, association.as_ptr(), verb.as_ptr(),
+            buffer.as_mut_ptr(), &mut count)
+    };
+    if result != 0 { return Err(format!("Windows PDF association unavailable ({result})")); }
+    let end = buffer.iter().position(|c| *c == 0).unwrap_or(count as usize);
+    let executable = String::from_utf16(&buffer[..end])
+        .map_err(|_| "Windows PDF association has invalid text")?;
+    if executable.is_empty() { return Err("Windows PDF association has no executable".into()); }
+    Ok(PathBuf::from(executable))
+}
+
+#[cfg(windows)]
+fn reader_same_executable(a: &Path, b: &Path) -> bool {
+    let left = fs::canonicalize(a).unwrap_or_else(|_| a.to_path_buf());
+    let right = fs::canonicalize(b).unwrap_or_else(|_| b.to_path_buf());
+    left.to_string_lossy().to_lowercase() == right.to_string_lossy().to_lowercase()
+}
+
+#[tauri::command]
+fn reader_pdf_default_state(window: tauri::WebviewWindow) -> Result<&'static str, String> {
+    reader_window(&window)?;
+    if !cfg!(feature = "reader-only") { return Ok("unknown"); }
+    #[cfg(windows)]
+    {
+        // Unknown is not "other": do not annoy people when Windows cannot
+        // answer reliably. Never mutate UserChoice or the default association.
+        let Ok(associated) = reader_default_pdf_executable() else { return Ok("unknown"); };
+        let Ok(current) = std::env::current_exe() else { return Ok("unknown"); };
+        return Ok(if reader_same_executable(&associated, &current) {
+            "default"
+        } else { "other" });
+    }
+    #[cfg(not(windows))]
+    { Ok("unknown") }
 }
 
 fn reader_window(window: &tauri::WebviewWindow) -> Result<(), String> {
@@ -1145,7 +1201,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 
@@ -1167,6 +1223,7 @@ mod reader_about_link_tests {
     fn only_about_links_may_be_launched_externally() {
         assert_eq!(reader_about_target("website"), Some("https://www.youtube.com/@SolYan-Music"));
         assert_eq!(reader_about_target("email"), Some("mailto:yansign841@gmail.com"));
+        assert_eq!(reader_about_target("pdf-default-settings"), Some("ms-settings:defaultapps"));
         for untrusted in ["https://example.com", "javascript:alert(1)", "file:///C:/Windows/win.ini", "", "Website"] {
             assert_eq!(reader_about_target(untrusted), None);
         }
