@@ -64,7 +64,17 @@ test('F11 fits one page on black, renders pending marks, navigates mixed pages a
 test('English UI, About, colored marks and three-font searchable typewriter output',async({page})=>{
   await open(page);await command(page,'settings');await page.locator('#readerLanguage').selectOption('en');await expect(page.locator('html')).toHaveAttribute('lang','en');await page.keyboard.press('Escape');await expect(page.locator('#saveCurrent')).toHaveAttribute('title','Save (Ctrl+S)');await expect(page.locator('#tabs .title')).toHaveText('Mở PDF.pdf');await expect(page.locator('.textLayer').first()).toContainText('Ghi chú SOURCE');
   await command(page,'about');await expect(page.locator('#readerAbout')).toContainText('Hoang Minh Anh / SolYan84');await expect(page.locator('#readerAbout')).toContainText('yansign841@gmail.com');await expect(page.locator('#aboutVersion')).toHaveText('0.1.0');await expect(page.locator('#readerAbout a[href="https://www.youtube.com/@SolYan-Music"]')).toBeVisible();await page.keyboard.press('Escape');
-  await page.locator('#toolStyle').click();await page.locator('#penColor').evaluate(el=>{el.value='#cc1122';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.locator('#highlightColor').evaluate(el=>{el.value='#22cc44';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.keyboard.press('Escape');
+  // The old detached toolStyle popover is retired; each tool opens the
+  // shared right Format inspector, including palette and live opacity.
+  await page.locator('#annot-ink').click();
+  await expect(page.locator('#readerFormatPanel')).toBeVisible();
+  await page.locator('#formatCustomColor').evaluate(el=>{el.value='#cc1122';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.locator('#formatOpacity').fill('72');
+  await page.locator('#formatPenWidth').selectOption('4');
+  await page.locator('#annot-highlight').click();
+  await expect(page.locator('#readerStyleTitle')).toContainText('Highlight Style');
+  await page.locator('#formatCustomColor').evaluate(el=>{el.value='#22cc44';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.locator('#formatOpacity').fill('45');
   for(const [kind,y]of [['ink',240],['highlight',280]]){await page.locator('#annot-'+kind).click();const b=await page.locator('.page').first().boundingBox();await page.mouse.move(b.x+80,b.y+y);await page.mouse.down();await page.mouse.move(b.x+200,b.y+y+20,{steps:4});await page.mouse.up();}
   await expect(page.locator('[data-kind=ink] svg polyline')).toHaveAttribute('stroke','#cc1122');await expect(page.locator('[data-kind=highlight] svg rect')).toHaveAttribute('fill','#22cc44');
   for(const [index,font]of ['sans','serif','mono'].entries()){await page.locator('#typewriter').click();await page.locator('#typewriterFont').selectOption(font);await page.locator('#typewriterSize').fill('16');await page.locator('#typewriterColor').evaluate(el=>{el.value='#992244';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.locator('#fillTextInput').fill('Tiếng Việt: Nguyễn Văn An '+font);await page.locator('#typewriterPlace').click();await expect(page.locator('.signature.selected')).toContainText('Tiếng Việt: Nguyễn Văn An '+font);const b=await page.locator('.signature.selected').boundingBox();await page.mouse.move(b.x+30,b.y+10);await page.mouse.down();await page.mouse.move(b.x+30,b.y+10+index*45,{steps:5});await page.mouse.up();}
@@ -175,4 +185,72 @@ test('Windows touchpad pinch targets PDF zoom; two-finger scroll keeps natural s
     target.dispatchEvent(e);return e.defaultPrevented;
   },{x:outside.x+25,y:outside.y+20});
   expect(didCancel).toBe(true);
+});
+
+test('Hand defaults, right Format follows tools, opacity & pencil width survive native PDF Save As',async({page})=>{
+  await open(page);
+  await expect(page.locator('#pan')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('#selectText')).toHaveAttribute('aria-pressed','false');
+  await expect(page.locator('#readerFormatPanel')).toBeHidden();
+  await page.locator('#annot-ink').click();
+  await expect(page.locator('#readerFormatPanel')).toBeVisible();
+  await expect(page.locator('#readerAnnotationFormat')).toBeVisible();
+  await expect(page.locator('#readerTextFormat')).toBeHidden();
+  await expect(page.locator('#toolStyle')).toHaveCount(0);
+  await page.locator('#formatColorPalette button[data-color="#fa3434"]').click();
+  await page.locator('#formatOpacity').fill('63');
+  await page.locator('#formatPenWidth').selectOption('6');
+  const bounds=await page.locator('.page').first().boundingBox();
+  await page.mouse.move(bounds.x+100,bounds.y+300);
+  await page.mouse.down();await page.mouse.move(bounds.x+180,bounds.y+340,{steps:6});await page.mouse.up();
+  await expect(page.locator('.signature.annotation[data-kind=ink]')).toHaveCount(1);
+  await expect(page.locator('#readerFormatPanel')).toBeVisible();
+  await expect(page.locator('#formatOpacity')).toHaveValue('63');
+  await page.locator('#formatArrangeleft').click();
+  const rect=await page.locator('.signature.annotation[data-kind=ink]').boundingBox();
+  expect(rect).not.toBeNull();
+  // Editable text uses the exact same dock; closing returns to Hand.
+  await page.locator('#typewriter').click();
+  await expect(page.locator('#readerTextFormat')).toBeVisible();
+  await expect(page.locator('#readerAnnotationFormat')).toBeHidden();
+  await expect(page.locator('#fillTextDialog')).toBeVisible();
+  await page.locator('#typewriterFont').selectOption('sans');
+  await page.locator('#fillTextInput').fill('Mẫu chữ Nguyễn');
+  await page.locator('#formatTextBold').click();
+  await page.locator('#formatTextItalic').click();
+  await page.locator('#formatTextUnderline').click();
+  await page.locator('#formatAlignCenter').click();
+  await page.locator('#formatLineSpacing').selectOption('1.5');
+  await page.locator('#typewriterPlace').click();
+  await expect(page.locator('.typewriter-visual')).toContainText('Mẫu chữ Nguyễn');
+  await expect(page.locator('#readerFormatPanel')).toBeVisible();
+  const downloadEvent=page.waitForEvent('download');
+  await page.locator('#save').click();
+  const downloaded=await downloadEvent;
+  const bytes=new Uint8Array(await readFile(await downloaded.path()));
+  const reopened=await getDocument({data:bytes.slice()}).promise;
+  const annotations=await (await reopened.getPage(1)).getAnnotations();
+  const ink=annotations.find(item=>item.subtype==='Ink');
+  expect(ink).toBeDefined();
+  expect(ink.opacity).toBeCloseTo(.63,2);
+  expect(ink.borderStyle.width).toBeCloseTo(6,1);
+  const text=(await (await reopened.getPage(1)).getTextContent()).items.map(i=>i.str).join(' ');
+  expect(text).toContain('Mẫu chữ Nguyễn');
+  await reopened.loadingTask.destroy();
+  await page.locator('#readerFormatClose').click();
+  await expect(page.locator('#pan')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('#readerFormatPanel')).toBeHidden();
+  // Layout remains side-by-side instead of covering the PDF page.
+  await page.locator('#annot-highlight').click();
+  for(const [w,h]of [[1440,900],[1024,700]]){
+    await page.setViewportSize({width:w,height:h});
+    const metrics=await page.evaluate(()=>{
+      const doc=document.querySelector('#documents').getBoundingClientRect();
+      const format=document.querySelector('#readerFormatPanel').getBoundingClientRect();
+      return {docRight:doc.right,formatLeft:format.left,formatRight:format.right};
+    });
+    expect(metrics.docRight).toBeLessThanOrEqual(metrics.formatLeft+.5);
+    expect(metrics.formatRight).toBeLessThanOrEqual(w+.5);
+  }
+  await page.screenshot({path:'test-results/reader-format-right-panel.png'});
 });
