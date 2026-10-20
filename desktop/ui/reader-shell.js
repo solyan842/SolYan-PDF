@@ -63,7 +63,9 @@ export function installReaderShell(api,panels){
     p.addEventListener('click',e=>{if(e.target.closest('button,a'))p.hidePopover();});host.append(b);document.body.append(p);return p;
   }
   const markup=popup('moreAnnotations','Thêm công cụ chú thích','rectangle',center);
-  const styles=popup('toolStyle','Màu bút / tô sáng','pen',center);styles.append(take('annotationStyles'));
+  // The format settings are docked on the right; no detached pen/color popover.
+  // Retain the color inputs as hidden state mirrors for the annotation engine.
+  const styleState=take('annotationStyles');styleState.hidden=true;document.body.append(styleState);
   markup.append(node('h3',{textContent:'Chú thích'}));
   for(const b of [...panels.comment.children])markup.append(b);
   const fill=popup('fillMenu','Điền & ký','note-pencil',center);

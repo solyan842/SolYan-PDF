@@ -94,7 +94,10 @@ export function installReaderFormat({textDialog,textInput,fontSelect,sizeInput,t
   let currentKind='ink',currentItem=null;
   function currentStyle(){
     const selected=currentItem?.kind===currentKind?currentItem:null;
-    return selected||defaults[currentKind];
+    if(!selected)return defaults[currentKind];
+    const c=selected.color;
+    const color=Array.isArray(c)?'#'+c.map(v=>Math.round(Math.min(1,Math.max(0,v))*255).toString(16).padStart(2,'0')).join(''):(c||defaults[currentKind].color);
+    return {...defaults[currentKind],...selected,color};
   }
   function updatePreview(){
     const style=currentStyle();
@@ -165,6 +168,7 @@ export function installReaderFormat({textDialog,textInput,fontSelect,sizeInput,t
   function selected(item){
     if(item&&['ink','highlight'].includes(item.kind))show(item.kind,item);
     else if(item?.kind==='text')show('text',item);
+    else if(item)hide();
     else if(!item&&root.hidden===false&&currentKind!=='text')reflectStyle();
   }
   function getAnnotationStyle(kind){return {...(defaults[kind]||defaults.ink)};}

@@ -59,20 +59,27 @@ async function loadFont(id){
   })().catch(error=>{cache.delete(id);throw error;}));
   return cache.get(id);
 }
-export async function prepareText({text,font='sans',fontSize=14,color='#182d46'}){
+export async function prepareText({text,font='sans',fontSize=14,color='#182d46',lineSpacing=1.25}){
   text=text.replace(/\r\n?/g,'\n').replace(/\t/g,'    ').normalize('NFC');
   if(!text.trim()||text.length>2000||text.split('\n').length>20)throw Error('Nhập 1–2000 ký tự, tối đa 20 dòng.');
   if(!textFonts[font]||!Number.isFinite(fontSize)||fontSize<6||fontSize>96||!/^#[0-9a-f]{6}$/i.test(color))throw Error('Kiểu chữ không hợp lệ.');
   const {metrics}=await loadFont(font);
   for(const character of text.replace(/\n/g,''))if(!metrics.hasGlyphForCodePoint(character.codePointAt(0)))throw Error('Font không hỗ trợ ký tự: '+character);
-  const lineHeight=fontSize*1.25,ascent=metrics.ascent/metrics.unitsPerEm*fontSize;
+  if(!Number.isFinite(lineSpacing)||lineSpacing<1||lineSpacing>2)throw Error('Giãn dòng không hợp lệ.');
+  const lineHeight=fontSize*lineSpacing,ascent=metrics.ascent/metrics.unitsPerEm*fontSize;
   const width=Math.max(...text.split('\n').map(line=>metrics.layout(line).positions.reduce((sum,p)=>sum+p.xAdvance,0)/metrics.unitsPerEm*fontSize),1)+4;
   const height=Math.max(lineHeight,text.split('\n').length*lineHeight)+4;
   return {kind:'text',role:'fill',label:'Văn bản',text,font,fontSize,color,lineHeight,ascent,baseWidth:width,baseHeight:height};
 }
 export function textVisual(item){
   const outer=document.createElement('div');outer.className='typewriter-visual';const content=document.createElement('div');content.textContent=item.text;
-  Object.assign(content.style,{fontFamily:`"${textFonts[item.font].family}"`,fontSize:`${item.fontSize}px`,lineHeight:`${item.lineHeight}px`,color:item.color,padding:'2px',width:`${item.baseWidth}px`,height:`${item.baseHeight}px`,transformOrigin:'0 0',transform:`scale(${item.rect.w*item.viewport.width/item.baseWidth},${item.rect.h*item.viewport.height/item.baseHeight})`});outer.append(content);return outer;
+  const style=item.textStyle||{};
+  Object.assign(content.style,{fontFamily:`"${textFonts[item.font].family}"`,fontSize:`${item.fontSize}px`,
+    fontWeight:style.bold?'700':'400',fontStyle:style.italic?'italic':'normal',
+    textDecoration:[style.underline?'underline':'',style.strike?'line-through':''].filter(Boolean).join(' '),
+    textAlign:style.align||'left',lineHeight:`${item.lineHeight}px`,color:item.color,padding:'2px',
+    width:`${item.baseWidth}px`,height:`${item.baseHeight}px`,transformOrigin:'0 0',
+    transform:`scale(${item.rect.w*item.viewport.width/item.baseWidth},${item.rect.h*item.viewport.height/item.baseHeight})`});outer.append(content);return outer;
 }
 export async function saveText(bytes,items,lib,{fontkit=globalThis.fontkit,loadBytes=async id=>(await loadFont(id)).bytes,point=globalThis.ReaderEdits.point}={}){
   const pdf=await lib.PDFDocument.load(bytes,{updateMetadata:false});pdf.registerFontkit(fontkit||await ensureFontkit());const embedded=new Map();
@@ -83,7 +90,26 @@ export async function saveText(bytes,items,lib,{fontkit=globalThis.fontkit,loadB
     const sx=item.rect.w*v.width/item.baseWidth,sy=item.rect.h*v.height/item.baseHeight;
     page.pushOperators(lib.pushGraphicsState(),lib.concatTransformationMatrix((x[0]-origin[0])*sx,(x[1]-origin[1])*sx,-(y[0]-origin[0])*sy,-(y[1]-origin[1])*sy,...origin));
     const color=item.color.match(/[0-9a-f]{2}/gi).map(x=>parseInt(x,16)/255);
-    item.text.split('\n').forEach((line,index)=>{if(line)page.drawText(line,{font,size:item.fontSize,x:2,y:-(2+item.ascent+index*item.lineHeight),color:lib.rgb(...color),lineHeight:item.lineHeight});});
+    const style=item.textStyle||{},align=['center','right'].includes(style.align)?style.align:'left';
+    item.text.split('\n').forEach((line,index)=>{
+      if(!line)return;
+      const width=font.widthOfTextAtSize(line,item.fontSize);
+      const x=2+(align==='center'?Math.max(0,(item.baseWidth-4-width)/2):align==='right'?Math.max(0,item.baseWidth-4-width):0);
+      const y=-(2+item.ascent+index*item.lineHeight);
+      const inkColor=lib.rgb(...color);
+      if(style.bold){
+        page.pushOperators(lib.pushGraphicsState(),lib.setTextRenderingMode(lib.TextRenderingMode.FillAndOutline),
+          lib.setLineWidth(Math.max(.15,item.fontSize*.027)),lib.setStrokingColor(inkColor));
+      }
+      page.drawText(line,{font,size:item.fontSize,x,y,color:inkColor,
+        xSkew:style.italic?lib.degrees(11):lib.degrees(0),lineHeight:item.lineHeight});
+      if(style.bold)page.pushOperators(lib.popGraphicsState());
+      const underline=style.underline?y-Math.max(1,item.fontSize*.11):null;
+      const strike=style.strike?y+item.fontSize*.32:null;
+      for(const ruleY of [underline,strike])if(ruleY!==null)page.drawLine({
+        start:{x,y:ruleY},end:{x:x+width,y:ruleY},
+        thickness:Math.max(.55,item.fontSize*.055),color:inkColor});
+    });
     page.pushOperators(lib.popGraphicsState());
   }
   return pdf.save();

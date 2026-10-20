@@ -21,12 +21,14 @@
       const width=Math.max(1,bounds[2]-bounds[0]),height=Math.max(1,bounds[3]-bounds[1]);
       const relative=q=>[q[0]-bounds[0],q[1]-bounds[1]];
       const color=item.color||[1,.6,0], [red,green,blue]=color;
-      const operators=[`${red} ${green} ${blue} RG`,`${red} ${green} ${blue} rg`,'1.5 w','1 J','1 j'];
+      const opacity=Math.min(1,Math.max(0,item.opacity??(item.kind==='highlight'?.3:1)));
+      const thickness=Math.min(8,Math.max(.5,item.strokeWidth??1.5));
+      const operators=[`${red} ${green} ${blue} RG`,`${red} ${green} ${blue} rg`,`${thickness} w`,'1 J','1 j'];
       const polygon=points=>points.map((q,i)=>`${relative(q).join(' ')} ${i?'l':'m'}`).join('\n');
-      const data={Type:'Annot',Subtype:type,Rect:bounds,F:4,C:color,BS:{W:1.5,S:'S'},NM:lib.PDFString.of(item.id),Contents:lib.PDFHexString.fromText(item.text||''),P:page.ref};
+      const data={Type:'Annot',Subtype:type,Rect:bounds,F:4,C:color,CA:opacity,BS:{W:thickness,S:'S'},NM:lib.PDFString.of(item.id),Contents:lib.PDFHexString.fromText(item.text||''),P:page.ref};
       if(['highlight','underline','strike'].includes(item.kind)){
         data.QuadPoints=[...tl,...tr,...bl,...br];
-        if(item.kind==='highlight'){operators.push('/GS gs',polygon([tl,tr,br,bl]),'h f');data.CA=.3;}
+        if(item.kind==='highlight'){operators.push('/GS gs',polygon([tl,tr,br,bl]),'h f');}
         else{const y=item.kind==='underline'?r.y+r.h:r.y+r.h/2;operators.push(polygon([p(r.x,y),p(r.x+r.w,y)]),'S');}
       }else if(item.kind==='rectangle')operators.push(`.75 .75 ${Math.max(0,width-1.5)} ${Math.max(0,height-1.5)} re S`);
       else if(item.kind==='ellipse'){
@@ -39,7 +41,8 @@
         operators.push(polygon(points),'S');
         if(item.kind==='arrow'){const end=points.at(-1),prev=points[0],angle=Math.atan2(end[1]-prev[1],end[0]-prev[0]);operators.push(polygon([[end[0]-10*Math.cos(angle-.5),end[1]-10*Math.sin(angle-.5)],end,[end[0]-10*Math.cos(angle+.5),end[1]-10*Math.sin(angle+.5)]]),'S');}
       }
-      const resources=doc.context.obj({ExtGState:{GS:{Type:'ExtGState',ca:.3,CA:1}}});
+      operators.splice(5,0,'/GS gs');
+      const resources=doc.context.obj({ExtGState:{GS:{Type:'ExtGState',ca:opacity,CA:opacity}}});
       const appearance=doc.context.register(doc.context.flateStream(operators.join('\n'),{Type:'XObject',Subtype:'Form',BBox:[0,0,width,height],Resources:resources}));
       data.AP={N:appearance};
       const annotation=doc.context.register(doc.context.obj(data));

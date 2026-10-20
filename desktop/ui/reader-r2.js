@@ -121,9 +121,9 @@ export function installR2(api){
   }
   button('sign','fillText','Chèn chữ (Typewriter)','cursor-text',()=>editText(doc(),null));
   button('sign','typewriter','Chèn chữ (Typewriter)','cursor-text',()=>$('fillText').click());
-  fillPlace.onclick=api.attempt(async()=>{const d=doc();if(textTarget?.document!==d.id)throw Error('Tài liệu đã thay đổi; mở lại công cụ chèn chữ.');const previous=d.placements.find(p=>p.id===textTarget.item),index=previous?.page??d.view.currentPageNumber-1,v=previous?.viewport||viewport(d,index),item=await prepareText({text:fillInput.value,font:fontSelect.value,fontSize:Number(sizeInput.value),color:textColor.value});
+  fillPlace.onclick=api.attempt(async()=>{const d=doc();if(textTarget?.document!==d.id)throw Error('Tài liệu đã thay đổi; mở lại công cụ chèn chữ.');const previous=d.placements.find(p=>p.id===textTarget.item),index=previous?.page??d.view.currentPageNumber-1,v=previous?.viewport||viewport(d,index),styles=formatter.textStyles(),
+      item=await prepareText({text:fillInput.value,font:fontSelect.value,fontSize:Number(sizeInput.value),color:textColor.value,lineSpacing:styles.lineSpacing});
     if(item.baseWidth>v.width*.9||item.baseHeight>v.height*.9)throw Error('Đoạn chữ quá lớn; giảm cỡ chữ hoặc xuống dòng.');
-    const styles=formatter.textStyles();
     item.textStyle=styles;
     const rect=Q.move({x:previous?.rect.x??.1,y:previous?.rect.y??.2,w:item.baseWidth/v.width,h:item.baseHeight/v.height},0,0);
     if(previous){checkpoint(d);Object.assign(previous,item,{rect});api.changed(d);api.render(d);}
