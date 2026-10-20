@@ -11,6 +11,12 @@ const documents = new Map();
 let active = null, selected = null, asset = null, busy = false, drawing = false, inked = false;
 const message = text => { $('status').textContent = text; };
 const attempt = fn => async (...args) => { try { await fn(...args); } catch (e) { message(`Không thể thực hiện: ${typeof e === 'string' ? e : e.message}`); } };
+// Disable WebView2's generic right-click menu ("Save as..." on PDF page
+// graphics does not save the document). Keep native edit menus on text inputs;
+// PDF Save As remains the toolbar command and Ctrl+Shift+S.
+document.addEventListener('contextmenu', event=>{
+  if(!event.target.closest('input,textarea,[contenteditable="true"]'))event.preventDefault();
+}, {capture:true});
 const current = () => documents.get(active);
 function syncView(doc){
   if(doc.id!==active)return;
