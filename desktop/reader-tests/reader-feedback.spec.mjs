@@ -69,12 +69,12 @@ test('English UI, About, colored marks and three-font searchable typewriter outp
   await page.locator('#annot-ink').click();
   await expect(page.locator('#readerFormatPanel')).toBeVisible();
   await page.locator('#formatCustomColor').evaluate(el=>{el.value='#cc1122';el.dispatchEvent(new Event('input',{bubbles:true}));});
-  await page.locator('#formatOpacity').fill('72');
+  await page.locator('#formatOpacity').evaluate(el=>{el.value='72';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.locator('#formatPenWidth').selectOption('4');
   await page.locator('#annot-highlight').click();
   await expect(page.locator('#readerStyleTitle')).toContainText('Highlight Style');
   await page.locator('#formatCustomColor').evaluate(el=>{el.value='#22cc44';el.dispatchEvent(new Event('input',{bubbles:true}));});
-  await page.locator('#formatOpacity').fill('45');
+  await page.locator('#formatOpacity').evaluate(el=>{el.value='45';el.dispatchEvent(new Event('input',{bubbles:true}));});
   for(const [kind,y]of [['ink',240],['highlight',280]]){await page.locator('#annot-'+kind).click();const b=await page.locator('.page').first().boundingBox();await page.mouse.move(b.x+80,b.y+y);await page.mouse.down();await page.mouse.move(b.x+200,b.y+y+20,{steps:4});await page.mouse.up();}
   await expect(page.locator('[data-kind=ink] svg polyline')).toHaveAttribute('stroke','#cc1122');await expect(page.locator('[data-kind=highlight] svg rect')).toHaveAttribute('fill','#22cc44');
   for(const [index,font]of ['sans','serif','mono'].entries()){await page.locator('#typewriter').click();await page.locator('#typewriterFont').selectOption(font);await page.locator('#typewriterSize').fill('16');await page.locator('#typewriterColor').evaluate(el=>{el.value='#992244';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.locator('#fillTextInput').fill('Tiếng Việt: Nguyễn Văn An '+font);await page.locator('#typewriterPlace').click();await expect(page.locator('.signature.selected')).toContainText('Tiếng Việt: Nguyễn Văn An '+font);const b=await page.locator('.signature.selected').boundingBox();await page.mouse.move(b.x+30,b.y+10);await page.mouse.down();await page.mouse.move(b.x+30,b.y+10+index*45,{steps:5});await page.mouse.up();}
@@ -198,7 +198,7 @@ test('Hand defaults, right Format follows tools, opacity & pencil width survive 
   await expect(page.locator('#readerTextFormat')).toBeHidden();
   await expect(page.locator('#toolStyle')).toHaveCount(0);
   await page.locator('#formatColorPalette button[data-color="#fa3434"]').click();
-  await page.locator('#formatOpacity').fill('63');
+  await page.locator('#formatOpacity').evaluate(el=>{el.value='63';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.locator('#formatPenWidth').selectOption('6');
   const bounds=await page.locator('.page').first().boundingBox();
   await page.mouse.move(bounds.x+100,bounds.y+300);
