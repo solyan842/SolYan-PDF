@@ -5,6 +5,7 @@ import { connectNativeReader } from './reader-native.js';
 import { installLanguage,t,getLanguage } from './reader-language.js';
 import { installReaderActions } from './reader-actions.js';
 import { installDefaultPdfPrompt } from './reader-default-app.js';
+import { installReaderSession } from './reader-session.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
@@ -25,7 +26,7 @@ function syncView(doc){
   const value=doc.view.currentScaleValue;if(value){const select=$('zoom');if(![...select.options].some(o=>o.value===String(value))){let o=select.querySelector('[data-live]');if(!o){o=document.createElement('option');o.dataset.live='true';select.append(o);}o.value=String(value);o.textContent=Math.round(doc.view.currentScale*100)+'%';}select.value=String(value);}
   for(const [id,on]of [['singlePage',doc.view.scrollMode===3],['twoPage',doc.view.spreadMode!==0],['continuous',doc.view.scrollMode===0&&doc.view.spreadMode===0]])$(id)?.setAttribute('aria-pressed',String(on));
 }
-let r2;
+let r2, session;
 const checkpoint = doc => r2?.checkpoint(doc);
 function changed(doc) { if (!doc.dirty) { doc.dirty = true; renderTabs(); } }
 function renderTabs() {
@@ -41,7 +42,7 @@ function renderTabs() {
       if (!active && documents.size) activate(documents.keys().next().value);
       else if (!documents.size) { $('welcome').hidden = false; $('thumbs').replaceChildren(); $('outline').replaceChildren(); document.getElementById('bookmarks')?.replaceChildren(); $('signOptions').hidden = true; $('save').disabled = true; $('saveCurrent').disabled = true; }
       if(!documents.size&&$('presentation'))$('presentation').disabled=true;
-      renderTabs();
+      renderTabs(); session?.touch();
     });
     tab.append(title, close); $('tabs').append(tab);
   }
@@ -68,11 +69,12 @@ async function openFile(file, source = null) {
   bus.on('pagesinit', () => { view.currentScaleValue = 'page-width'; });
   // PDF.js resets custom page children before async raster rendering. Restore
   // overlays against the updated viewports immediately, not only at draw end.
-  bus.on('scalechanging', () => { if (doc.id === active) {renderSignatures(doc);syncView(doc);} });
+  bus.on('scalechanging', () => { if (doc.id === active) {renderSignatures(doc);syncView(doc);} session?.touch(); });
   for(const event of ['scrollmodechanged','spreadmodechanged'])bus.on(event,()=>syncView(doc));
   bus.on('pagerendered', () => { if (doc.id === active) renderSignatures(doc); });
-  bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } });
+  bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } session?.touch(); });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });
+  session?.opened(doc);
   activate(doc.id); message(`${file.name} · ${pdf.numPages} trang · Xử lý offline`);
 }
 function activate(id) {
@@ -84,6 +86,7 @@ function activate(id) {
   renderTabs(); doc.view.update(); thumbnails(doc); outline(doc); renderSignatures(doc); r2?.activated(doc);
   syncView(doc);
   document.dispatchEvent(new Event('reader-document-activated'));
+  session?.touch();
 }
 async function thumbnails(doc) {
   doc.thumbnails?.disconnect(); $('thumbs').replaceChildren();
@@ -278,7 +281,8 @@ document.addEventListener('dragover',e=>{e.preventDefault();});document.addEvent
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();$(e.shiftKey?'save':'saveCurrent').click();}});
 document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected&&!e.target.closest('input,textarea,select,[contenteditable=true]')&&!document.querySelector('dialog[open]')){e.preventDefault();removeSignature();}});
 window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
-r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},get busy(){return busy;}});
+r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},flushSession:()=>session?.flush(),get busy(){return busy;}});
+session=installReaderSession({native:window.__TAURI__,documents,current,activate,message,attempt});
 installReaderActions({current,message,attempt,pdfjs,exportDocument:doc=>r2.exportDocument(doc),openFile,get busy(){return busy;}});
 installLanguage();
 document.addEventListener('reader-language-changed',()=>{if($('outline').dataset.empty==='true')$('outline').textContent=t('PDF này chưa có mục lục.');});
@@ -286,5 +290,5 @@ $('open').disabled=false;
 document.body.dataset.ready='true';
 installDefaultPdfPrompt({native:window.__TAURI__,message});
 attempt(async()=>{
-  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,message});
+  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,message,hasOpen:()=>documents.size>0,session});
 })();

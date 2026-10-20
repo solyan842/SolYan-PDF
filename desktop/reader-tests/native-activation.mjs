@@ -296,6 +296,43 @@ try{
   expect(await readFile(a)).toEqual(originalA);
   expect(log.filter(entry=>entry.pageerror)).toEqual([]);
   log.push({case:'restart-and-early-second-launch',tabs:2});
+
+  // True app-profile persistence: use real Windows filesystem paths, exit the
+  // installed EXE normally, restart it with NO OS args, and require both tabs,
+  // selected document and position/zoom to survive (not just a browser reload).
+  await page.locator('#tabs .tab .title').first().click();
+  await page.locator('#pageNumber').fill('3');await page.locator('#pageNumber').press('Tab');
+  await page.locator('#zoom').selectOption('1.5');
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await page.locator('#tabs .tab .title').last().click();
+  await expect(activeText()).toContainText(['NATIVE SOURCE B']);
+  await expect.poll(async()=>page.evaluate(async()=>{
+    const rows=await window.__TAURI__.core.invoke('reader_session_recent');
+    return rows.length;
+  })).toBeGreaterThanOrEqual(2);
+  const preRestoreTree=(await windows()).descendants;
+  await page.locator('#window-close').click();
+  await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
+  await expect.poll(async()=>{const state=await windows();return preRestoreTree.filter(pid=>state.livePids.includes(pid));},{timeout:10000}).toEqual([]);
+  await stop();await start([]);
+  await expect(page.locator('#tabs .tab')).toHaveCount(2);
+  await expect(activeText()).toContainText(['NATIVE SOURCE B']);
+  await page.locator('#tabs .tab .title').first().click();
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await expect.poll(async()=>page.locator('.readerContainer:not([hidden]) .page').first().evaluate(n=>parseFloat(getComputedStyle(n).getPropertyValue('--scale-factor')))).toBeCloseTo(2,1);
+  log.push({case:'installed-native-session-resume',tabs:2,activeTabRestored:true,page:3,scale:1.5,sourceIntegrity:true});
+
+  // Missing source remains visible in Recent (disabled) but doesn't stop the
+  // other tab restoring. No native API accepts a webview-supplied path.
+  await stop();await rm(b);
+  await start([]);await expect(page.locator('#tabs .tab')).toHaveCount(1);
+  await expect(activeText()).toContainText(['NATIVE SOURCE A']);
+  await page.locator('#readerMenu').click();await page.locator('#recentFiles').click();
+  await expect(page.locator('#readerRecentDialog')).toBeVisible();
+  await expect(page.locator('.reader-recent-open').filter({hasText:'B.pdf'})).toBeDisabled();
+  await page.locator('#readerRecentClose').click();
+  log.push({case:'installed-session-missing-file-skip',remainingTabs:1,missingRecentDisabled:true});
+
   const closingTree=(await windows()).descendants;
   await page.locator('#window-close').click();
   await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);

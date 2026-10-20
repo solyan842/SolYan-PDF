@@ -243,3 +243,17 @@ body:has(#readerFormatPanel:not([hidden])) #signOptions{display:none!important}
 #readerPropertiesDetails dd{margin:0;min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
 #readerPropertiesClose{display:block;margin-left:auto}
 @media(max-width:450px){#readerPropertiesDetails{grid-template-columns:minmax(95px,37%) minmax(0,1fr);gap:8px}}
+
+/* Recent PDFs: local-path display is textContent-only, never HTML. */
+#readerRecentDialog{width:min(660px,calc(100vw - 32px));max-width:none;max-height:78vh;padding:20px;overflow:auto}
+#readerRecentDialog h2{font-size:17px;margin:0 0 10px}
+#readerRecentDialog>p{font-size:12px;color:var(--muted);line-height:1.5;margin:0 0 14px}
+#readerRecentList{display:flex;flex-direction:column;gap:6px;max-height:53vh;overflow:auto}
+.reader-recent-open{width:100%;text-align:left;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:9px 12px}
+.reader-recent-open strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.reader-recent-open span{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.reader-recent-open small{color:var(--accent);font-size:11px}
+.reader-recent-open:disabled{opacity:.55;cursor:not-allowed}
+#readerRecentDialog .reader-recent-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}
+#readerRecentClear{font-size:12px}
+#readerRecentClose{margin:0}

@@ -11,9 +11,13 @@ pub struct OpenQueue {
     grants: HashMap<String, PathBuf>,
     counter: u64,
     sources: HashSet<String>,
+    paths: HashMap<String, PathBuf>,
     overflow: bool,
 }
 impl OpenQueue {
+    pub fn path_for(&self, key: &str) -> Option<PathBuf> {
+        self.paths.get(key).cloned()
+    }
     pub fn is_source(&self, path: &Path) -> bool {
         if let Ok(path) = fs::canonicalize(path) {
             let key = path.to_string_lossy().to_string();
@@ -35,6 +39,7 @@ impl OpenQueue {
                     #[cfg(windows)]
                     let key = key.to_lowercase();
                     self.sources.insert(key.clone());
+                    self.paths.insert(key.clone(),path.clone());
                     Ok((key, path))
                 });
             // Collapse repeated pending launches, but allow reactivation after delivery.

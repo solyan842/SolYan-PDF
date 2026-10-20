@@ -271,7 +271,7 @@ export function installR2(api){
     const check=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});if(check.getPageCount()!==d.pdf.numPages)throw Error('Kiểm tra lưu: số trang bị thay đổi.');return bytes;
   }
   document.addEventListener('keydown',event=>{if(!event.ctrlKey||!api.current()||event.target.closest('input,textarea,[contenteditable=true]'))return;if(event.key.toLowerCase()==='z'||event.key.toLowerCase()==='y'){event.preventDefault();undo(event.key.toLowerCase()==='y'||event.shiftKey);}});
-  installReaderShell({...api,beforeClose(){for(const d of api.documents.values())flushBookmark(d);}},panel);
+  installReaderShell({...api,async beforeClose(){for(const d of api.documents.values())flushBookmark(d);await api.flushSession?.();}},panel);
   setMode('pan');
   return{get mode(){return mode;},selection,opened,flushBookmark,editText,activated(d){
     const chosen=d.placements.find(p=>p.id===d.selectedId);

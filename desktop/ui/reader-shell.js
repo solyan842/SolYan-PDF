@@ -24,7 +24,7 @@ export function installReaderShell(api,panels){
   const invoke=(action)=>window.__TAURI__.core.invoke('reader_window_control',{action});
   for(const [action,label,glyph]of [['minimize','Thu nhỏ','−'],['maximize','Phóng to / khôi phục','□'],['close','Đóng cửa sổ','×']]){
     const b=node('button',{id:'window-'+action,textContent:glyph,title:label});b.setAttribute('aria-label',label);
-    b.onclick=api.attempt(async()=>{if(action==='close'){if([...api.documents.values()].some(d=>d.dirty)&&!confirm(t('Đóng cửa sổ và bỏ thay đổi chưa lưu?')))return;api.beforeClose();}await invoke(action);});caption.append(b);
+    b.onclick=api.attempt(async()=>{if(action==='close'){if([...api.documents.values()].some(d=>d.dirty)&&!confirm(t('Đóng cửa sổ và bỏ thay đổi chưa lưu?')))return;await api.beforeClose();}await invoke(action);});caption.append(b);
   }
   // Native start_dragging on the FIRST pointerdown consumes the second click,
   // so WebView2 never delivers a usable dblclick. Start a drag only after the

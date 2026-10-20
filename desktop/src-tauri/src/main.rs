@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod reader_open;
+mod reader_session;
 mod document_handoff;
 
 use rand::RngCore;
@@ -811,7 +812,89 @@ async fn reader_save(window: tauri::WebviewWindow, state: State<'_, ReaderOpenSt
     Ok(path.to_string_lossy().to_string())
 }
 
-struct ReaderOpenState { queue: Mutex<reader_open::OpenQueue>, outputs: Mutex<std::collections::HashMap<String, PathBuf>> }
+struct ReaderOpenState {
+    queue: Mutex<reader_open::OpenQueue>,
+    outputs: Mutex<std::collections::HashMap<String, PathBuf>>,
+    session_lock: Mutex<()>,
+}
+
+// All persistent paths come from OS opens or the Reader-owned profile, never
+// from a webview-supplied filesystem path. Only the Reader window may call.
+fn reader_session_root(app:&tauri::AppHandle)->Result<PathBuf,String>{
+    app.path().app_data_dir().map_err(|e|e.to_string())
+}
+#[tauri::command]
+fn reader_session_save(window:tauri::WebviewWindow, state:State<'_,ReaderOpenState>, tabs:Vec<reader_session::View>, active:Option<String>)->Result<(),String>{
+    reader_window(&window)?;
+    let transfer=handoff_root(&window.app_handle())?;
+    let queue=state.queue.lock().map_err(|_|"Reader queue unavailable")?;
+    let mut verified=Vec::new();
+    for (key,page,scale,left,top) in tabs.into_iter().take(reader_session::MAX_TABS){
+        let Some(path)=queue.path_for(&key) else {return Err("Unknown Reader session source".into());};
+        if path.starts_with(&transfer){continue;}
+        verified.push(reader_session::Tab{path,page:reader_session::valid_page(page),scale:reader_session::valid_scale(scale),left:reader_session::valid_scroll(left),top:reader_session::valid_scroll(top)});
+    }
+    let selected=if let Some(key)=active {
+        let path=queue.path_for(&key).ok_or("Unknown Reader active source")?;
+        if path.starts_with(&transfer){None}else{Some(path)}
+    }else{None};
+    let _lock=state.session_lock.lock().map_err(|_|"Reader session lock unavailable")?;
+    let root=reader_session_root(&window.app_handle())?;
+    let mut store=reader_session::read(&root);
+    reader_session::update(&mut store,verified,selected);
+    reader_session::write(&root,&store)
+}
+#[tauri::command]
+fn reader_session_recent(window:tauri::WebviewWindow,state:State<'_,ReaderOpenState>)->Result<Vec<reader_session::RecentRow>,String>{
+    reader_window(&window)?;
+    let _lock=state.session_lock.lock().map_err(|_|"Reader session lock unavailable")?;
+    Ok(reader_session::recent_rows(&reader_session::read(&reader_session_root(&window.app_handle())?)))
+}
+#[tauri::command]
+fn reader_session_clear_recent(window:tauri::WebviewWindow,state:State<'_,ReaderOpenState>)->Result<(),String>{
+    reader_window(&window)?;
+    let _lock=state.session_lock.lock().map_err(|_|"Reader session lock unavailable")?;
+    let root=reader_session_root(&window.app_handle())?;
+    let mut store=reader_session::read(&root);
+    store.recent.clear();
+    reader_session::write(&root,&store)
+}
+#[tauri::command]
+fn reader_session_open_recent(window:tauri::WebviewWindow,state:State<'_,ReaderOpenState>,index:usize)->Result<bool,String>{
+    reader_window(&window)?;
+    let path={
+        let _lock=state.session_lock.lock().map_err(|_|"Reader session lock unavailable")?;
+        let store=reader_session::read(&reader_session_root(&window.app_handle())?);
+        store.recent.get(index).map(|entry|entry.0.clone()).ok_or("Recent file no longer exists in history")?
+    };
+    if !path.is_file(){return Err("Tệp PDF đã bị di chuyển hoặc xóa.".into());}
+    let mut queue=state.queue.lock().map_err(|_|"Reader queue unavailable")?;
+    queue.enqueue([path],Path::new("."));
+    drop(queue);
+    window.emit("reader-open-pending",()).map_err(|e|e.to_string())?;
+    Ok(true)
+}
+#[tauri::command]
+fn reader_session_restore(window:tauri::WebviewWindow,state:State<'_,ReaderOpenState>)->Result<(Vec<reader_session::View>,Option<String>,usize),String>{
+    reader_window(&window)?;
+    let store={
+        let _lock=state.session_lock.lock().map_err(|_|"Reader session lock unavailable")?;
+        reader_session::read(&reader_session_root(&window.app_handle())?)
+    };
+    let mut queue=state.queue.lock().map_err(|_|"Reader queue unavailable")?;
+    let mut restores=Vec::new();
+    let mut missing=0;
+    for tab in store.tabs.into_iter().take(reader_session::MAX_TABS){
+        if tab.path.is_file(){
+            queue.enqueue([tab.path.clone()],Path::new("."));
+            restores.push((reader_session::source_key(&tab.path),tab.page,tab.scale,tab.left,tab.top));
+        }else{missing+=1;}
+    }
+    drop(queue);
+    let active=store.active.map(|p|reader_session::source_key(&p));
+    Ok((restores,active,missing))
+}
+
 #[tauri::command]
 async fn reader_choose_files(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, language: Option<String>) -> Result<bool, String> {
     reader_window(&window)?;
@@ -1104,7 +1187,7 @@ fn desktop_take_handoff(app:tauri::AppHandle,window:tauri::WebviewWindow,token:S
 fn main() {
     let mut requests = reader_open::OpenQueue::default();
     requests.enqueue(std::env::args_os().skip(1).map(PathBuf::from), &std::env::current_dir().unwrap_or_default());
-    let builder = tauri::Builder::default().manage(ReaderOpenState { queue: Mutex::new(requests), outputs: Mutex::new(std::collections::HashMap::new()) });
+    let builder = tauri::Builder::default().manage(ReaderOpenState { queue: Mutex::new(requests), outputs: Mutex::new(std::collections::HashMap::new()), session_lock: Mutex::new(()) });
     // First plugin, Reader only. Its mutex is scoped by vn.solyan.pdf.reader.
     #[cfg(all(windows, feature = "reader-only"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
@@ -1201,7 +1284,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

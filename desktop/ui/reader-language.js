@@ -1,6 +1,10 @@
 // Reader UI only. PDF text, filenames, bookmark names and signature names are excluded.
 let language='vi';try{if(localStorage.getItem('sreader.language')==='en')language='en';}catch{}
 const strings={
+  'Xóa lịch sử':'Clear history','Tệp PDF gần đây':'Recent PDFs','Tệp PDF gần đây…':'Recent PDFs…',
+  'Chưa có PDF gần đây.':'No recent PDFs.','Không tìm thấy tệp':'File not found',
+  'Chỉ lưu đường dẫn và vị trí đọc trong hồ sơ sReader trên máy này. Không lưu nội dung PDF hoặc thay đổi chưa lưu.':'Only file paths and reading positions are stored in the sReader profile on this device. PDF contents and unsaved edits are not stored.',
+  'Đã bỏ qua PDF không còn tồn tại: ':'Skipped missing PDFs: ','Không lưu được phiên đọc PDF: ':'Unable to save reading session: ',
   'Điền biểu mẫu PDF':'Fill PDF forms','PDF này không có trường biểu mẫu có thể điền.':'This PDF has no fillable form fields.','Nhấn vào trường trên trang để điền; dùng Tab để chuyển trường.':'Click a field on the page; use Tab to move between fields.',
   'Thuộc tính tài liệu':'Document properties','Thuộc tính tài liệu…':'Document properties…',
   'Tên tệp':'File name','Số trang':'Pages','Dung lượng':'File size','Kích thước trang đầu':'First page size',
