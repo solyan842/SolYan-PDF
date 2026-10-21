@@ -49,3 +49,12 @@ to that same SHA, launching the heavyweight installer gate once. Inspect actual
 failed job log once, then artifact fallback, before any repair. Preserve original
 local untracked Cargo.lock, generated files and previous work. Actual installed
 functional PASS and downloadable demo installer remain pending the full gate.
+
+## Live dispatch checkpoint
+
+Feature branch: `feat/windows-stool-installer-acceptance`.
+Code SHA: `5f9c430911004d46fee0ae8094e2cd2cd5caa9cc`.
+[Windows sTool Fast CI #6](https://github.com/solyan842/SolYan-PDF/actions/runs/39552591200): SUCCESS, exact SHA above.
+[Windows sTool Installer #1](https://github.com/solyan842/SolYan-PDF/actions/runs/39552910841): IN PROGRESS when saved; milestone `build/windows-stool-demo-20261021`, same SHA.
+Current job `119065930183`: building real Core/Office resources. No installed PASS or demo artifact yet.
+This documentation-only checkpoint branch triggers no CI. Re-fetch current repository-wide Actions before resuming; never dispatch the same milestone a second time blindly.
