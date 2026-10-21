@@ -27,7 +27,8 @@ async function concurrent(service){
 async function output(file,input,button,name,kind='pdf'){
   await go(file);await page.locator('#fileInput').setInputFiles(join(fixtures,input));
   const download=page.waitForEvent('download',{timeout:300000});await page.locator(button).click();
-  const saved=await download;expect(await saved.failure()).toBeNull();await saved.saveAs(join(out,name));
+  const failure=page.locator('#status.error').waitFor({state:'visible',timeout:300000}).then(async()=>{throw Error('Tool failed: '+await page.locator('#status').textContent());});
+  const saved=await Promise.race([download,failure]);expect(await saved.failure()).toBeNull();await saved.saveAs(join(out,name));
   await exec('python',['desktop/backend/tests/stool_fixtures.py',kind,join(out,name)],{windowsHide:true,timeout:30000});
 }
 async function watch(name){
@@ -49,9 +50,10 @@ try{
   await expect.poll(()=>browser.contexts()[0]?.pages().some(p=>p.url().endsWith('/index.html')||p.url().endsWith('/')),{timeout:30000}).toBe(true);
   page=browser.contexts()[0].pages()[0];report.origin=page.url();
   await expect(page.locator('#tool-search')).toBeVisible();
+  const homeUsableMs=performance.now()-launch;
   await page.locator('#tool-search').fill('PDF');await expect(page.locator('#all-tools-grid .tool-card').first()).toBeVisible();
   await roots([]);await page.waitForTimeout(1500);await roots([]);
-  report.home={observedUsableMs:performance.now()-launch,memory:await endWatch(),scope:'fresh profile; OS cache uncontrolled; includes test transport/polling; not retail cold-start guarantee'};
+  report.home={observedUsableMs:homeUsableMs,memory:await endWatch(),scope:'fresh profile; OS cache uncontrolled; includes test transport/polling; not retail cold-start guarantee'};
   await page.screenshot({path:join(out,'home.png')});
   await output('transform.html?tool=compress','source.pdf','#runBtn','compressed.pdf');
   await roots(['core']);const coreBefore=(await inspect()).roots;
@@ -68,10 +70,10 @@ try{
   await output('transform.html?tool=compress','source.pdf','#runBtn','core-recovered.pdf');await roots(['core']);
   report.cases.push('Core real output, concurrent session reuse, invalid input retry and crashed Core recovery');
   await concurrent('office');await roots(['core','office']);
-  await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office.pdf');
+  await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office.pdf','office');
   const officeBefore=(await inspect()).roots;await concurrent('office');expect((await inspect()).roots).toEqual(officeBefore);
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','office']);
-  await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office-recovered.pdf');await roots(['core','office']);
+  await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office-recovered.pdf','office');await roots(['core','office']);
   report.cases.push('LibreOffice UI conversion, concurrent reuse and crashed Office recovery');
   await go('ocr.html');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.png'));
   const ocrStarted=performance.now();await watch('ocr');

@@ -49,3 +49,20 @@ to that same SHA, launching the heavyweight installer gate once. Inspect actual
 failed job log once, then artifact fallback, before any repair. Preserve original
 local untracked Cargo.lock, generated files and previous work. Actual installed
 functional PASS and downloadable demo installer remain pending the full gate.
+
+## Installer #1 outcome and repair
+
+Fast CI #6 SUCCESS at `5f9c430`. Installer #1 (`39552910841`) built NSIS
+884,519,342 bytes and passed installed zero-engine Home, then failed on first
+PDF compression with `Failed to fetch`. Log read once and artifact `12326255431`
+inspected. See WINDOWS-STOOL-CORE-CORS.md for the real CORS preflight regression
+and separate runtime repair commit. Five production-composition ASGI tests
+changed from two FAIL / three PASS to five PASS locally; API auth remains strict.
+
+Follow-up test-only changes fail immediately on an actual UI error instead of
+waiting five minutes for a download, measure usable Home before intentional
+idle verification, and assert LibreOffice output text rather than just PDF
+page count. New CORS tests run in Fast CI and before Core packaging. No PDF
+output, signature, offline OCR, PDF/A, process recovery or uninstall gate removed.
+Push the combined tested batch once, require Fast CI, then dispatch a new named
+installer milestone; never rerun the unfixed #1 SHA.

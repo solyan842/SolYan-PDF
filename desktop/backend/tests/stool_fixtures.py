@@ -4,7 +4,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['create','pdf','signed','pdfa']);p.add_argument('path');a=p.parse_args();path=Path(a.path)
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['create','pdf','signed','pdfa','office']);p.add_argument('path');a=p.parse_args();path=Path(a.path)
     if a.mode=='create':
         from sign_runtime_smoke import make_fixtures
         from PIL import Image, ImageDraw, ImageFont
@@ -15,6 +15,7 @@ def main():
         draw.text((50,80),'SOLYAN OCR TEST 12345',font=ImageFont.truetype('C:/Windows/Fonts/arial.ttf',72),fill='black');image.save(path/'source.png')
     else:
         pdf=PdfReader(path);assert len(pdf.pages)==1
+        if a.mode=='office':assert 'SOLYAN OFFICE TEST 12345' in pdf.pages[0].extract_text()
         if a.mode=='signed':assert any(f.get('/FT')=='/Sig' and f.get('/V') for f in pdf.get_fields().values())
         if a.mode=='pdfa':assert '/Metadata' in pdf.trailer['/Root'] and '/OutputIntents' in pdf.trailer['/Root']
         print(f'{a.mode} output PASS: {path.name}')

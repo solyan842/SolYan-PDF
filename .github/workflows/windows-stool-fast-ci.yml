@@ -39,6 +39,16 @@ jobs:
       - name: Create diagnostics
         shell: pwsh
         run: New-Item -ItemType Directory -Force artifacts | Out-Null
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test real desktop ASGI authentication and CORS composition
+        shell: pwsh
+        run: |
+          python -m pip install -r desktop/backend/requirements-smoke-tests.txt 2>&1 | Tee-Object artifacts/stool-cors-dependencies.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s desktop/backend/tests -p test_core_runner_cors.py -v 2>&1 | Tee-Object artifacts/stool-cors-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check sTool cold-start and service mapping contracts
         shell: pwsh
         run: |
