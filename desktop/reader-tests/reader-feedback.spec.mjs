@@ -115,6 +115,22 @@ test('optional Unicode font engine loads only for Typewriter and only once',asyn
   expect(fontkitRequests).toHaveLength(1);
 });
 
+test('page 3 survives immediate zoom change after a numeric page jump',async({page})=>{
+  const pdf=await PDFDocument.create();
+  for(let p=1;p<=3;p++)pdf.addPage([612,792]).drawText('Page '+p,{x:60,y:750});
+  await page.goto('/reader.html');
+  await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles({name:'Page zoom.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  await page.locator('#pageNumber').fill('3');
+  await page.locator('#pageNumber').press('Tab');
+  await page.locator('#zoom').selectOption('1.5');
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await expect.poll(()=>page.evaluate(()=>document.getElementById('pageNumber').value)).toBe('3');
+  await page.locator('#zoom').selectOption('1');
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+});
+
 test('presentation is chrome-free while keyboard and Ctrl-wheel zoom keep working',async({page})=>{
   await open(page);
   await page.locator('#zoom').selectOption('1.5');

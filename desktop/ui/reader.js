@@ -248,10 +248,20 @@ function find(back=false){const doc=current();if(doc){doc.query=$('query').value
 $('query').onkeydown=e=>{if(e.key==='Enter')find(e.shiftKey);};$('findNext').onclick=()=>find();$('findPrevious').onclick=()=>find(true);
 $('previous').onclick=()=>{if(current())current().view.currentPageNumber=Math.max(1,current().view.currentPageNumber-1);};
 $('next').onclick=()=>{if(current())current().view.currentPageNumber=Math.min(current().pdf.numPages,current().view.currentPageNumber+1);};
-$('pageNumber').onchange=()=>{if(current())current().view.currentPageNumber=Math.max(1,Math.min(current().pdf.numPages,Number($('pageNumber').value)||1));};
-// PDF.js caches the location used by zoom until its scroll update runs. A page
-// jump immediately followed by zoom must refresh that location synchronously.
-function changeZoom(value){const d=current();if(!d)return;d.view.update();d.view.currentScaleValue=value;}
+$('pageNumber').onchange=()=>{
+  const d=current();if(!d)return;
+  const requested=Math.max(1,Math.min(d.pdf.numPages,Number($('pageNumber').value)||1));
+  d.view.currentPageNumber=requested;
+  // Numeric page jumps must settle PDF.js's viewport before zoom uses the
+  // old scroll state to infer page 1 in installed Windows WebView2.
+  d.view.scrollPageIntoView({pageNumber:requested});
+};
+function changeZoom(value){
+  const d=current();if(!d)return;
+  const selected=Math.max(1,Math.min(d.pdf.numPages,Number($('pageNumber').value)||d.view.currentPageNumber));
+  d.view.update();d.view.currentScaleValue=value;
+  if(d.view.currentPageNumber!==selected)d.view.scrollPageIntoView({pageNumber:selected});
+}
 $('zoom').onchange=()=>changeZoom($('zoom').value);
 $('zoomIn').onclick=()=>{if(current())changeZoom(Math.min(4,current().view.currentScale*1.2));};
 $('zoomOut').onclick=()=>{if(current())changeZoom(Math.max(.25,current().view.currentScale/1.2));};
