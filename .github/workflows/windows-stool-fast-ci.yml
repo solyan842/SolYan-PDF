@@ -59,11 +59,13 @@ jobs:
         run: |
           npm ci --prefix desktop/stool-tests --ignore-scripts 2>&1 | Tee-Object artifacts/stool-test-driver.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test desktop/stool-tests/close-protocol.test.mjs 2>&1 | Tee-Object artifacts/stool-close-protocol.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/check-workflows.mjs 2>&1 | Tee-Object artifacts/stool-workflow-contract.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --check desktop/stool-tests/installed.mjs 2>&1 | Tee-Object artifacts/stool-installed-script.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($file in @('stool-installer-smoke.ps1','stool-process-smoke.ps1','stool-webview-policy.ps1')) {
+          foreach ($file in @('stool-installer-smoke.ps1','stool-process-smoke.ps1','stool-close-response.ps1','stool-webview-policy.ps1')) {
             $tokens=$null; $errorsInScript=$null
             [Management.Automation.Language.Parser]::ParseFile((Resolve-Path "desktop/backend/$file"),[ref]$tokens,[ref]$errorsInScript) | Out-Null
             if ($errorsInScript.Count) { throw ($errorsInScript | Out-String) }

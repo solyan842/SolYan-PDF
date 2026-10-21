@@ -22,7 +22,11 @@ function Snapshot {
   $memory=@($tracked | ForEach-Object {$p=Get-Process -Id $_ -ErrorAction SilentlyContinue;if($p){@{pid=$p.Id;workingSetBytes=$p.WorkingSet64;privateBytes=$p.PrivateMemorySize64}}})
   @{roots=$roots;descendants=$tracked;window=$owner.MainWindowHandle.ToInt64();memory=$memory}
 }
-if($Mode -eq 'Close'){$owner.CloseMainWindow() | Out-Null;exit}
+if($Mode -eq 'Close'){
+  . (Join-Path $PSScriptRoot 'stool-close-response.ps1')
+  Request-StoolWindowClose -Owner $owner | ConvertTo-Json -Compress
+  exit
+}
 if($Mode -eq 'Crash'){
   $state=Snapshot
   $targets=@($state.roots | Where-Object {$_.name -eq "solyan-$Service.exe"})

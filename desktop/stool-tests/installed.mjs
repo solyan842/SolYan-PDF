@@ -7,6 +7,7 @@ import {resolve,join} from 'node:path';
 import {createHash} from 'node:crypto';
 import os from 'node:os';
 import net from 'node:net';
+import {parseHelperJSON,assertCloseAcknowledgement,waitForOwnedShutdown} from './close-protocol.mjs';
 const exec=promisify(execFile);
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_OS!=='Windows')throw Error('Disposable Windows runner required');
 const exe=resolve(process.argv[2]),fixtures=resolve(process.argv[3]),out=resolve('artifacts/stool-native');
@@ -17,7 +18,7 @@ const report={commit:process.env.GITHUB_SHA,hardware:{os:os.release(),cpu:os.cpu
 const server=net.createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;await new Promise(r=>server.close(r));
 const policy=resolve('desktop/backend/stool-webview-policy.ps1'),helper=resolve('desktop/backend/stool-process-smoke.ps1'),state=join(out,'policy.json');
 let app,browser,page,monitor;
-async function psJSON(script,args=[],timeout=30000){const {stdout}=await exec('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,...args],{windowsHide:true,timeout});return JSON.parse(stdout.trim());}
+async function psJSON(script,args=[],timeout=30000){const {stdout}=await exec('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,...args],{windowsHide:true,timeout});return parseHelperJSON(stdout,script);}
 const inspect=()=>psJSON(helper,['-Exe',exe,'-OwnerPid',String(app.pid)]);
 async function roots(expected){const s=await inspect();expect(s.roots.map(p=>p.name).sort()).toEqual(expected.map(n=>'solyan-'+n+'.exe').sort());return s;}
 async function go(file){await page.goto(new URL(file,report.origin).href);}
@@ -105,13 +106,15 @@ try{
   const allBefore=(await inspect()).roots;await concurrent('archive');expect((await inspect()).roots).toEqual(allBefore);
   report.cases.push('PDF/A UI conversion, metadata/output intents and concurrent reuse');
   for(const [name,hash]of originals)expect(digest(await readFile(join(fixtures,name)))).toBe(hash);
-  const closing=await inspect();await psJSON(helper,['-Mode','Close','-Exe',exe,'-OwnerPid',String(app.pid)]);
-  await expect.poll(()=>app.exitCode,{timeout:20000}).toBe(0);
+  const closing=await inspect();const acknowledgement=await psJSON(helper,['-Mode','Close','-Exe',exe,'-OwnerPid',String(app.pid)]);
+  assertCloseAcknowledgement(acknowledgement,app.pid);
   // Exact PID census, no global name-based killing to manufacture cleanup PASS.
-  await expect.poll(async()=>{
-    const {stdout}=await exec('powershell.exe',['-NoProfile','-NonInteractive','-Command',`@(Get-Process -Id ${closing.descendants.join(',')} -ErrorAction SilentlyContinue).Count`],{windowsHide:true});
-    return Number(stdout.trim());
-  },{timeout:20000}).toBe(0);
+  await waitForOwnedShutdown(app,closing.descendants,async pids=>{
+    const {stdout}=await exec('powershell.exe',['-NoProfile','-NonInteractive','-Command',`@(Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue).Count`],{windowsHide:true,timeout:10000});
+    const count=stdout.trim();if(!/^\d+$/.test(count))throw Error('Invalid owned-process census response');
+    return Number(count);
+  });
+  report.cases.push('Acknowledged normal close, exit code zero and all owned descendant PIDs gone');
   report.status='PASS';
 }catch(e){report.status='FAIL';report.error=e.stack;if(page)await page.screenshot({path:join(out,'failure.png')}).catch(()=>{});throw e;}
 finally{
