@@ -82,6 +82,23 @@ for(const control of ['zoom','zoomIn','zoomOut'])test(`rapid page navigation fol
   await expect(page.locator('#pageNumber')).toHaveValue('2');
 });
 
+test('tab restore cannot overwrite a newer page jump and zoom after animation frames',async({page})=>{
+  await mockNative(page,{a:await fixture('RESTORE A'),b:await fixture('RESTORE B')});
+  await page.goto('/reader.html');await expect(page.locator('.page canvas').first()).toBeVisible();
+  await page.evaluate(()=>window.__enqueue('b'));
+  await expect(page.locator('.readerContainer:not([hidden]) .textLayer')).toContainText(['RESTORE B']);
+  await page.evaluate(async()=>{
+    document.querySelector('#tabs .tab .title').click();
+    const input=document.getElementById('pageNumber'),zoom=document.getElementById('zoom');
+    input.value='3';input.dispatchEvent(new Event('change'));
+    zoom.value='1.5';zoom.dispatchEvent(new Event('change'));
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  });
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await expect(page.locator('.readerContainer:not([hidden]) .textLayer')).toContainText(['RESTORE A page 3']);
+  await expect.poll(()=>page.locator('.readerContainer:not([hidden]) .page').first().evaluate(n=>parseFloat(getComputedStyle(n).getPropertyValue('--scale-factor')))).toBeCloseTo(2,1);
+});
+
 test('malformed forwarded PDF does not block the next request or discard current document',async({page})=>{
   await mockNative(page,{a:await fixture('NATIVE A'),b:await fixture('NATIVE B')});
   await page.goto('/reader.html');await expect(page.locator('#tabs .tab')).toHaveCount(1);

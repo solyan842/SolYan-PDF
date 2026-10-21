@@ -93,14 +93,13 @@ export function installReaderSession({native,documents,current,activate,message,
     doc.view.currentScaleValue=String(Math.max(.25,Math.min(4,Number(zoom)||1)));
     doc.view.update();
     doc.view.currentPageNumber=requestedPage;
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      if(doc.container.isConnected&&current()?.id===doc.id){
-        doc.container.scrollLeft=Math.max(0,Number(left)||0);
-        // Older sessions could record zero while a hidden tab was on page >1.
-        // In that case retain PDF.js's requested-page position.
-        if(Number(top)>0||requestedPage===1)doc.container.scrollTop=Math.max(0,Number(top)||0);
-      }
-    }));
+    // PDF.js updates page dimensions synchronously when scaling. Apply the
+    // offsets in this activation task, before accepting the next user input.
+    // A deferred animation-frame restore can overwrite a newer page/zoom jump.
+    doc.container.scrollLeft=Math.max(0,Number(left)||0);
+    // Older sessions could record zero while a hidden tab was on page >1.
+    // In that case retain PDF.js's requested-page position.
+    if(Number(top)>0||requestedPage===1)doc.container.scrollTop=Math.max(0,Number(top)||0);
     touch();
   }
   function opened(doc){
