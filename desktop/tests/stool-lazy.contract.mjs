@@ -34,3 +34,13 @@ test('only allowlisted services and local endpoints can be requested', () => {
   assert.ok(main.includes('http://127.0.0.1:'));
   assert.ok(read('desktop/ui/index.html').includes('id="home-view"'));
 });
+
+test('fast CI only creates empty compile-only resource roots and never builds Reader',()=>{
+  const ci=read('.github/workflows/windows-stool-fast-ci.yml');
+  for(const service of ['core','office','ocr','sign','archive'])assert.ok(ci.includes("'"+service+"'"));
+  assert.ok(ci.includes('Prepare compile-only resource roots'));
+  assert.ok(ci.includes("Expected an empty compile-only directory"));
+  assert.ok(ci.includes('cargo check --no-default-features'));
+  assert.equal(ci.includes('cargo tauri build'),false);
+  assert.equal(ci.includes('windows-reader-ci.yml'),false);
+});

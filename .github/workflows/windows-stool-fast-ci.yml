@@ -45,6 +45,21 @@ jobs:
         run: |
           & ./desktop/ui/validate-contract.ps1 2>&1 | Tee-Object artifacts/stool-ui-contract.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # Tauri validates every resource directory before rustc, even in
+      # cargo check. Stage EMPTY directories exclusively on disposable CI;
+      # never claim this produces a packaged installer or working sidecars.
+      - name: Prepare compile-only resource roots for Tauri validation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $services = @('core','office','ocr','sign','archive')
+          foreach ($service in $services) {
+            $path = Join-Path 'desktop/src-tauri/resources' $service
+            if (Test-Path $path) { throw "Refusing to overwrite staged runtime at $path" }
+            New-Item -ItemType Directory -Force -Path $path | Out-Null
+            if ((Get-ChildItem $path -Force | Measure-Object).Count -ne 0) { throw "Expected an empty compile-only directory at $path" }
+          }
+          Write-Output 'Tauri compile-only resource roots staged without binaries, models or installers'
       - name: Check Tauri sTool Rust independently, no NSIS or sidecars
         shell: pwsh
         working-directory: desktop/src-tauri
