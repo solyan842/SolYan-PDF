@@ -66,3 +66,10 @@ page count. New CORS tests run in Fast CI and before Core packaging. No PDF
 output, signature, offline OCR, PDF/A, process recovery or uninstall gate removed.
 Push the combined tested batch once, require Fast CI, then dispatch a new named
 installer milestone; never rerun the unfixed #1 SHA.
+
+## Current verified dispatch
+
+Feature HEAD `005dbb7d8179d5b1f807d994d39c0dbe60e3223e`; separate runtime commit `258cb175d776c16223f7e471ae7c7467829b4cb3`.
+[Fast CI #7](https://github.com/solyan842/SolYan-PDF/actions/runs/39557347968) SUCCESS, including the five real ASGI tests.
+[Installer #2](https://github.com/solyan842/SolYan-PDF/actions/runs/39557692700) IN PROGRESS when saved, same SHA, branch `build/windows-stool-demo-20261021-cors`.
+Do not rerun old installer #1; its log was consumed and its exact CORS regression repaired. Re-fetch live Actions before diagnosing #2. No installed demo PASS yet.
