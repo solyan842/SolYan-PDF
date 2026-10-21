@@ -115,28 +115,33 @@ test('optional Unicode font engine loads only for Typewriter and only once',asyn
   expect(fontkitRequests).toHaveLength(1);
 });
 
-test('presentation zooms from fullscreen without changing Reader zoom',async({page})=>{
+test('presentation is chrome-free while keyboard and Ctrl-wheel zoom keep working',async({page})=>{
   await open(page);
   await page.locator('#zoom').selectOption('1.5');
   const readerZoom=await page.locator('#zoom').inputValue();
   await page.keyboard.press('F11');
-  await expect(page.locator('#presentationStage')).toHaveAttribute('data-zoom','1');
+  const stage=page.locator('#presentationStage');
+  await expect(stage).toBeVisible();
+  await expect(stage).toHaveAttribute('data-zoom','1');
+  await expect(page.locator('#presentationZoomTools,#presentationZoomLabel,.presentation-hint')).toHaveCount(0);
   const sheet=page.locator('.presentation-paper');
   const fitted=await sheet.boundingBox();
-  await page.locator('#presentationZoomTools button[title="Phóng to (+)"]').click();
-  await expect(page.locator('#presentationStage')).toHaveAttribute('data-zoom','1.25');
+  await page.keyboard.press('+');
+  await expect(stage).toHaveAttribute('data-zoom','1.25');
   await expect.poll(async()=>Number((await sheet.boundingBox())?.width||0)).toBeGreaterThan(fitted.width*1.2);
-  await page.locator('#presentationZoomTools button[title="Thu nhỏ (−)"]').click();
-  await expect(page.locator('#presentationStage')).toHaveAttribute('data-zoom','1');
+  await page.keyboard.press('-');
+  await expect(stage).toHaveAttribute('data-zoom','1');
   await page.locator('#presentationViewport').hover({position:{x:60,y:80}});
   await page.keyboard.down('Control');await page.mouse.wheel(0,-100);await page.keyboard.up('Control');
-  await expect(page.locator('#presentationStage')).toHaveAttribute('data-zoom','1.25');
-  await page.locator('#presentationZoomTools button[title="Vừa màn hình (0)"]').click();
-  await expect(page.locator('#presentationStage')).toHaveAttribute('data-zoom','1');
+  await expect(stage).toHaveAttribute('data-zoom','1.25');
+  await page.keyboard.press('0');
+  await expect(stage).toHaveAttribute('data-zoom','1');
   await page.keyboard.press('+');
-  await expect(page.locator('#presentationStage')).toHaveAttribute('data-zoom','1.25');
+  await expect(stage).toHaveAttribute('data-zoom','1.25');
+  await page.mouse.move(20,20);
+  await expect(page.locator('#presentationZoomTools,#presentationZoomLabel,.presentation-hint')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.locator('#presentationStage')).toBeHidden();
+  await expect(stage).toBeHidden();
   await expect(page.locator('#zoom')).toHaveValue(readerZoom);
 });
 

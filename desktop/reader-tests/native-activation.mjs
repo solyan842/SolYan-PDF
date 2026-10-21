@@ -268,7 +268,9 @@ try{
   const presentationBefore=await page.locator('.readerContainer:not([hidden])').evaluate(el=>({top:el.scrollTop,left:el.scrollLeft}));
   await page.keyboard.press('F11');await expect(page.locator('#presentationStage')).toHaveAttribute('data-page','2');
   expect(await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'fullscreen-state'}))).toBe(true);
-  await expect(page.locator('header')).toBeHidden();await page.keyboard.press('ArrowRight');await expect(page.locator('#presentationStage')).toHaveAttribute('data-page','3');await page.screenshot({path:join(root,'installed-presentation-F11.png')});
+  await expect(page.locator('header')).toBeHidden();
+  await expect(page.locator('#presentationZoomTools,#presentationZoomLabel,.presentation-hint')).toHaveCount(0);
+  await page.keyboard.press('ArrowRight');await expect(page.locator('#presentationStage')).toHaveAttribute('data-page','3');await page.screenshot({path:join(root,'installed-presentation-F11.png')});
   await page.keyboard.press('Escape');await expect(page.locator('#presentationStage')).toBeHidden();await expect(page.locator('#pageNumber')).toHaveValue('2');
   expect(await page.locator('.readerContainer:not([hidden])').evaluate(el=>({top:el.scrollTop,left:el.scrollLeft}))).toEqual(presentationBefore);
   expect(await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'fullscreen-state'}))).toBe(false);

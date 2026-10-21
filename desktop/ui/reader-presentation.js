@@ -2,14 +2,9 @@
 export function installPresentation(api){
   const stage=document.createElement('section');stage.id='presentationStage';stage.hidden=true;stage.tabIndex=-1;stage.setAttribute('aria-label','Trình chiếu tài liệu');
   const area=document.createElement('div');area.id='presentationViewport';stage.append(area);
-  const controls=document.createElement('div');controls.id='presentationZoomTools';controls.setAttribute('role','group');controls.setAttribute('aria-label','Thu phóng khi trình chiếu');
-  function addButton(label,title,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.title=title;b.setAttribute('aria-label',title);b.addEventListener('click',fn);controls.append(b);return b;}
-  const minus=addButton('−','Thu nhỏ (−)',()=>changeZoom(1/1.25));
-  const percent=document.createElement('span');percent.id='presentationZoomLabel';percent.setAttribute('aria-live','polite');controls.append(percent);
-  const plus=addButton('+','Phóng to (+)',()=>changeZoom(1.25));
-  addButton('Vừa trang','Vừa màn hình (0)',()=>setZoom(1));
-  const hint=document.createElement('p');hint.className='presentation-hint';hint.textContent='Esc thoát · ← → chuyển trang · Ctrl + lăn chuột để zoom';
-  stage.append(controls,hint);document.body.append(stage);
+  // No floating toolbar or hints can obscure PDF pages in presentation.
+  // Keyboard + / - / 0, Ctrl+wheel, and Esc continue working.
+  document.body.append(stage);
   let session=null,exiting=false,resizeFrame=0;
   const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
   const native=action=>window.__TAURI__.core.invoke('reader_window_control',{action});
@@ -37,8 +32,7 @@ export function installPresentation(api){
     stage.dataset.page=String(s.page);stage.dataset.pages=String(s.doc.pdf.numPages);stage.dataset.zoom=String(s.zoomFactor);
   }
   function redraw(){void draw().catch(error=>{api.message('Không thể trình chiếu: '+error.message);void exit();});}
-  function updateZoom(){const z=session?.zoomFactor||1;percent.textContent=Math.round(z*100)+'%';minus.disabled=z<=.5;plus.disabled=z>=4;}
-  function setZoom(z){if(!session)return;z=Math.max(.5,Math.min(4,Math.round(z*1000)/1000));if(z===session.zoomFactor)return;session.zoomFactor=z;session.centerAfterDraw=true;updateZoom();redraw();}
+  function setZoom(z){if(!session)return;z=Math.max(.5,Math.min(4,Math.round(z*1000)/1000));if(z===session.zoomFactor)return;session.zoomFactor=z;session.centerAfterDraw=true;redraw();}
   function changeZoom(step){if(session)setZoom(session.zoomFactor*step);}
   stage.addEventListener('wheel',event=>{if(!session||!event.ctrlKey)return;event.preventDefault();event.stopPropagation();changeZoom(event.deltaY<0?1.25:1/1.25);},{passive:false});
   async function exit(){
@@ -63,7 +57,7 @@ export function installPresentation(api){
     for(const p of document.querySelectorAll(':popover-open'))p.hidePopover();
     d.view.update();
     const s=session={doc:d,page:d.view.currentPageNumber,originalPage:d.view.currentPageNumber,rotation:d.view.pagesRotation,scale:d.view.currentScaleValue,left:d.container.scrollLeft,top:d.container.scrollTop,zoom:document.getElementById('zoom').value,focus:document.activeElement,generation:0,task:null,zoomFactor:1,centerAfterDraw:false,native:Boolean(window.__TAURI__?.core&&!document.getElementById('windowControls')?.hidden)};
-    stage.hidden=false;updateZoom();document.body.classList.add('presentation-active');
+    stage.hidden=false;document.body.classList.add('presentation-active');
     try{
       if(s.native)s.nativeWasFullscreen=await native('presentation-enter');
       else await stage.requestFullscreen({navigationUI:'hide'});
