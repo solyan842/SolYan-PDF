@@ -1,37 +1,7 @@
-name: Windows Desktop CI
+name: Windows Desktop CI (legacy manual D6)
 
 on:
-  pull_request:
-    paths:
-      - "desktop/**"
-      - "backend/app/**"
-      - "engines/sign-service/**"
-      - "engines/archive-service/**"
-      - "engines/office-service/**"
-      - "docs/WINDOWS-DESKTOP-*.md"
-      - ".github/workflows/windows-desktop-ci.yml"
-      - ".github/workflows/ci-result.yml"
-      - "scripts/Get-CiBrief.ps1"
-      - "scripts/tests/**"
   workflow_dispatch:
-  push:
-    branches:
-      - "feat/windows-desktop-v1"
-      - "feat/windows-desktop-d4-text-integration"
-      - "feat/windows-desktop-d5-signing"
-      - "feat/windows-desktop-d5-pdfa-integration"
-      - "feat/windows-desktop-d6-release-gate"
-    paths:
-      - "desktop/**"
-      - "backend/app/**"
-      - "engines/sign-service/**"
-      - "engines/archive-service/**"
-      - "engines/office-service/**"
-      - "docs/WINDOWS-DESKTOP-*.md"
-      - ".github/workflows/windows-desktop-ci.yml"
-      - ".github/workflows/ci-result.yml"
-      - "scripts/Get-CiBrief.ps1"
-      - "scripts/tests/**"
 
 permissions:
   contents: read

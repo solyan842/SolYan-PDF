@@ -1,0 +1,15 @@
+import YAML from 'yaml';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const get=name=>YAML.parse(readFileSync('.github/workflows/'+name,'utf8'));
+const full=get('windows-stool-installer.yml'),legacy=get('windows-desktop-ci.yml');
+assert.deepEqual(Object.keys(legacy.on),['workflow_dispatch']);
+assert.deepEqual(full.on.push.branches,['build/windows-stool-demo-*']);
+assert.ok('workflow_dispatch' in full.on);assert.ok(!('pull_request' in full.on));
+assert.deepEqual(Object.keys(full.jobs),['stool-windows-x64']);
+const steps=full.jobs['stool-windows-x64'].steps;
+assert.ok(steps.some(s=>s.run?.includes('stool-installer-smoke.ps1')));
+assert.ok(steps.some(s=>s.if==='always()'&&s.uses?.startsWith('actions/upload-artifact@')));
+assert.ok(!steps.some(s=>/reader-only|tauri\.reader/.test(s.run||'')));
+get('windows-stool-fast-ci.yml');
+console.log('Parsed workflow isolation, milestone triggers and durable diagnostics PASS');

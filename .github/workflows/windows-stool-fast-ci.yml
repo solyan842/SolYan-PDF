@@ -10,6 +10,9 @@ on:
       - 'desktop/backend/**'
       - 'desktop/tests/stool-lazy.contract.mjs'
       - 'desktop/tests/stool-icons.contract.mjs'
+      - 'desktop/tests/stool-installer.contract.mjs'
+      - 'desktop/stool-tests/**'
+      - '.github/workflows/windows-stool-installer.yml'
       - '.github/workflows/windows-stool-fast-ci.yml'
       - 'docs/WINDOWS-STOOL-*.md'
   workflow_dispatch:
@@ -39,8 +42,23 @@ jobs:
       - name: Check sTool cold-start and service mapping contracts
         shell: pwsh
         run: |
-          node --test desktop/tests/stool-lazy.contract.mjs desktop/tests/stool-icons.contract.mjs 2>&1 | Tee-Object artifacts/stool-lazy-contract.log
+          node --test desktop/tests/stool-lazy.contract.mjs desktop/tests/stool-icons.contract.mjs desktop/tests/stool-installer.contract.mjs 2>&1 | Tee-Object artifacts/stool-lazy-contract.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate installed acceptance scripts without staging heavy runtimes
+        shell: pwsh
+        run: |
+          npm ci --prefix desktop/stool-tests --ignore-scripts 2>&1 | Tee-Object artifacts/stool-test-driver.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/check-workflows.mjs 2>&1 | Tee-Object artifacts/stool-workflow-contract.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --check desktop/stool-tests/installed.mjs 2>&1 | Tee-Object artifacts/stool-installed-script.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in @('stool-installer-smoke.ps1','stool-process-smoke.ps1','stool-webview-policy.ps1')) {
+            $tokens=$null; $errorsInScript=$null
+            [Management.Automation.Language.Parser]::ParseFile((Resolve-Path "desktop/backend/$file"),[ref]$tokens,[ref]$errorsInScript) | Out-Null
+            if ($errorsInScript.Count) { throw ($errorsInScript | Out-String) }
+          }
+          'PowerShell acceptance scripts parse PASS' | Tee-Object artifacts/stool-installed-powershell.log
       - name: Check UI contracts, not the Reader build
         shell: pwsh
         run: |
