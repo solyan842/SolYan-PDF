@@ -1,0 +1,18 @@
+{
+  "scope": "local Windows headless Edge against unchanged sTool UI; no installed Tauri or engine acceptance",
+  "cases": [
+    "all tools and all nine categories match catalog",
+    "Vietnamese and English queries plus empty result",
+    "Ctrl+K focus and Escape reset",
+    "every card has SVG, name and separate description",
+    "no script exceptions and only four app-owned lightweight Home scripts"
+  ],
+  "observedBrowserHomeMs": 12386,
+  "catalogTools": 96,
+  "externalRequestHosts": [
+    "me.kis.v2.scr.kaspersky-labs.com"
+  ],
+  "zeroExternalRequests": "FAIL",
+  "functionalResult": "PASS",
+  "result": "PARTIAL: external requests observed, inspect environment injection"
+}

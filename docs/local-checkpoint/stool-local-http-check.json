@@ -1,0 +1,13 @@
+{
+  "scope": "Windows local TCP, real uvicorn, production runner composition, synthetic route; not packaged engine acceptance",
+  "result": "PASS",
+  "cases": [
+    "real socket approved preflight without token",
+    "authenticated real socket POST",
+    "missing and wrong credentials remain 401",
+    "foreign origin preflight denied",
+    "plain OPTIONS requires token",
+    "32 concurrent authenticated requests succeed",
+    "owned HTTP server closes cleanly"
+  ]
+}

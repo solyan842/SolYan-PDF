@@ -1,0 +1,19 @@
+{
+  "scope": "Windows frozen Core executable + pinned qpdf 12.4.2; not full installed UI acceptance",
+  "cases": [
+    "real production health confirms qpdf",
+    "actual production preflight and token enforcement",
+    "compress: real PDF saved, qpdf check, all page text and size preserved",
+    "decompress: real PDF saved, qpdf check, all page text and size preserved",
+    "flatten: real PDF saved, qpdf check, all page text and size preserved",
+    "compress-images: real PDF saved, qpdf check, all page text and size preserved",
+    "bad PDF rejected; valid retry succeeds",
+    "8 simultaneous real PDF operations and independently checked outputs",
+    "source PDF bytes unchanged"
+  ],
+  "sourceSha256": "581520c0a8bb0e93536d62ceeaaefa637179803ca86bca9a368fff1077266eb0",
+  "result": "FUNCTIONAL_PASS; CLEANUP_FAIL",
+  "ownedCoreExited": true,
+  "cleanupResult": "FAIL: taskkill /PID owned-root /T /F returned Access denied; remaining test-owned solyan-core PIDs 37580, 42348, 44628 require cleanup and port-closure verification",
+  "processTreeCleanupVerified": false
+}

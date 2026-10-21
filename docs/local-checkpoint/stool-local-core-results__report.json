@@ -1,0 +1,17 @@
+{
+  "scope": "Windows production Core source runner + pinned qpdf 12.4.2; not frozen installer acceptance",
+  "cases": [
+    "real production health confirms qpdf",
+    "actual production preflight and token enforcement",
+    "compress: real PDF saved, qpdf check, all page text and size preserved",
+    "decompress: real PDF saved, qpdf check, all page text and size preserved",
+    "flatten: real PDF saved, qpdf check, all page text and size preserved",
+    "compress-images: real PDF saved, qpdf check, all page text and size preserved",
+    "bad PDF rejected; valid retry succeeds",
+    "8 simultaneous real PDF operations and independently checked outputs",
+    "source PDF bytes unchanged"
+  ],
+  "sourceSha256": "b572b6688474867fea50285155b3a40e7918336d1b68db5d31665495815d5155",
+  "result": "PASS",
+  "ownedCoreExited": true
+}

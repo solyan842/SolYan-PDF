@@ -1,0 +1,27 @@
+[
+  {
+    "name": "pyinstaller",
+    "version": "6.22.3",
+    "sha256": "500bd58c7bf7e584a8435adccbd763a0b918d5c12b08d74ff50fd79b2915458b"
+  },
+  {
+    "name": "pyinstaller-hooks-contrib",
+    "version": "2026.9",
+    "sha256": "fb3e67dd64122561724c48ad0366ac9e8c16e638b63bf7d85de03bf3fdbf06c3"
+  },
+  {
+    "name": "altgraph",
+    "version": "0.17.5",
+    "sha256": "f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597"
+  },
+  {
+    "name": "pefile",
+    "version": "2024.8.26",
+    "sha256": "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"
+  },
+  {
+    "name": "pywin32-ctypes",
+    "version": "0.2.3",
+    "sha256": "8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8"
+  }
+]
