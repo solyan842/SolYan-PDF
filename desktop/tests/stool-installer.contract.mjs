@@ -25,3 +25,14 @@ test('installed acceptance retains D6 signing, PDF-A and uninstall gates',()=>{
   const sign=read('desktop/ui/sign.html');
   for(const id of ['pdfInput','certInput','certPassword','runBtn'])assert.ok(sign.includes(`id="${id}"`));
 });
+
+test('installed OCR assertion accepts token segmentation without losing content',async()=>{
+  const {expectedOcrLine}=await import('../stool-tests/ocr-assertion.mjs');
+  for(const actual of ['SOLYAN OCR TEST 12345','SOL YAN OCR TEST 12345','SOL   YAN OCR TEST 12345','sol yan ocr test 12345']){
+    assert.match(actual,expectedOcrLine);
+  }
+  for(const wrong of ['SOL YANN OCR TEST 12345','SOL YAN OCB TEST 12345','SOL YAN OCR TEST 12346','SOL YAN TEST OCR 12345','SOL YAN OCR TEST 1234']){
+    assert.doesNotMatch(wrong,expectedOcrLine);
+  }
+  assert.match(read('desktop/stool-tests/installed.mjs'),/toHaveValue\(expectedOcrLine,\{timeout:300000\}\)/);
+});

@@ -1,4 +1,5 @@
 import {chromium,expect} from '@playwright/test';
+import {expectedOcrLine} from './ocr-assertion.mjs';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
@@ -78,7 +79,7 @@ try{
   await go('ocr.html');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.png'));
   const ocrStarted=performance.now();await watch('ocr');
   await page.locator('#runOcr').click();
-  await expect(page.locator('#outputPreview')).toHaveValue(/SOLYAN.*OCR.*TEST.*12345/i,{timeout:300000});
+  await expect(page.locator('#outputPreview')).toHaveValue(expectedOcrLine,{timeout:300000});
   report.firstOcr={observedMs:performance.now()-ocrStarted,memory:await endWatch()};
   await roots(['core','office','ocr']);const ocrBefore=(await inspect()).roots;await concurrent('ocr');expect((await inspect()).roots).toEqual(ocrBefore);
   await page.locator('#runOcr').click();await expect(page.locator('#status')).toHaveClass(/success/,{timeout:300000});
