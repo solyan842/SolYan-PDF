@@ -71,6 +71,7 @@ test('recent PDFs and full tab session restore after reload, including missing p
   await expect.poll(()=>saved.tabs.length).toBe(2);
   await expect.poll(()=>saved.tabs[0][1]).toBe(3);
   await expect.poll(()=>saved.tabs[0][2]).toBeCloseTo(1.5,1);
+  await expect.poll(()=>saved.tabs[0][4]).toBeGreaterThan(0);
   await expect.poll(()=>saved.active).toBe(b);
   await page.reload();
   await expect(page.locator('#tabs .tab')).toHaveCount(2);
@@ -81,6 +82,10 @@ test('recent PDFs and full tab session restore after reload, including missing p
   await page.locator('#tabs .tab .title').first().click();
   await expect(page.locator('#pageNumber')).toHaveValue('3');
   await expect.poll(async()=>page.locator('.readerContainer:not([hidden]) .page').first().evaluate(n=>parseFloat(getComputedStyle(n).getPropertyValue('--scale-factor')))).toBeCloseTo(2,1);
+  await page.locator('#tabs .tab .title').last().click();
+  await expect(page.locator('#pageNumber')).toHaveValue('1');
+  await page.locator('#tabs .tab .title').first().click();
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
   await page.locator('#readerMenu').click();await page.locator('#recentFiles').click();
   await expect(page.locator('#readerRecentDialog')).toBeVisible();
   await expect(page.locator('.reader-recent-open')).toHaveCount(2);
@@ -105,7 +110,9 @@ test('recent PDFs and full tab session restore after reload, including missing p
   await page.locator('.reader-recent-open').filter({hasText:'Tiếng Việt'}).click();
   await page.evaluate(()=>window.__nativeNotify());
   await expect(page.locator('#tabs .tab')).toHaveCount(1);
-  await expect(page.locator('.textLayer')).toContainText(['ORIGINAL A PAGE 1']);
+  // Existing fingerprint bookmarks resume reading even after a tab is closed.
+  await expect(page.locator('#pageNumber')).toHaveValue('3');
+  await expect(page.locator('.textLayer')).toContainText(['ORIGINAL A PAGE 3']);
   await page.locator('#readerMenu').click();await page.locator('#recentFiles').click();
   await page.locator('#readerRecentClear').click();
   await expect(page.locator('#readerRecentList')).toContainText('Chưa có PDF gần đây.');

@@ -79,7 +79,10 @@ async function openFile(file, source = null) {
 }
 function activate(id) {
   active = id; const doc = current(); selected = doc.selectedId;
-  for (const other of documents.values()) other.container.hidden = other.id !== id;
+  for (const other of documents.values()) {
+    if(other.id!==id&&!other.container.hidden)session?.deactivated(other);
+    other.container.hidden = other.id !== id;
+  }
   $('welcome').hidden = true; $('pageCount').textContent = `/ ${doc.pdf.numPages}`; $('pageNumber').max = doc.pdf.numPages; $('pageNumber').value = doc.view.currentPageNumber;
   $('save').disabled = false; $('saveCurrent').disabled = false; $('query').value = doc.query; $('matches').textContent = doc.matches; $('signOptions').hidden = !selected;
   if($('presentation'))$('presentation').disabled=false;

@@ -24,6 +24,7 @@ export function installReaderSession({native,documents,current,activate,message,
     // A hidden tab can still be awaiting PDF.js pagesinit. Never replace its
     // saved page/zoom with the uninitialized viewer defaults during a flush.
     if(d.readerPendingRestore)return [...d.readerPendingRestore];
+    if(d.container.hidden&&d.readerInactiveView)return [...d.readerInactiveView];
     return [d.source,Math.max(1,Math.round(d.view?.currentPageNumber||1)),
       Math.max(.25,Math.min(4,Number(d.view?.currentScale)||1)),
       Math.max(0,Math.round(d.container?.scrollLeft||0)),
@@ -80,7 +81,7 @@ export function installReaderSession({native,documents,current,activate,message,
   }
   function applyRestore(doc){
     const row=doc?.readerPendingRestore;
-    if(!row||!doc.readerPagesReady||current()?.id!==doc.id||!doc.container.isConnected)return;
+    if(!ready||!row||!doc.readerPagesReady||current()?.id!==doc.id||!doc.container.isConnected)return;
     const [,page,zoom,left,top]=row;
     const requestedPage=Math.min(doc.pdf.numPages,Math.max(1,Number(page)||1));
     doc.readerPendingRestore=null;
@@ -95,7 +96,9 @@ export function installReaderSession({native,documents,current,activate,message,
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       if(doc.container.isConnected&&current()?.id===doc.id){
         doc.container.scrollLeft=Math.max(0,Number(left)||0);
-        doc.container.scrollTop=Math.max(0,Number(top)||0);
+        // Older sessions could record zero while a hidden tab was on page >1.
+        // In that case retain PDF.js's requested-page position.
+        if(Number(top)>0||requestedPage===1)doc.container.scrollTop=Math.max(0,Number(top)||0);
       }
     }));
     touch();
@@ -110,14 +113,22 @@ export function installReaderSession({native,documents,current,activate,message,
     });
     touch();
   }
-  function activated(doc){applyRestore(doc);}
+  // display:none resets the container's measured scroll offsets. Capture the
+  // visible position before hiding, then reuse it for flushes and reactivation.
+  function deactivated(doc){doc.readerInactiveView=viewOf(doc);}
+  function activated(doc){
+    doc.readerPendingRestore ||= doc.readerInactiveView;
+    doc.readerInactiveView=null;applyRestore(doc);
+  }
   function focus(key){
     const doc=[...documents.values()].find(d=>d.source===key);
     if(doc)activate(doc.id);
   }
   function finish(skipped=0){
-    ready=true;restoring.clear();touch();
+    // Startup opens each restored tab temporarily. Only restore the final
+    // active tab now; the others retain their rows until selected by the user.
+    ready=true;restoring.clear();applyRestore(current());touch();
     if(skipped>0)message(t('Đã bỏ qua PDF không còn tồn tại: ')+skipped);
   }
-  return {opened,activated,touch,flush,prepare,focus,finish,refresh};
+  return {opened,activated,deactivated,touch,flush,prepare,focus,finish,refresh};
 }
