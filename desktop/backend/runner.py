@@ -55,8 +55,17 @@ def main() -> None:
     os.environ.setdefault("SOLYAN_ALLOWED_ORIGINS", "http://tauri.localhost")
 
     from backend.app.main import app as fastapi_app
+    from starlette.middleware.cors import CORSMiddleware
 
-    app = DesktopTokenMiddleware(fastapi_app, args.token)
+    # A browser preflight carries the *name* of the token header, never its
+    # secret value. Keep standard CORS outside authentication so approved UI
+    # origins can preflight, while every real API request still needs its token.
+    app = CORSMiddleware(
+        DesktopTokenMiddleware(fastapi_app, args.token),
+        allow_origins=[origin.strip() for origin in os.environ['SOLYAN_ALLOWED_ORIGINS'].split(',') if origin.strip()],
+        allow_methods=['*'],
+        allow_headers=['*'],
+    )
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning", access_log=False)
 
 
