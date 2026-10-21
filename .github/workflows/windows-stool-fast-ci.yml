@@ -9,6 +9,7 @@ on:
       - 'desktop/ui/**'
       - 'desktop/backend/**'
       - 'desktop/tests/stool-lazy.contract.mjs'
+      - 'desktop/tests/stool-icons.contract.mjs'
       - '.github/workflows/windows-stool-fast-ci.yml'
       - 'docs/WINDOWS-STOOL-*.md'
   workflow_dispatch:
@@ -38,7 +39,7 @@ jobs:
       - name: Check sTool cold-start and service mapping contracts
         shell: pwsh
         run: |
-          node --test desktop/tests/stool-lazy.contract.mjs 2>&1 | Tee-Object artifacts/stool-lazy-contract.log
+          node --test desktop/tests/stool-lazy.contract.mjs desktop/tests/stool-icons.contract.mjs 2>&1 | Tee-Object artifacts/stool-lazy-contract.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check UI contracts, not the Reader build
         shell: pwsh
