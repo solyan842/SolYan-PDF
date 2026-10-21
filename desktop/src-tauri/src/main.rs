@@ -167,10 +167,32 @@ fn service_plan(state:&CoreState)->Result<ServicePlan,String>{
     if slot.is_none(){*slot=Some(ServicePlan::create()?);}
     slot.clone().ok_or("sTool service plan unavailable".into())
 }
-fn ensure_core(app:&tauri::AppHandle,state:&CoreState,plan:&ServicePlan)->Result<String,String>{
-    if let Some(existing)=state.session.lock().map_err(|_|"sTool core session lock unavailable")?.as_ref(){
-        return Ok(format!("{}\n{}",existing.endpoint,existing.token));
+// Check the owned Child, not a stale cached session or an arbitrary TCP port.
+// A exited process releases its Windows Job Object when removed from the slot.
+fn managed_child_alive<T>(
+    process: &mut Option<T>,
+    select: impl FnOnce(&mut T) -> &mut Child,
+    label: &str,
+) -> Result<bool,String> {
+    let Some(item)=process.as_mut() else{return Ok(false);};
+    match select(item).try_wait() {
+        Ok(None)=>Ok(true),
+        Ok(Some(_status))=>{*process=None;Ok(false)},
+        Err(error)=>Err(format!("Cannot inspect {label} process: {error}"))
     }
+}
+fn ensure_core(app:&tauri::AppHandle,state:&CoreState,plan:&ServicePlan)->Result<String,String>{
+    {
+        let mut owned=state.process.lock().map_err(|_|"sTool core process lock unavailable")?;
+        if managed_child_alive(&mut *owned,|p|&mut p.child,"Core")? {
+            if let Some(existing)=state.session.lock().map_err(|_|"sTool core session lock unavailable")?.as_ref() {
+                return Ok(format!("{}\n{}",existing.endpoint,existing.token));
+            }
+            // An active Core without its credential/session cannot be safely reused.
+            if let Some(mut stale)=owned.take(){let _=stale.child.kill();let _=stale.child.wait();}
+        }
+    }
+    *state.session.lock().map_err(|_|"sTool core session lock unavailable")?=None;
     let (process,session)=start_core(
         app,&ServicePlan::url(plan.office_port),
         &ServicePlan::url(plan.ocr_port),&plan.ocr_token,
@@ -202,19 +224,31 @@ async fn desktop_service_ready(app:tauri::AppHandle,service:String)->Result<bool
         match service.as_str(){
             "office"=>{
                 let mut slot=state.office_process.lock().map_err(|_|"Office process lock unavailable")?;
-                if slot.is_none(){let (process,_)=start_office(&app,plan.office_port)?;*slot=Some(process);}
+                if !managed_child_alive(&mut *slot,|p|&mut p.child,"Office")? {
+                    let (process,_)=start_office(&app,plan.office_port)?;
+                    *slot=Some(process);
+                }
             }
             "ocr"=>{
                 let mut slot=state.ocr_process.lock().map_err(|_|"OCR process lock unavailable")?;
-                if slot.is_none(){let (process,_,_)=start_ocr(&app,plan.ocr_port,&plan.ocr_token)?;*slot=Some(process);}
+                if !managed_child_alive(&mut *slot,|p|&mut p.child,"OCR")? {
+                    let (process,_,_)=start_ocr(&app,plan.ocr_port,&plan.ocr_token)?;
+                    *slot=Some(process);
+                }
             }
             "sign"=>{
                 let mut slot=state.sign_process.lock().map_err(|_|"Signing process lock unavailable")?;
-                if slot.is_none(){let (process,_,_)=start_sign(&app,plan.sign_port,&plan.sign_token)?;*slot=Some(process);}
+                if !managed_child_alive(&mut *slot,|p|&mut p.child,"Signing")? {
+                    let (process,_,_)=start_sign(&app,plan.sign_port,&plan.sign_token)?;
+                    *slot=Some(process);
+                }
             }
             "archive"=>{
                 let mut slot=state.archive_process.lock().map_err(|_|"Archive process lock unavailable")?;
-                if slot.is_none(){let (process,_,_)=start_archive(&app,plan.archive_port,&plan.archive_token)?;*slot=Some(process);}
+                if !managed_child_alive(&mut *slot,|p|&mut p.child,"Archive")? {
+                    let (process,_,_)=start_archive(&app,plan.archive_port,&plan.archive_token)?;
+                    *slot=Some(process);
+                }
             }
             _=>unreachable!()
         }

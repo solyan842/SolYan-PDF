@@ -44,3 +44,14 @@ test('fast CI only creates empty compile-only resource roots and never builds Re
   assert.equal(ci.includes('cargo tauri build'),false);
   assert.equal(ci.includes('windows-reader-ci.yml'),false);
 });
+
+test('stale cached sessions and exited heavy sidecars are checked before reuse',()=>{
+  const main=read('desktop/src-tauri/src/main.rs');
+  assert.ok(main.includes('fn managed_child_alive<T>('));
+  assert.ok(main.includes('.try_wait()'));
+  assert.ok(main.includes('state.session.lock()'));
+  for(const service of ['Office','OCR','Signing','Archive'])
+    assert.ok(main.includes('managed_child_alive(&mut *slot,|p|&mut p.child,"'+service+'")'),service+' needs crash restart');
+  assert.ok(main.includes('managed_child_alive(&mut *owned,|p|&mut p.child,"Core")'));
+  assert.ok(main.includes('let _=stale.child.kill();let _=stale.child.wait()'));
+});
