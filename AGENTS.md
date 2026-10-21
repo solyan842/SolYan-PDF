@@ -1,5 +1,20 @@
 # SolYan-PDF — MANDATORY AGENT ENTRY GATE
 
+## USER PRIORITY — REUSE EXISTING MODULES, SAVE TIME AND QUOTA (2026-10-21)
+
+This rule applies to EVERY feature and supersedes older implementation plans that propose unnecessary custom code.
+
+- Before implementing or expanding a subsystem, inspect existing repository code, official platform APIs/plugins and maintained OSS modules. Prefer integrating a proven module over designing another implementation. This includes printing, print preview/layout, window persistence, dialogs, URL opening/security, file saving and PDF operations.
+- Compare the relevant candidates once: actual required capabilities, license, maintenance, compatibility with the pinned stack, offline operation, integration cost and test evidence. Record the decision briefly in tracked docs so later sessions reuse the research.
+- Do not begin substantial custom UI, layout algorithms, persistence or engine code until evidence identifies the exact requirement an existing module cannot meet. Implement only that missing adapter or policy. Do not invent a replacement simply because writing it is possible.
+- For printing, first evaluate the existing pinned PDF.js print service and Windows/WebView2 native print UI/driver capabilities. Do not recreate printer selection, Properties, copies, duplex or other controls already supplied by the platform. Do not show controls without working behavior or claim native support from browser mocks.
+- Apply this review to unfinished local custom code too. Preserve work, but replace unnecessary implementations with verified reusable components before integrating; do not defend or ship them merely because effort was already spent.
+- Work from current GitHub HEAD on the correct dedicated product branch. Check whether the feature/fix already exists on other active branches before coding. Keep sReader and sTool independent; never overwrite another writer, main or stable. Promote Reader to its stable branch only after the requested feature batch and relevant exact-head checks are complete.
+- Use one writer. Batch meaningful local checks, then one coherent push and the correct product CI. Do not repeat passing checks without a relevant change, rebuild heavy installers unnecessarily, poll unchanged CI, reread large histories, or dump unfiltered logs. Do not use extra agents unless explicitly authorized.
+- Report concrete implemented behavior, verified results and remaining gaps. Do not substitute repeated plans, explanations or success claims for working integration. Never weaken acceptance gates to save effort or make CI green.
+
+User instruction: find and apply existing components wherever suitable; avoid unnecessary custom work, duplicated effort and waste of time or usage quota.
+
 Status: **REQUIRED / REPO SOURCE OF TRUTH**
 
 This file exists to prevent stale-state work, repeated fixes, CI diagnosis without real logs, accidental `main` edits, benchmark weakening, false success reports, and unnecessary custom implementation when mature open-source building blocks already exist.
