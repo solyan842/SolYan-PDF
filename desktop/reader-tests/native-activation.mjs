@@ -369,6 +369,39 @@ try{
   await writeFile(join(root,'installed-performance.json'),JSON.stringify(measurements,null,2));
   log.push({case:'installed-ten-tabs-and-100-pages',measurements});
 
+  // Real installed native window persistence; normal placement, maximized and
+  // presentation close are checked across separate EXE launches.
+  if((await assertSingle()).maximized)await page.locator('#window-maximize').click();
+  await windows('Resize',undefined,{width:1200,height:800});
+  const normalBounds=(await assertSingle()).bounds;
+  await page.locator('#window-close').click();await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
+  await stop();await start([]);expect((await assertSingle()).bounds).toEqual(normalBounds);
+  await page.locator('#window-maximize').click();await expect.poll(async()=>(await assertSingle()).maximized).toBe(true);
+  await page.locator('#window-close').click();await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
+  await stop();await start([]);expect((await assertSingle()).maximized).toBe(true);
+  // Restore normal geometry, enter presentation, close while fullscreen, reopen.
+  await page.locator('#window-maximize').click();
+  await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'presentation-enter'}));
+  await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'close'}));
+  await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);await stop();await start([]);
+  expect(await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'fullscreen-state'}))).toBe(false);
+  expect((await assertSingle()).bounds).toEqual(normalBounds);
+  log.push({case:'window-state-normal-maximized-fullscreen-restart',normalBounds});
+  // Direct IPC cannot bypass policy or supply approval. No browser is launched.
+  for(const address of ['javascript:alert(1)','file:///C:/Windows/win.ini','http://127.0.0.1','https://u:p@example.com']){
+    expect(await page.evaluate(async address=>{try{await window.__TAURI__.core.invoke('reader_open_pdf_link',{address,approved:true});return false;}catch{return true;}},address)).toBe(true);
+  }
+  const initialUrl=page.url();
+  await page.evaluate(()=>{window.__linkResult=null;window.__TAURI__.core.invoke('reader_open_pdf_link',{address:'https://example.com',approved:true}).then(result=>window.__linkResult=result).catch(error=>window.__linkResult='ERROR:'+error);});
+  await expect.poll(async()=>(await windows('CancelOpen')).cancelled,{timeout:20000}).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>window.__linkResult),{timeout:10000}).toBe('cancelled');
+  expect(page.url()).toBe(initialUrl);
+  await page.evaluate(()=>{window.open('https://example.com','_blank');});
+  await expect.poll(()=>browser.contexts()[0].pages().length).toBe(1);
+  const cdpSession=await page.context().newCDPSession(page);
+  await cdpSession.send('Page.navigate',{url:'https://example.com'});await cdpSession.detach();
+  expect(page.url()).toBe(initialUrl);await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  log.push({case:'native-link-policy-direct-IPC-prompt-cancel-navigation-new-window',browserOpened:false});
   const closingTree=(await windows()).descendants;
   await page.locator('#window-close').click();
   await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);

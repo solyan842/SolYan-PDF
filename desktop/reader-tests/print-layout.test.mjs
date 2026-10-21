@@ -1,0 +1,17 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+globalThis.window={PDFLib:await import('pdf-lib')};
+const {sheets}=await import('../ui/reader-print-layout.js');
+const sizes={0:[600,800],1:[800,600],2:[1200,1600],3:[600,800],4:[600,800]};
+test('mixed physical sizes and actual/custom scaling preserve dimensions',()=>{
+ const p=sheets([0,1],sizes);assert.deepEqual(p.map(s=>s.size),[[600,800],[800,600]]);
+ assert.equal(sheets([0],sizes,{paper:[300,400],scale:'actual',rotate:false})[0].items[0].width,600);
+ assert.equal(sheets([0],sizes,{paper:[300,400],scale:'custom',percent:50,rotate:false})[0].items[0].width,300);
+});
+test('N-up and booklet impose page order with padding instead of dropping pages',()=>{
+ const multiple=sheets([0,1,2,3,4],sizes,{nup:4,paper:[800,600]});assert.equal(multiple.length,2);assert.deepEqual(multiple.flatMap(s=>s.items.map(p=>p.index)),[0,1,2,3,4]);
+ const booklet=sheets([0,1,2,3,4],sizes,{mode:'booklet',paper:[800,600]});assert.equal(booklet.length,4);assert.deepEqual(booklet.map(s=>s.items.map(p=>p.index)),[[0],[1],[2],[3,4]]);
+});
+test('tiling covers entire large page at physical scale without source mutation',()=>{
+ const source=structuredClone(sizes),p=sheets([2],sizes,{mode:'tile',paper:[600,800]});assert.equal(p.length,4);assert.deepEqual(p.map(s=>[s.items[0].x,s.items[0].y]),[[0,0],[-600,0],[0,-800],[-600,-800]]);assert.deepEqual(sizes,source);
+});

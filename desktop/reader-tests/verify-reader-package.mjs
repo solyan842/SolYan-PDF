@@ -10,7 +10,7 @@ assert.equal(reader.mainBinaryName,'solyan-pdf-reader');
 assert.notEqual(reader.identifier,base.identifier);
 assert.equal(reader.app.windows[0].url,'reader.html');
 assert.deepEqual(reader.bundle.icon,['../branding/sReader_PDF/app.ico']);
-assert.match(read('../src-tauri/Cargo.toml'),/^reader-only\s*=\s*\["dep:tauri-plugin-single-instance"\]/m);
+assert.match(read('../src-tauri/Cargo.toml'),/^reader-only\s*=\s*\["dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state"\]/m);
 const html=read('../ui/reader.html');
 assert.doesNotMatch(html,/<script\b[^>]*>\s*[^<\s]/i,'No inline Reader scripts');
 for(const [,path] of html.matchAll(/(?:src|href)="(\.\/[^"#]+)"/g)){

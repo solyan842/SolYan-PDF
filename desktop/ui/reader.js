@@ -1,3 +1,4 @@
+import {linkifyText,installLinkGuard} from './reader-link-guard.js';
 import * as pdfjs from './vendor/pdfjs/build/pdf.mjs';
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor/pdfjs/web/pdf_viewer.mjs';
 import { installR2 } from './reader-r2.js';
@@ -9,6 +10,7 @@ import { installReaderSession } from './reader-session.js';
 globalThis.pdfjsLib = pdfjs;
 pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
+installLinkGuard({message:text=>document.getElementById('status').textContent=text});
 const documents = new Map();
 let active = null, selected = null, asset = null, busy = false, drawing = false, inked = false;
 const message = text => { $('status').textContent = text; };
@@ -60,7 +62,7 @@ async function openFile(file, source = null) {
   const pdf = await task.promise;
   const container = document.createElement('div'); container.className = 'readerContainer'; container.tabIndex = 0;
   const viewer = document.createElement('div'); viewer.className = 'pdfViewer'; container.append(viewer); $('documents').append(container);
-  const bus = new EventBus(), link = new PDFLinkService({ eventBus: bus, externalLinkEnabled: false }), find = new PDFFindController({ eventBus: bus, linkService: link });
+  const bus = new EventBus(), link = new PDFLinkService({ eventBus: bus, externalLinkEnabled: true }), find = new PDFFindController({ eventBus: bus, linkService: link });
   const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS, maxCanvasPixels: 12_000_000, enableScripting: false });
   const doc = { id: crypto.randomUUID(), name: file.name, source, bytes, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
@@ -71,6 +73,7 @@ async function openFile(file, source = null) {
   // overlays against the updated viewports immediately, not only at draw end.
   bus.on('scalechanging', () => { if (doc.id === active) {renderSignatures(doc);syncView(doc);} session?.touch(); });
   for(const event of ['scrollmodechanged','spreadmodechanged'])bus.on(event,()=>syncView(doc));
+  bus.on('textlayerrendered',()=>linkifyText(doc.container));
   bus.on('pagerendered', () => { if (doc.id === active) renderSignatures(doc); });
   bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } session?.touch(); });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });

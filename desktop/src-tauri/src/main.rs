@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod reader_open;
+mod reader_links;
+mod reader_window_state;
 mod reader_session;
 mod document_handoff;
 
@@ -1129,8 +1131,8 @@ fn reader_window_control(window: tauri::WebviewWindow, action: String) -> Result
     match action.as_str() {
         "available" => return Ok(true),
         "fullscreen-state" => return window.is_fullscreen().map_err(|e| e.to_string()),
-        "presentation-enter" => { let previous = window.is_fullscreen().map_err(|e| e.to_string())?; window.set_fullscreen(true).map_err(|e| e.to_string())?; return Ok(previous); },
-        "presentation-leave" => window.set_fullscreen(false),
+        "presentation-enter" => { reader_window_state::capture(&window); let previous = window.is_fullscreen().map_err(|e| e.to_string())?; window.set_fullscreen(true).map_err(|e| e.to_string())?; return Ok(previous); },
+        "presentation-leave" => { window.set_fullscreen(false).map_err(|e|e.to_string())?; return Ok(true); },
         "minimize" => window.minimize(),
         "maximize" => if window.is_maximized().map_err(|e| e.to_string())? { window.unmaximize() } else { window.maximize() },
         "drag" => window.start_dragging(),
@@ -1202,10 +1204,19 @@ fn main() {
             let _ = window.emit("reader-open-pending", ());
         }
     }));
+    #[cfg(all(windows,feature="reader-only"))]
+    let builder=builder.plugin(tauri_plugin_window_state::Builder::default().with_state_flags(reader_window_state::flags()).build());
     let app = builder
         .on_window_event(|window, event| {
             #[cfg(all(windows, feature = "reader-only"))]
             if window.label() == "main" {
+                if let Some(view)=window.app_handle().get_webview_window("main") {
+                    match event {
+                        tauri::WindowEvent::CloseRequested { .. } => reader_window_state::save(&view),
+
+                        _ => {}
+                    }
+                }
                 if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                     let state = window.state::<ReaderOpenState>();
                     if let Ok(mut queue) = state.queue.lock() {
@@ -1215,10 +1226,19 @@ fn main() {
                 }
             }
         })
+
         .manage(CoreState::default())
         .setup(|app| {
             if let Ok(root)=handoff_root(app.handle()){document_handoff::cleanup(&root);}
-            if cfg!(feature = "reader-only") { return Ok(()); }
+            if cfg!(feature = "reader-only") {
+                let config=app.config().app.windows[0].clone();
+                let window=tauri::WebviewWindowBuilder::from_config(app,&config)?
+                    .on_navigation(reader_links::navigation_allowed)
+                    .on_new_window(|_,_|tauri::webview::NewWindowResponse::Deny)
+                    .build()?;
+                reader_window_state::fit_to_work_area(&window);
+                return Ok(());
+            }
             let args:Vec<_>=std::env::args().collect();if let Some(index)=args.iter().position(|a|a=="--solyan-handoff"){if let Some(token)=args.get(index+1){if token.len()==64&&token.bytes().all(|c|c.is_ascii_hexdigit()){if let Some(window)=app.get_webview_window("main"){let url=window.url()?.join(&format!("handoff.html?native={token}"))?;window.navigate(url)?;}}}}
             let state = app.state::<CoreState>();
             match start_office(app.handle()) {
@@ -1284,7 +1304,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_links::reader_open_pdf_link])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

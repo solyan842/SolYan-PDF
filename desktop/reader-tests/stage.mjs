@@ -1,3 +1,4 @@
+import {stripTypeScriptTypes} from 'node:module';
 import { cp, mkdir, readFile,writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -22,3 +23,12 @@ await cp(new URL('./node_modules/pdfjs-dist/LICENSE', import.meta.url), new URL(
 console.log(`Staged pinned pdf-lib 1.17.1 and PDF.js 6.4.299 at ${fileURLToPath(vendor)}`);
 
 for(const app of ['sReader_PDF','sTool_PDF'])await cp(new URL('../branding/'+app+'/icon-48.png',import.meta.url),new URL(app+'.png',vendor));
+
+// Reuse the existing web product layout modules; strip TS at staging only.
+await mkdir(new URL('reader-layout/',vendor),{recursive:true});
+for(const name of ['n-up','booklet','poster']){
+  let source=await readFile(new URL('../../frontend/lib/'+name+'.ts',import.meta.url),'utf8');
+  source=source.replace(/import\s*\{([^}]+)\}\s*from '\.\/n-up';/g,(_,names)=>"import {"+names.replace(/\bNUpSourcePage,?\s*/g,'')+"} from './n-up';");
+  source=stripTypeScriptTypes(source,{mode:'strip'}).replace(/import\s*\{([^}]+)\}\s*from 'pdf-lib';/g,(_,names)=>'const {'+names+'}=window.PDFLib;').replace(/from '\.\/n-up'/g,"from './n-up.js'");
+  await writeFile(new URL('reader-layout/'+name+'.js',vendor),'// Generated from frontend/lib/'+name+'.ts; do not edit.\n'+source);
+}

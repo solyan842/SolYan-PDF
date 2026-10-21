@@ -7,6 +7,9 @@ on:
       - 'feat/windows-reader-fast-*'
     paths:
       - '.gitattributes'
+      - 'frontend/lib/n-up.ts'
+      - 'frontend/lib/booklet.ts'
+      - 'frontend/lib/poster.ts'
       - 'desktop/ui/reader*'
       - 'desktop/ui/reader-icons/**'
       - 'desktop/ui/quick-sign.js'
