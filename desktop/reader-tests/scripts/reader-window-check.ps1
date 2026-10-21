@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs','Resize')][string]$Mode = 'Inspect',
+    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs','Resize','Memory')][string]$Mode = 'Inspect',
     [Parameter(Mandatory)][string]$Exe,
     [string]$FilePath,
     [int]$Width,
@@ -204,6 +204,17 @@ do {
     $children = @($all | Where-Object { $_.ParentProcessId -in $tracked -and $_.ProcessId -notin $tracked } | Select-Object -ExpandProperty ProcessId)
     $tracked += $children
 } while ($children.Count)
+if ($Mode -eq 'Memory') {
+    if ($apps.Count -ne 1) { throw 'Expected one installed Reader process for memory sample' }
+    $samples = @($tracked | ForEach-Object {
+        $process = Get-Process -Id $_ -ErrorAction SilentlyContinue
+        if ($process) {
+            @{ pid=$process.Id; name=$process.ProcessName; workingSetBytes=$process.WorkingSet64; privateBytes=$process.PrivateMemorySize64 }
+        }
+    })
+    @{ scope='Reader root and descendant processes; point-in-time, not peak; working sets may share pages'; processes=$samples } | ConvertTo-Json -Depth 5 -Compress
+    exit
+}
 $webviews = @($all | Where-Object { $_.ProcessId -in $tracked -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object {
     @{ pid=$_.ProcessId; executable=$_.ExecutablePath; commandLine=$_.CommandLine }
 })

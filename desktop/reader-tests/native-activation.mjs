@@ -8,6 +8,9 @@ import {mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import net from 'node:net';
+import os from 'node:os';
+import {createHash} from 'node:crypto';
+import {exerciseReaderLoad} from './reader-load.mjs';
 const exec=promisify(execFile);
 if(process.platform!=='win32'||process.env.GITHUB_ACTIONS!=='true')throw Error('Installed activation tests require a disposable Windows Actions runner');
 const exe=resolve(process.argv[2]),root=resolve('desktop/reader-tests/test-results/native-activation');
@@ -69,6 +72,7 @@ async function start(files,earlyFiles){
   policies.add(stateFile);
   const setup=await policy('Setup',stateFile,cdp,profile);
   log.push({webview2Setup:setup});console.log('WebView2 test bootstrap '+JSON.stringify(setup));
+  const launchStarted=performance.now();
   app=spawn(exe,files,{windowsHide:true,stdio:'ignore',env:{...process.env,WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-address=127.0.0.1 --remote-debugging-port=${cdp}`,WEBVIEW2_USER_DATA_FOLDER:profile}});
   owned.add(app.pid);
   app.on('error',e=>{log.push({spawnError:e.message});});
@@ -117,6 +121,12 @@ async function start(files,earlyFiles){
     console.error('WebView2 bootstrap errors: '+JSON.stringify(log.filter(e=>e.webviewConsoleError||e.webviewLogError||e.pageerror)));
     throw error;
   } finally {await devtools.detach().catch(()=>{});}
+  const shellObservedMs=performance.now()-launchStarted;
+  if(files.length)await expect(page.locator('.readerContainer:not([hidden]) .page canvas').first()).toBeVisible();
+  log.push({startupMeasurement:{shellObservedMs,firstCanvasObservedMs:files.length?performance.now()-launchStarted:null,
+    scope:'fresh WebView profile, OS cache uncontrolled; automation-observed upper bounds; policy setup excluded',
+    earlySecondaryLaunch:Boolean(earlyFiles),os:os.release(),cpu:os.cpus()[0]?.model,logicalCpus:os.cpus().length,
+    physicalRamBytes:os.totalmem(),storageType:'not measured',webview2:setup.runtimeVersions}});
 }
 async function stop(){
   try {
@@ -334,6 +344,30 @@ try{
   await expect(page.locator('.reader-recent-open').filter({hasText:'B.pdf'})).toBeDisabled();
   await page.locator('#readerRecentClose').click();
   log.push({case:'installed-session-missing-file-skip',remainingTabs:1,missingRecentDisabled:true});
+
+  // Measure the installed EXE, not browser heap or artifact ZIP size. Use only
+  // generated fixtures under this disposable runner's owned test directory.
+  const loadFiles=[];
+  for(let n=0;n<9;n++){
+    const pdf=await PDFDocument.create(),pages=n===0?100:3,label='LOAD '+n;
+    for(let i=0;i<pages;i++)pdf.addPage([600,800]).drawText(label+' PAGE '+(i+1),{x:60,y:650});
+    const bytes=await pdf.save(),name='load-'+n+'.pdf',path=join(root,name);
+    await writeFile(path,bytes);loadFiles.push({name,path,label,pages,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
+  }
+  const measurements=await exerciseReaderLoad({page,files:loadFiles,open:file=>secondary([file.path]),sampleMemory:()=>windows('Memory')});
+  for(const file of loadFiles)expect(createHash('sha256').update(await readFile(file.path)).digest('hex')).toBe(file.sha256);
+  for(const memory of [measurements.before,measurements.atTenTabs,measurements.afterClosing]){
+    expect(memory.processes.some(p=>p.pid===app.pid)).toBe(true);
+    expect(memory.processes.some(p=>p.name==='msedgewebview2')).toBe(true);
+    for(const process of memory.processes){expect(process.workingSetBytes).toBeGreaterThan(0);expect(process.privateBytes).toBeGreaterThan(0);}
+  }
+  expect(await readFile(a)).toEqual(originalA);
+  measurements.environment={commit:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,os:os.release(),
+    cpu:os.cpus()[0]?.model,logicalCpus:os.cpus().length,physicalRamBytes:os.totalmem(),
+    webview2:log.findLast(entry=>entry.webview2Setup)?.webview2Setup.runtimeVersions,
+    storageType:'not measured',debugTransport:'test-only CDP enabled; not a retail latency baseline'};
+  await writeFile(join(root,'installed-performance.json'),JSON.stringify(measurements,null,2));
+  log.push({case:'installed-ten-tabs-and-100-pages',measurements});
 
   const closingTree=(await windows()).descendants;
   await page.locator('#window-close').click();
