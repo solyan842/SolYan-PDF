@@ -1,5 +1,36 @@
 # sTool Installer #7 PASS; native Save draft checkpoint
 
+## 2026-10-23 continuation: local window now opens, input blocked
+
+GitHub rechecked: Installer #7 and Fast #13 still SUCCESS at 059b727;
+native Save checkpoint HEAD was 7bbd8cf154e3bc3b6192b67e77746c9925e615dd.
+No application code changed in this continuation.
+
+The shell identity is codexsandboxoffline. Built the same native Save draft
+with `--features tauri/custom-protocol`, pinned local pdf-lib 1.17.1 assets,
+and a separate test profile. Launched using the documented Computer Use
+sky.launch_app API rather than the shell. The actual sTool Home accessibility
+tree is now visible under window title `sTool Save As Test`.
+Both launch context and build options changed; do not claim a uniquely proven
+root cause of the earlier WebView2 error. No registry/security/runtime update.
+
+Local executable:
+`work/stool-save-probe/sTool-SaveAs-Test.exe`.
+Only public CI source fixtures:
+`work/stool-save-probe/fixtures/source-one.pdf` and `source-two.pdf`.
+`work/stool-save-probe/verify_saved_pdf.py --baseline` recorded SHA256.
+For an actual merged output, run `verify_saved_pdf.py <output.pdf>` to require
+both input SHA256 values unchanged, expected two-page count, page geometry
+and extracted text. This verifier has NOT yet been run on native-saved output.
+All local helper files remain outside repository source.
+
+New technical boundary: sky.click failed `failed to activate captured window`.
+After fresh list_windows/get_window selection, sky.activate_window failed with
+the same error. Stop automated input and ask the owner to unlock Windows if
+needed and bring `sTool Save As Test` to the foreground. This request is pending.
+No source PDF was selected, no Save dialog was tested, and no output was saved.
+Do not claim native Save PASS or trigger another heavy installer yet.
+
 ## Accepted CI demo source
 
 - Branch: build/windows-stool-demo-20261022-sign-retry
