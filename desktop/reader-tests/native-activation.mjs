@@ -47,7 +47,7 @@ async function policy(mode,stateFile,cdp,profile){
 async function windows(mode='Inspect',file,dimensions){
   const args=['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',helper,'-Mode',mode,'-Exe',exe];
   if(file)args.push('-FilePath',file);
-  if(mode==='Resize'){
+  if(mode==='Resize'||mode==='ResizeOversized'){
     if(!dimensions||!Number.isInteger(dimensions.width)||!Number.isInteger(dimensions.height))throw Error('Invalid native test dimensions');
     args.push('-Width',String(dimensions.width),'-Height',String(dimensions.height));
   }
@@ -372,8 +372,26 @@ try{
   // Real installed native window persistence; normal placement, maximized and
   // presentation close are checked across separate EXE launches.
   if((await assertSingle()).maximized)await page.locator('#window-maximize').click();
-  await windows('Resize',undefined,{width:1200,height:800});
-  const normalBounds=(await assertSingle()).bounds;
+  await expect.poll(async()=>(await assertSingle()).maximized).toBe(false);
+  const assertInsideWorkArea=state=>{
+    const [x,y,width,height]=state.bounds,[left,top,workWidth,workHeight]=state.workArea;
+    expect(width).toBeGreaterThan(0);expect(height).toBeGreaterThan(0);
+    expect(x).toBeGreaterThanOrEqual(left);expect(y).toBeGreaterThanOrEqual(top);
+    expect(x+width).toBeLessThanOrEqual(left+workWidth);
+    expect(y+height).toBeLessThanOrEqual(top+workHeight);
+  };
+  // Reproduce #40: an old oversized placement must become wholly visible on
+  // restart. Include the native frame, then require the correction to be stable.
+  const oversized=await windows('ResizeOversized',undefined,{width:2500,height:1600});
+  log.push({case:'window-state-oversized-before-restart',oversized});
+  await page.locator('#window-close').click();await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
+  await stop();await start([]);
+  const corrected=await assertSingle();assertInsideWorkArea(corrected);
+  log.push({case:'window-state-oversized-corrected',corrected});
+  const resize=await windows('Resize',undefined,{width:1200,height:800});
+  const normal=await assertSingle();assertInsideWorkArea(normal);
+  expect(normal.bounds).toEqual(resize.bounds);
+  const normalBounds=normal.bounds;
   await page.locator('#window-close').click();await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);
   await stop();await start([]);expect((await assertSingle()).bounds).toEqual(normalBounds);
   await page.locator('#window-maximize').click();await expect.poll(async()=>(await assertSingle()).maximized).toBe(true);
@@ -381,12 +399,14 @@ try{
   await stop();await start([]);expect((await assertSingle()).maximized).toBe(true);
   // Restore normal geometry, enter presentation, close while fullscreen, reopen.
   await page.locator('#window-maximize').click();
+  await expect.poll(async()=>(await assertSingle()).bounds).toEqual(normalBounds);
   await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'presentation-enter'}));
   await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'close'}));
   await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);await stop();await start([]);
   expect(await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'fullscreen-state'}))).toBe(false);
   expect((await assertSingle()).bounds).toEqual(normalBounds);
-  log.push({case:'window-state-normal-maximized-fullscreen-restart',normalBounds});
+  assertInsideWorkArea(await assertSingle());
+  log.push({case:'window-state-normal-maximized-fullscreen-restart',normalBounds,workArea:normal.workArea,clientSize:normal.clientSize,dpi:normal.dpi});
   // Direct IPC cannot bypass policy or supply approval. No browser is launched.
   for(const address of ['javascript:alert(1)','file:///C:/Windows/win.ini','http://127.0.0.1','https://u:p@example.com']){
     expect(await page.evaluate(async address=>{try{await window.__TAURI__.core.invoke('reader_open_pdf_link',{address,approved:true});return false;}catch{return true;}},address)).toBe(true);

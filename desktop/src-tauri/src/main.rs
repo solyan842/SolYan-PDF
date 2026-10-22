@@ -1233,6 +1233,9 @@ fn main() {
             if cfg!(feature = "reader-only") {
                 let config=app.config().app.windows[0].clone();
                 let window=tauri::WebviewWindowBuilder::from_config(app,&config)?
+                    // Let the plugin restore a client size below the default
+                    // minimum on small/high-DPI monitors; fit sets the real limit.
+                    .min_inner_size(1.0,1.0)
                     .on_navigation(reader_links::navigation_allowed)
                     .on_new_window(|_,_|tauri::webview::NewWindowResponse::Deny)
                     .build()?;

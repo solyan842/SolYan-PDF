@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs','Resize','Memory')][string]$Mode = 'Inspect',
+    [ValidateSet('Inspect','Minimize','Association','CancelOpen','SaveAs','Resize','ResizeOversized','Memory')][string]$Mode = 'Inspect',
     [Parameter(Mandatory)][string]$Exe,
     [string]$FilePath,
     [int]$Width,
@@ -33,6 +33,23 @@ public static class ReaderWindows {
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [StructLayout(LayoutKind.Sequential)] public struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    // Match the Reader's physical coordinates; do not DPI-virtualize the probe.
+    public static void UsePhysicalCoordinates() { SetThreadDpiAwarenessContext(new IntPtr(-4)); }
+    public static int[] WorkArea(IntPtr hwnd) {
+        var info = new MonitorInfo(); info.Size = Marshal.SizeOf(info);
+        if (!GetMonitorInfo(MonitorFromWindow(hwnd, 2), ref info)) throw new InvalidOperationException("No monitor work area");
+        return new [] { info.Work.Left, info.Work.Top, info.Work.Right-info.Work.Left, info.Work.Bottom-info.Work.Top };
+    }
+    public static int[] ClientSize(IntPtr hwnd) {
+        Rect rect; if (!GetClientRect(hwnd, out rect)) throw new InvalidOperationException("No client rectangle");
+        return new [] { rect.Right-rect.Left, rect.Bottom-rect.Top };
+    }
     public static int[] WindowBounds(IntPtr hwnd) {
         Rect rect;
         if (!GetWindowRect(hwnd, out rect)) return new int[0];
@@ -43,6 +60,14 @@ public static class ReaderWindows {
     public static void Resize(IntPtr hwnd, int width, int height) {
         // SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE.
         if (!SetWindowPos(hwnd, IntPtr.Zero, 0, 0, width, height, 0x0016))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    }
+    public static void ResizeInsideWorkArea(IntPtr hwnd, int width, int height) {
+        var work=WorkArea(hwnd); var bounds=WindowBounds(hwnd);
+        width=Math.Min(width,work[2]); height=Math.Min(height,work[3]);
+        int x=Math.Max(work[0],Math.Min(bounds[0],work[0]+work[2]-width));
+        int y=Math.Max(work[1],Math.Min(bounds[1],work[1]+work[3]-height));
+        if (!SetWindowPos(hwnd,IntPtr.Zero,x,y,width,height,0x0014))
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -141,6 +166,7 @@ public static class ReaderWindows {
     }
 }
 '@
+[ReaderWindows]::UsePhysicalCoordinates()
 if ($Mode -eq 'Association') {
     # Explicit Explorer/Open With class; never change the user's default PDF app.
     $classes = 'Registry::HKEY_CURRENT_USER\Software\Classes'
@@ -178,13 +204,14 @@ if ($Mode -eq 'CancelOpen') {
     @{ cancelled=[ReaderWindows]::CancelOpen($apps[0].Id) } | ConvertTo-Json -Compress
     exit
 }
-if ($Mode -eq 'Resize') {
+if ($Mode -in @('Resize','ResizeOversized')) {
     if ($apps.Count -ne 1) { throw 'Expected one installed Reader process' }
     if ($Width -lt 1024 -or $Width -gt 2500 -or $Height -lt 700 -or $Height -gt 1600) { throw 'Unsafe Reader test window dimensions' }
     $windows = [ReaderWindows]::Windows($apps[0].Id)
     if ($windows.Count -ne 1) { throw 'Expected one Reader main window' }
-    [ReaderWindows]::Resize([IntPtr]$windows[0],$Width,$Height)
-    @{ requested=@($Width,$Height); bounds=@([ReaderWindows]::WindowBounds([IntPtr]$windows[0])); hwnd=$windows[0] } | ConvertTo-Json -Compress
+    if ($Mode -eq 'Resize') { [ReaderWindows]::ResizeInsideWorkArea([IntPtr]$windows[0],$Width,$Height) }
+    else { [ReaderWindows]::Resize([IntPtr]$windows[0],$Width,$Height) }
+    @{ requested=@($Width,$Height); bounds=@([ReaderWindows]::WindowBounds([IntPtr]$windows[0])); workArea=@([ReaderWindows]::WorkArea([IntPtr]$windows[0])); hwnd=$windows[0] } | ConvertTo-Json -Compress
     exit
 }
 if ($Mode -eq 'Minimize') {
@@ -195,7 +222,7 @@ if ($Mode -eq 'Minimize') {
 }
 $result = @($apps | ForEach-Object {
     $windows = [ReaderWindows]::Windows($_.Id)
-    @{ pid=$_.Id; windows=@($windows); minimized=($windows.Count -eq 1 -and [ReaderWindows]::IsIconic([IntPtr]$windows[0])); maximized=($windows.Count -eq 1 -and [ReaderWindows]::IsZoomed([IntPtr]$windows[0])); bounds=$(if ($windows.Count -eq 1) { @([ReaderWindows]::WindowBounds([IntPtr]$windows[0])) } else { @() }); foreground=[ReaderWindows]::GetForegroundWindow().ToInt64() }
+    @{ pid=$_.Id; windows=@($windows); minimized=($windows.Count -eq 1 -and [ReaderWindows]::IsIconic([IntPtr]$windows[0])); maximized=($windows.Count -eq 1 -and [ReaderWindows]::IsZoomed([IntPtr]$windows[0])); bounds=$(if ($windows.Count -eq 1) { @([ReaderWindows]::WindowBounds([IntPtr]$windows[0])) } else { @() }); workArea=$(if ($windows.Count -eq 1) { @([ReaderWindows]::WorkArea([IntPtr]$windows[0])) } else { @() }); clientSize=$(if ($windows.Count -eq 1) { @([ReaderWindows]::ClientSize([IntPtr]$windows[0])) } else { @() }); dpi=$(if ($windows.Count -eq 1) { [ReaderWindows]::GetDpiForWindow([IntPtr]$windows[0]) } else { 0 }); foreground=[ReaderWindows]::GetForegroundWindow().ToInt64() }
 })
 $engines = @(Get-Process -Name solyan-core,solyan-office,solyan-ocr,solyan-sign,solyan-archive -ErrorAction SilentlyContinue)
 $all = @(Get-CimInstance Win32_Process)
