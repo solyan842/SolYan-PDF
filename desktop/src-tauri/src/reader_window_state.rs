@@ -20,7 +20,8 @@ pub fn fit_to_work_area(window:&tauri::WebviewWindow){
     let monitor=window.current_monitor().ok().flatten().or_else(||window.primary_monitor().ok().flatten());
     let Some(monitor)=monitor else{return;};let work=monitor.work_area();
     let (Ok(size),Ok(pos))=(window.inner_size(),window.outer_position()) else{return;};
-    let width=size.width.min(work.size.width),height=size.height.min(work.size.height);
+    let width=size.width.min(work.size.width);
+    let height=size.height.min(work.size.height);
     let _=window.set_min_size(Some(tauri::PhysicalSize::new(((1024.0*monitor.scale_factor()) as u32).min(work.size.width),((700.0*monitor.scale_factor()) as u32).min(work.size.height))));
     let _=window.set_size(tauri::PhysicalSize::new(width,height));
     let x=pos.x.clamp(work.position.x,work.position.x+(work.size.width-width) as i32);
