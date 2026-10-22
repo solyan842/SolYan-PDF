@@ -97,6 +97,8 @@ jobs:
         run: |
           cargo check --no-default-features 2>&1 | Tee-Object ../../artifacts/stool-cargo-check.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --no-default-features 2>&1 | Tee-Object ../../artifacts/stool-cargo-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Keep sTool diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@v4

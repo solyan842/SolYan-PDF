@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod service_health;
 use rand::RngCore;
 use std::{
     ffi::OsString,
@@ -181,15 +182,66 @@ fn managed_child_alive<T>(
         Err(error)=>Err(format!("Cannot inspect {label} process: {error}"))
     }
 }
+fn managed_child_healthy<T>(
+    process:&mut Option<T>,
+    select:impl Fn(&mut T)->&mut Child,
+    healthy:impl FnOnce()->bool,
+    label:&str,
+)->Result<bool,String>{
+    if !managed_child_alive(process,|p|select(p),label)?{return Ok(false);}
+    if healthy(){return Ok(true);}
+    // Only the managed child/job is retired. Never kill by name or interfere
+    // with another tool. Dropping the wrapper releases its existing Job Object.
+    if let Some(mut stale)=process.take(){
+        let child=select(&mut stale);
+        if let Err(error)=child.kill(){
+            if child.try_wait().map_err(|e|e.to_string())?.is_none(){return Err(format!("Cannot retire unresponsive {label}: {error}"));}
+        }
+        child.wait().map_err(|e|format!("Cannot reap unresponsive {label}: {e}"))?;
+    }
+    Ok(false)
+}
+
+#[cfg(all(test,windows))]
+mod recovery_tests{
+    use super::*;
+    struct OwnedTestChild{child:Child}
+    impl Drop for OwnedTestChild{fn drop(&mut self){let _=self.child.kill();let _=self.child.wait();}}
+    fn child()->OwnedTestChild{
+        let mut command=Command::new("ping.exe");
+        command.args(["-n","30","127.0.0.1"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(0x08000000);
+        OwnedTestChild{child:command.spawn().unwrap()}
+    }
+    #[test]fn healthy_process_keeps_its_pid(){
+        let mut slot=Some(child());let pid=slot.as_ref().unwrap().child.id();
+        assert!(managed_child_healthy(&mut slot,|p|&mut p.child,||true,"test").unwrap());
+        assert_eq!(slot.as_ref().unwrap().child.id(),pid);
+        assert!(slot.as_mut().unwrap().child.try_wait().unwrap().is_none());
+    }
+    #[test]fn unresponsive_process_is_reaped_without_touching_other_tools(){
+        let mut other=child();let mut slot=Some(child());
+        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,||false,"test").unwrap());
+        assert!(slot.is_none());assert!(other.child.try_wait().unwrap().is_none());
+        // The next request may create one replacement in the empty slot.
+        slot=Some(child());assert!(managed_child_healthy(&mut slot,|p|&mut p.child,||true,"replacement").unwrap());
+    }
+    #[test]fn absent_and_exited_processes_do_not_probe_stale_ports(){
+        let mut slot:Option<OwnedTestChild>=None;
+        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,||panic!("stale probe"),"missing").unwrap());
+        slot=Some(child());slot.as_mut().unwrap().child.kill().unwrap();slot.as_mut().unwrap().child.wait().unwrap();
+        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,||panic!("stale probe"),"exited").unwrap());assert!(slot.is_none());
+    }
+}
 fn ensure_core(app:&tauri::AppHandle,state:&CoreState,plan:&ServicePlan)->Result<String,String>{
     {
         let mut owned=state.process.lock().map_err(|_|"sTool core process lock unavailable")?;
-        if managed_child_alive(&mut *owned,|p|&mut p.child,"Core")? {
-            if let Some(existing)=state.session.lock().map_err(|_|"sTool core session lock unavailable")?.as_ref() {
-                return Ok(format!("{}\n{}",existing.endpoint,existing.token));
-            }
-            // An active Core without its credential/session cannot be safely reused.
-            if let Some(mut stale)=owned.take(){let _=stale.child.kill();let _=stale.child.wait();}
+        let cached=state.session.lock().map_err(|_|"sTool core session lock unavailable")?.clone();
+        if managed_child_healthy(&mut *owned,|p|&mut p.child,||cached.as_ref().is_some_and(|session|{
+            session.endpoint.rsplit(':').next().and_then(|p|p.parse().ok())
+                .is_some_and(|port|service_health::probe(port,Some(&session.token),"\"engine\":\"qpdf\""))
+        }),"Core")? {
+            let existing=cached.as_ref().ok_or("Core session unavailable")?;
+            return Ok(format!("{}\n{}",existing.endpoint,existing.token));
         }
     }
     *state.session.lock().map_err(|_|"sTool core session lock unavailable")?=None;
@@ -224,28 +276,28 @@ async fn desktop_service_ready(app:tauri::AppHandle,service:String)->Result<bool
         match service.as_str(){
             "office"=>{
                 let mut slot=state.office_process.lock().map_err(|_|"Office process lock unavailable")?;
-                if !managed_child_alive(&mut *slot,|p|&mut p.child,"Office")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.office_port,None,"LibreOffice"),"Office")? {
                     let (process,_)=start_office(&app,plan.office_port)?;
                     *slot=Some(process);
                 }
             }
             "ocr"=>{
                 let mut slot=state.ocr_process.lock().map_err(|_|"OCR process lock unavailable")?;
-                if !managed_child_alive(&mut *slot,|p|&mut p.child,"OCR")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.ocr_port,Some(&plan.ocr_token),"\"engine\":\"PaddleOCR\""),"OCR")? {
                     let (process,_,_)=start_ocr(&app,plan.ocr_port,&plan.ocr_token)?;
                     *slot=Some(process);
                 }
             }
             "sign"=>{
                 let mut slot=state.sign_process.lock().map_err(|_|"Signing process lock unavailable")?;
-                if !managed_child_alive(&mut *slot,|p|&mut p.child,"Signing")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.sign_port,Some(&plan.sign_token),"\"engine\":\"pyHanko\""),"Signing")? {
                     let (process,_,_)=start_sign(&app,plan.sign_port,&plan.sign_token)?;
                     *slot=Some(process);
                 }
             }
             "archive"=>{
                 let mut slot=state.archive_process.lock().map_err(|_|"Archive process lock unavailable")?;
-                if !managed_child_alive(&mut *slot,|p|&mut p.child,"Archive")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.archive_port,Some(&plan.archive_token),"\"engine\":\"OCRmyPDF\""),"Archive")? {
                     let (process,_,_)=start_archive(&app,plan.archive_port,&plan.archive_token)?;
                     *slot=Some(process);
                 }

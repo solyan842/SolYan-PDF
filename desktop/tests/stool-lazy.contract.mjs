@@ -51,7 +51,7 @@ test('stale cached sessions and exited heavy sidecars are checked before reuse',
   assert.ok(main.includes('.try_wait()'));
   assert.ok(main.includes('state.session.lock()'));
   for(const service of ['Office','OCR','Signing','Archive'])
-    assert.ok(main.includes('managed_child_alive(&mut *slot,|p|&mut p.child,"'+service+'")'),service+' needs crash restart');
-  assert.ok(main.includes('managed_child_alive(&mut *owned,|p|&mut p.child,"Core")'));
-  assert.ok(main.includes('let _=stale.child.kill();let _=stale.child.wait()'));
+    assert.match(main,new RegExp('managed_child_healthy\\(&mut \\*slot,[^\\n]+,"'+service+'"\\)'),service+' needs crash and health restart');
+  assert.ok(main.includes('managed_child_healthy(&mut *owned,|p|&mut p.child'));
+  assert.ok(main.includes('child.kill()')&&main.includes('child.wait()'));
 });
