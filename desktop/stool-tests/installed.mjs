@@ -41,6 +41,21 @@ async function watch(name){
   child.catch(()=>{});monitor={stop,promise:child};
 }
 async function endWatch(){if(!monitor)return null;const m=monitor;monitor=null;await writeFile(m.stop,'complete');return JSON.parse((await m.promise).stdout.trim());}
+async function freezeAndRecover(service,run){
+  const before=await inspect(),name=`solyan-${service}.exe`;
+  const frozen=await psJSON(helper,['-Mode','Freeze','-Exe',exe,'-OwnerPid',String(app.pid),'-Service',service]);
+  expect(frozen.service).toBe(service);expect(frozen.threads).toBeGreaterThan(0);expect(frozen.frozen.length).toBeGreaterThan(0);
+  expect(frozen.frozen).toContain(before.roots.find(p=>p.name===name).pid);
+  const alive=await inspect();for(const pid of frozen.frozen)expect(alive.livePids).toContain(pid);
+  // Recovery must come from the real tool invocation, not the test killing it.
+  await run();
+  await expect.poll(async()=>{const now=await inspect();return frozen.frozen.filter(pid=>now.livePids.includes(pid));},{timeout:20000}).toEqual([]);
+  const after=await inspect(),replacement=after.roots.filter(p=>p.name===name);
+  expect(replacement).toHaveLength(1);expect(frozen.frozen).not.toContain(replacement[0].pid);
+  const other=rows=>rows.filter(p=>p.name!==name).sort((a,b)=>a.name.localeCompare(b.name));
+  expect(other(after.roots)).toEqual(other(before.roots));
+  report.cases.push({case:'live-frozen-service-recovery',service,frozen:frozen.frozen,replacement:replacement[0].pid});
+}
 try{
   report.transport=await psJSON(policy,['-Mode','Setup','-StateFile',state,'-Port',String(port),'-UserDataFolder',join(out,'profile')],60000);
   const launch=performance.now();
@@ -71,12 +86,14 @@ try{
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','core']);
   await output('transform.html?tool=compress','source.pdf','#runBtn','core-recovered.pdf');await roots(['core']);
   report.cases.push('Core real output, concurrent session reuse, invalid input retry and crashed Core recovery');
+  await freezeAndRecover('core',()=>output('transform.html?tool=compress','source.pdf','#runBtn','core-unfrozen.pdf'));await roots(['core']);
   await concurrent('office');await roots(['core','office']);
   await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office.pdf','office');
   const officeBefore=(await inspect()).roots;await concurrent('office');expect((await inspect()).roots).toEqual(officeBefore);
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','office']);
   await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office-recovered.pdf','office');await roots(['core','office']);
   report.cases.push('LibreOffice UI conversion, concurrent reuse and crashed Office recovery');
+  await freezeAndRecover('office',()=>output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office-unfrozen.pdf','office'));await roots(['core','office']);
   await go('ocr.html');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.png'));
   const ocrStarted=performance.now();await watch('ocr');
   await page.locator('#runOcr').click();
@@ -89,6 +106,10 @@ try{
   await roots(['core','office','ocr']);
   await page.screenshot({path:join(out,'ocr.png')});
   report.cases.push('Offline OCR real text, first-use sampled peak and concurrent reuse');
+  await freezeAndRecover('ocr',async()=>{
+    await page.locator('#outputPreview').evaluate(node=>node.value='');
+    await page.locator('#runOcr').click();await expect(page.locator('#outputPreview')).toHaveValue(expectedOcrLine,{timeout:300000});
+  });await roots(['core','office','ocr']);
   await concurrent('sign');await roots(['core','office','ocr','sign']);
   await go('sign.html');await page.locator('#pdfInput').setInputFiles(join(fixtures,'source.pdf'));
   await page.locator('#certInput').setInputFiles(join(fixtures,'certificate.p12'));await page.locator('#certPassword').fill('wrong');
@@ -99,12 +120,17 @@ try{
   await exec('python',['desktop/backend/tests/stool_fixtures.py','signed',join(out,'signed.pdf')],{windowsHide:true});
   await concurrent('sign');await roots(['core','office','ocr','sign']);
   report.cases.push('PKCS12 UI signing, wrong-passphrase retry; separate D6 cryptographic validation retained');
+  await freezeAndRecover('sign',async()=>{
+    const saved=page.waitForEvent('download',{timeout:180000});await page.locator('#runBtn').click();await(await saved).saveAs(join(out,'signed-unfrozen.pdf'));
+    await exec('python',['desktop/backend/tests/stool_fixtures.py','signed',join(out,'signed-unfrozen.pdf')],{windowsHide:true});
+  });await roots(['core','office','ocr','sign']);
   await concurrent('archive');await roots(['core','office','ocr','sign','archive']);
   await output('pdfa.html','source.pdf','#runBtn','archive.pdf','pdfa');
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','archive']);
   await output('pdfa.html','source.pdf','#runBtn','archive-recovered.pdf','pdfa');
   const allBefore=(await inspect()).roots;await concurrent('archive');expect((await inspect()).roots).toEqual(allBefore);
   report.cases.push('PDF/A UI conversion, metadata/output intents and concurrent reuse');
+  await freezeAndRecover('archive',()=>output('pdfa.html','source.pdf','#runBtn','archive-unfrozen.pdf','pdfa'));await roots(['core','office','ocr','sign','archive']);
   for(const [name,hash]of originals)expect(digest(await readFile(join(fixtures,name)))).toBe(hash);
   const closing=await inspect();const acknowledgement=await psJSON(helper,['-Mode','Close','-Exe',exe,'-OwnerPid',String(app.pid)]);
   assertCloseAcknowledgement(acknowledgement,app.pid);

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod service_health;
+#[cfg(windows)] mod port_owner;
 use rand::RngCore;
 use std::{
     ffi::OsString,
@@ -118,6 +119,18 @@ struct ArchiveProcess {
     _job: WindowsJob,
 }
 
+macro_rules! owned_health {
+    ($($kind:ty),+) => {$(impl $kind{
+        fn healthy(&self,port:u16,token:Option<&str>,engine:&str)->bool{
+            service_health::probe(port,token,engine,|stream|{
+                #[cfg(windows)]{port_owner::connection_belongs_to_job(stream,self._job.0)}
+                #[cfg(not(windows))]{let _=stream;true}
+            })
+        }
+    })+};
+}
+owned_health!(CoreProcess,OfficeProcess,OcrProcess,SignProcess,ArchiveProcess);
+
 // Lightweight shell owns no sidecar on startup. Each service is started at
 // most once, when a user explicitly invokes the corresponding tool.
 #[derive(Clone)]
@@ -185,11 +198,11 @@ fn managed_child_alive<T>(
 fn managed_child_healthy<T>(
     process:&mut Option<T>,
     select:impl Fn(&mut T)->&mut Child,
-    healthy:impl FnOnce()->bool,
+    healthy:impl FnOnce(&T)->bool,
     label:&str,
 )->Result<bool,String>{
     if !managed_child_alive(process,|p|select(p),label)?{return Ok(false);}
-    if healthy(){return Ok(true);}
+    if healthy(process.as_ref().ok_or("Managed process unavailable")?){return Ok(true);}
     // Only the managed child/job is retired. Never kill by name or interfere
     // with another tool. Dropping the wrapper releases its existing Job Object.
     if let Some(mut stale)=process.take(){
@@ -214,31 +227,79 @@ mod recovery_tests{
     }
     #[test]fn healthy_process_keeps_its_pid(){
         let mut slot=Some(child());let pid=slot.as_ref().unwrap().child.id();
-        assert!(managed_child_healthy(&mut slot,|p|&mut p.child,||true,"test").unwrap());
+        assert!(managed_child_healthy(&mut slot,|p|&mut p.child,|_|true,"test").unwrap());
         assert_eq!(slot.as_ref().unwrap().child.id(),pid);
         assert!(slot.as_mut().unwrap().child.try_wait().unwrap().is_none());
     }
     #[test]fn unresponsive_process_is_reaped_without_touching_other_tools(){
         let mut other=child();let mut slot=Some(child());
-        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,||false,"test").unwrap());
+        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,|_|false,"test").unwrap());
         assert!(slot.is_none());assert!(other.child.try_wait().unwrap().is_none());
         // The next request may create one replacement in the empty slot.
-        slot=Some(child());assert!(managed_child_healthy(&mut slot,|p|&mut p.child,||true,"replacement").unwrap());
+        slot=Some(child());assert!(managed_child_healthy(&mut slot,|p|&mut p.child,|_|true,"replacement").unwrap());
     }
     #[test]fn absent_and_exited_processes_do_not_probe_stale_ports(){
         let mut slot:Option<OwnedTestChild>=None;
-        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,||panic!("stale probe"),"missing").unwrap());
+        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,|_|panic!("stale probe"),"missing").unwrap());
         slot=Some(child());slot.as_mut().unwrap().child.kill().unwrap();slot.as_mut().unwrap().child.wait().unwrap();
-        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,||panic!("stale probe"),"exited").unwrap());assert!(slot.is_none());
+        assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,|_|panic!("stale probe"),"exited").unwrap());assert!(slot.is_none());
+    }
+    fn foreign_listener()->(u16,std::thread::JoinHandle<Vec<u8>>){
+        let listener=TcpListener::bind(("127.0.0.1",0)).unwrap();let port=listener.local_addr().unwrap().port();
+        let task=std::thread::spawn(move||{
+            let(mut socket,_)=listener.accept().unwrap();socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let mut bytes=Vec::new();socket.read_to_end(&mut bytes).unwrap();bytes
+        });(port,task)
+    }
+    #[test]fn foreign_reuse_connection_receives_no_token_or_request(){
+        let unrelated=child();let job=WindowsJob::attach(&unrelated.child).unwrap();
+        let(port,server)=foreign_listener();
+        assert!(!service_health::probe(port,Some("must-not-leak"),"qpdf",|stream|port_owner::connection_belongs_to_job(stream,job.0)));
+        assert!(server.join().unwrap().is_empty());
+    }
+    #[test]fn all_startup_health_paths_reject_a_stolen_port_before_sending(){
+        let unrelated=child();let job=WindowsJob::attach(&unrelated.child).unwrap();
+        for check in [wait_for_core_health,wait_for_ocr_health,wait_for_sign_health,wait_for_archive_health]{
+            let(port,server)=foreign_listener();assert!(check(port,"must-not-leak",&job).is_err());assert!(server.join().unwrap().is_empty());
+        }
+        let(port,server)=foreign_listener();assert!(wait_for_office_health(port,&job).is_err());assert!(server.join().unwrap().is_empty());
+    }
+    #[test]fn real_owned_socket_is_accepted_and_invalid_job_is_rejected(){
+        for descendant in [false,true]{
+        let port=free_loopback_port().unwrap();
+        // Only the stdlib socket endpoint is used; CI already provides Python.
+        let python=std::env::var_os("STOOL_TEST_PYTHON").unwrap_or_else(||"python.exe".into());
+        let script="import socket,sys\ns=socket.socket();s.bind(('127.0.0.1',int(sys.argv[1])));s.listen(1)\nc,_=s.accept();r=c.recv(8192)\nassert b'X-SolYan-Desktop-Token: owned-test-token' in r\nc.sendall(b'HTTP/1.1 200 OK\\r\\nConnection: close\\r\\n\\r\\n{\"status\":\"ok\",\"engine\":\"qpdf\"}');c.close();s.close()";
+        let mut command=Command::new(python);
+        if descendant{
+            // Match PyInstaller's launcher/worker ownership: attach the launcher
+            // first, then let it create the process that actually owns the socket.
+            command.args(["-u","-c","import subprocess,sys;sys.stdin.readline();sys.exit(subprocess.call([sys.executable,'-u','-c',sys.argv[1],sys.argv[2]]))",script,&port.to_string()]);
+        }else{command.args(["-u","-c",script,&port.to_string()]);}
+        command.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::inherit()).creation_flags(0x08000000);
+        let mut owned=OwnedTestChild{child:command.spawn().unwrap()};let job=WindowsJob::attach(&owned.child).unwrap();
+        if descendant{owned.child.stdin.take().unwrap().write_all(b"go\n").unwrap();}
+        let started=std::time::Instant::now();
+        loop{
+            if service_health::probe(port,Some("owned-test-token"),"\"engine\":\"qpdf\"",|stream|{
+                assert!(!port_owner::connection_belongs_to_job(stream,0));
+                assert!(!port_owner::connection_belongs_to_job(stream,usize::MAX));
+                port_owner::connection_belongs_to_job(stream,job.0)
+            }){break;}
+            assert!(owned.child.try_wait().unwrap().is_none(),"owned HTTP helper exited before a successful authenticated probe");
+            assert!(started.elapsed()<Duration::from_secs(10),"owned endpoint was not ready");std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(owned.child.wait().unwrap().success());
+        }
     }
 }
 fn ensure_core(app:&tauri::AppHandle,state:&CoreState,plan:&ServicePlan)->Result<String,String>{
     {
         let mut owned=state.process.lock().map_err(|_|"sTool core process lock unavailable")?;
         let cached=state.session.lock().map_err(|_|"sTool core session lock unavailable")?.clone();
-        if managed_child_healthy(&mut *owned,|p|&mut p.child,||cached.as_ref().is_some_and(|session|{
+        if managed_child_healthy(&mut *owned,|p|&mut p.child,|process|cached.as_ref().is_some_and(|session|{
             session.endpoint.rsplit(':').next().and_then(|p|p.parse().ok())
-                .is_some_and(|port|service_health::probe(port,Some(&session.token),"\"engine\":\"qpdf\""))
+                .is_some_and(|port|process.healthy(port,Some(&session.token),"\"engine\":\"qpdf\""))
         }),"Core")? {
             let existing=cached.as_ref().ok_or("Core session unavailable")?;
             return Ok(format!("{}\n{}",existing.endpoint,existing.token));
@@ -276,28 +337,28 @@ async fn desktop_service_ready(app:tauri::AppHandle,service:String)->Result<bool
         match service.as_str(){
             "office"=>{
                 let mut slot=state.office_process.lock().map_err(|_|"Office process lock unavailable")?;
-                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.office_port,None,"LibreOffice"),"Office")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,|p|p.healthy(plan.office_port,None,"LibreOffice"),"Office")? {
                     let (process,_)=start_office(&app,plan.office_port)?;
                     *slot=Some(process);
                 }
             }
             "ocr"=>{
                 let mut slot=state.ocr_process.lock().map_err(|_|"OCR process lock unavailable")?;
-                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.ocr_port,Some(&plan.ocr_token),"\"engine\":\"PaddleOCR\""),"OCR")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,|p|p.healthy(plan.ocr_port,Some(&plan.ocr_token),"\"engine\":\"PaddleOCR\""),"OCR")? {
                     let (process,_,_)=start_ocr(&app,plan.ocr_port,&plan.ocr_token)?;
                     *slot=Some(process);
                 }
             }
             "sign"=>{
                 let mut slot=state.sign_process.lock().map_err(|_|"Signing process lock unavailable")?;
-                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.sign_port,Some(&plan.sign_token),"\"engine\":\"pyHanko\""),"Signing")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,|p|p.healthy(plan.sign_port,Some(&plan.sign_token),"\"engine\":\"pyHanko\""),"Signing")? {
                     let (process,_,_)=start_sign(&app,plan.sign_port,&plan.sign_token)?;
                     *slot=Some(process);
                 }
             }
             "archive"=>{
                 let mut slot=state.archive_process.lock().map_err(|_|"Archive process lock unavailable")?;
-                if !managed_child_healthy(&mut *slot,|p|&mut p.child,||service_health::probe(plan.archive_port,Some(&plan.archive_token),"\"engine\":\"OCRmyPDF\""),"Archive")? {
+                if !managed_child_healthy(&mut *slot,|p|&mut p.child,|p|p.healthy(plan.archive_port,Some(&plan.archive_token),"\"engine\":\"OCRmyPDF\""),"Archive")? {
                     let (process,_,_)=start_archive(&app,plan.archive_port,&plan.archive_token)?;
                     *slot=Some(process);
                 }
@@ -346,10 +407,11 @@ fn free_loopback_port() -> Result<u16, String> {
     Ok(port)
 }
 
-fn wait_for_core_health(port: u16, token: &str) -> Result<(), String> {
+fn wait_for_core_health(port: u16, token: &str, #[cfg(windows)] job:&WindowsJob) -> Result<(), String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     for _ in 0..100 {
         if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(300)) {
+            #[cfg(windows)] if !port_owner::connection_belongs_to_job(&stream,job.0){return Err("Core port is not owned by its managed Windows job".into());}
             let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
             let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
             let request = format!(
@@ -371,10 +433,11 @@ fn wait_for_core_health(port: u16, token: &str) -> Result<(), String> {
     Err("local core did not reach qpdf-backed health in time".to_string())
 }
 
-fn wait_for_office_health(port: u16) -> Result<(), String> {
+fn wait_for_office_health(port: u16, #[cfg(windows)] job:&WindowsJob) -> Result<(), String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     for _ in 0..60 {
         if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(500)) {
+            #[cfg(windows)] if !port_owner::connection_belongs_to_job(&stream,job.0){return Err("Office port is not owned by its managed Windows job".into());}
             let _ = stream.set_read_timeout(Some(Duration::from_secs(20)));
             let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
             let request = format!(
@@ -397,10 +460,11 @@ fn wait_for_office_health(port: u16) -> Result<(), String> {
 }
 
 
-fn wait_for_ocr_health(port: u16, token: &str) -> Result<(), String> {
+fn wait_for_ocr_health(port: u16, token: &str, #[cfg(windows)] job:&WindowsJob) -> Result<(), String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     for _ in 0..180 {
         if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(400)) {
+            #[cfg(windows)] if !port_owner::connection_belongs_to_job(&stream,job.0){return Err("OCR port is not owned by its managed Windows job".into());}
             let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
             let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
             let request = format!(
@@ -422,10 +486,11 @@ fn wait_for_ocr_health(port: u16, token: &str) -> Result<(), String> {
     Err("local OCR sidecar did not reach healthy state".to_string())
 }
 
-fn wait_for_sign_health(port: u16, token: &str) -> Result<(), String> {
+fn wait_for_sign_health(port: u16, token: &str, #[cfg(windows)] job:&WindowsJob) -> Result<(), String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     for _ in 0..120 {
         if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(400)) {
+            #[cfg(windows)] if !port_owner::connection_belongs_to_job(&stream,job.0){return Err("Signing port is not owned by its managed Windows job".into());}
             let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
             let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
             let request = format!(
@@ -447,10 +512,11 @@ fn wait_for_sign_health(port: u16, token: &str) -> Result<(), String> {
     Err("local signing sidecar did not reach pyHanko health".to_string())
 }
 
-fn wait_for_archive_health(port: u16, token: &str) -> Result<(), String> {
+fn wait_for_archive_health(port: u16, token: &str, #[cfg(windows)] job:&WindowsJob) -> Result<(), String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     for _ in 0..120 {
         if let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(400)) {
+            #[cfg(windows)] if !port_owner::connection_belongs_to_job(&stream,job.0){return Err("Archive port is not owned by its managed Windows job".into());}
             let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
             let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
             let request = format!(
@@ -527,7 +593,7 @@ fn start_office(app: &tauri::AppHandle, port: u16) -> Result<(OfficeProcess, Str
         }
     };
 
-    if let Err(error) = wait_for_office_health(port) {
+    if let Err(error) = wait_for_office_health(port, #[cfg(windows)] &job) {
         let _ = child.kill();
         let _ = child.wait();
         return Err(error);
@@ -605,7 +671,7 @@ fn start_ocr(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(OcrProce
         }
     };
 
-    if let Err(error) = wait_for_ocr_health(port, &token) {
+    if let Err(error) = wait_for_ocr_health(port, &token, #[cfg(windows)] &job) {
         let _ = child.kill();
         let _ = child.wait();
         return Err(error);
@@ -657,7 +723,7 @@ fn start_sign(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(SignPro
         }
     };
 
-    if let Err(error) = wait_for_sign_health(port, &token) {
+    if let Err(error) = wait_for_sign_health(port, &token, #[cfg(windows)] &job) {
         let _ = child.kill();
         let _ = child.wait();
         return Err(error);
@@ -721,7 +787,7 @@ fn start_archive(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(Arch
             return Err(error);
         }
     };
-    if let Err(error) = wait_for_archive_health(port, &token) {
+    if let Err(error) = wait_for_archive_health(port, &token, #[cfg(windows)] &job) {
         let _ = child.kill();
         let _ = child.wait();
         return Err(error);
@@ -802,7 +868,7 @@ fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str,
         }
     };
 
-    if let Err(error) = wait_for_core_health(port, &token) {
+    if let Err(error) = wait_for_core_health(port, &token, #[cfg(windows)] &job) {
         let _ = child.kill();
         let _ = child.wait();
         return Err(error);

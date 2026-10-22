@@ -2,14 +2,16 @@
 // its engine-specific readiness budget; Home never invokes this adapter.
 use std::{io::{Read,Write},net::{SocketAddr,TcpStream},time::{Duration,Instant}};
 
-pub fn probe(port:u16,token:Option<&str>,engine:&str)->bool{
-    probe_with_budget(port,token,engine,Duration::from_secs(2))
+pub fn probe(port:u16,token:Option<&str>,engine:&str,owns:impl FnOnce(&TcpStream)->bool)->bool{
+    probe_with_budget(port,token,engine,Duration::from_secs(2),owns)
 }
 
-fn probe_with_budget(port:u16,token:Option<&str>,engine:&str,budget:Duration)->bool{
+fn probe_with_budget(port:u16,token:Option<&str>,engine:&str,budget:Duration,owns:impl FnOnce(&TcpStream)->bool)->bool{
     let started=Instant::now();
     let address=SocketAddr::from(([127,0,0,1],port));
     let Ok(mut stream)=TcpStream::connect_timeout(&address,budget) else{return false;};
+    // No request bytes or credentials cross an unverified connection.
+    if !owns(&stream){return false;}
     let header=token.map(|t|format!("X-SolYan-Desktop-Token: {t}\r\n")).unwrap_or_default();
     let request=format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{header}Connection: close\r\n\r\n");
     let remaining=budget.saturating_sub(started.elapsed());
@@ -43,25 +45,25 @@ mod tests{
     }
     #[test]fn authenticated_matching_engine_can_be_reused(){
         let(port,task)=server("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n{\"status\":\"ok\",\"engine\":\"qpdf\"}");
-        assert!(probe(port,Some("test-session-token"),"\"engine\":\"qpdf\""));
+        assert!(probe(port,Some("test-session-token"),"\"engine\":\"qpdf\"",|_|true));
         assert!(task.join().unwrap().contains("X-SolYan-Desktop-Token: test-session-token\r\n"));
     }
     #[test]fn error_status_and_wrong_engine_are_not_reused(){
         for response in ["HTTP/1.1 503 Busy\r\n\r\n{\"status\":\"ok\",\"engine\":\"qpdf\",\"message\":\" 200 \"}","HTTP/1.1 200 OK\r\n\r\n{\"status\":\"ok\",\"engine\":\"PaddleOCR\"}"]{
-            let(port,task)=server(response);assert!(!probe(port,None,"\"engine\":\"qpdf\""));task.join().unwrap();
+            let(port,task)=server(response);assert!(!probe(port,None,"\"engine\":\"qpdf\"",|_|true));task.join().unwrap();
         }
     }
     #[test]fn living_but_silent_server_has_a_bounded_failure(){
         let listener=TcpListener::bind(("127.0.0.1",0)).unwrap();let port=listener.local_addr().unwrap().port();
         let task=thread::spawn(move||{let(_socket,_)=listener.accept().unwrap();thread::sleep(Duration::from_millis(250));});
-        let before=Instant::now();assert!(!probe_with_budget(port,None,"qpdf",Duration::from_millis(60)));
+        let before=Instant::now();assert!(!probe_with_budget(port,None,"qpdf",Duration::from_millis(60),|_|true));
         assert!(before.elapsed()<Duration::from_secs(1));task.join().unwrap();
     }
     #[test]fn trickling_or_oversized_responses_cannot_extend_the_budget(){
         let listener=TcpListener::bind(("127.0.0.1",0)).unwrap();let port=listener.local_addr().unwrap().port();
         let task=thread::spawn(move||{let(mut socket,_)=listener.accept().unwrap();for _ in 0..30{if socket.write_all(b"x").is_err(){break;}thread::sleep(Duration::from_millis(15));}});
-        let before=Instant::now();assert!(!probe_with_budget(port,None,"qpdf",Duration::from_millis(80)));assert!(before.elapsed()<Duration::from_secs(1));task.join().unwrap();
+        let before=Instant::now();assert!(!probe_with_budget(port,None,"qpdf",Duration::from_millis(80),|_|true));assert!(before.elapsed()<Duration::from_secs(1));task.join().unwrap();
         let response=Box::leak(format!("HTTP/1.1 200 OK\r\n\r\n{}", "x".repeat(20000)).into_boxed_str());
-        let(port,task)=server(response);assert!(!probe(port,None,"qpdf"));let _=task.join();
+        let(port,task)=server(response);assert!(!probe(port,None,"qpdf",|_|true));let _=task.join();
     }
 }
