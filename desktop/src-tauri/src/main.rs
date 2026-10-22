@@ -1205,7 +1205,12 @@ fn main() {
         }
     }));
     #[cfg(all(windows,feature="reader-only"))]
-    let builder=builder.plugin(tauri_plugin_window_state::Builder::default().with_state_flags(reader_window_state::flags()).build());
+    let builder=builder
+        // Tauri invokes window-ready hooks in registration order. Establish
+        // physical minimums before the official plugin restores MAXIMIZED.
+        .plugin(tauri::plugin::Builder::<tauri::Wry,()>::new("reader-work-area")
+            .on_window_ready(|window|reader_window_state::prepare(&window)).build())
+        .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(reader_window_state::flags()).build());
     let app = builder
         .on_window_event(|window, event| {
             #[cfg(all(windows, feature = "reader-only"))]

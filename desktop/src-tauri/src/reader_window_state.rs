@@ -16,7 +16,17 @@ pub fn flags()->tauri_plugin_window_state::StateFlags{
 // Missing delta in the plugin: keep the entire normal window inside the current
 // work area after monitor removal/DPI changes, not just a 1-pixel intersection.
 pub fn fit_to_work_area(window:&tauri::WebviewWindow){
-    if window.is_fullscreen().unwrap_or(true){return;}
+    fit_normal_window(&window.as_ref().window(),false);
+}
+
+// Runs BEFORE the persistence plugin's window-ready hook. On Windows/Tao,
+// set_min_size calls set_inner_size and clears MAXIMIZED. Never apply that
+// mutation after the plugin has restored a maximized window.
+#[cfg(all(windows,feature="reader-only"))]
+pub fn prepare(window:&tauri::Window){fit_normal_window(window,true);}
+
+fn fit_normal_window(window:&tauri::Window,initialize_minimum:bool){
+    if window.is_maximized().unwrap_or(true)||window.is_fullscreen().unwrap_or(true){return;}
     let monitor=window.current_monitor().ok().flatten().or_else(||window.primary_monitor().ok().flatten());
     let Some(monitor)=monitor else{return;};let work=monitor.work_area();
     let (Ok(inner),Ok(outer),Ok(pos))=(window.inner_size(),window.outer_size(),window.outer_position()) else{return;};
@@ -27,10 +37,9 @@ pub fn fit_to_work_area(window:&tauri::WebviewWindow){
     let (height,y)=fit_axis(inner.height,frame.1,pos.y,work.position.y,work.size.height);
     let client_limit=(work.size.width.saturating_sub(frame.0).max(1),work.size.height.saturating_sub(frame.1).max(1));
     // Lower the minimum before resizing on a small monitor/high DPI desktop.
-    let _=window.set_min_size(Some(tauri::PhysicalSize::new(
+    if initialize_minimum {let _=window.set_min_size(Some(tauri::PhysicalSize::new(
         ((1024.0*monitor.scale_factor()) as u32).min(client_limit.0),
-        ((700.0*monitor.scale_factor()) as u32).min(client_limit.1))));
-    if window.is_maximized().unwrap_or(true){return;}
+        ((700.0*monitor.scale_factor()) as u32).min(client_limit.1))));}
     if (width,height)!=(inner.width,inner.height){let _=window.set_size(tauri::PhysicalSize::new(width,height));}
     if (x,y)!=(pos.x,pos.y){let _=window.set_position(tauri::PhysicalPosition::new(x,y));}
 }
