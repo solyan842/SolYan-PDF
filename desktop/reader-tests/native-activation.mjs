@@ -11,6 +11,7 @@ import net from 'node:net';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
 import {exerciseReaderLoad} from './reader-load.mjs';
+import {qrFixture,qrPdf,qrMatches} from './reader-qr-fixture.mjs';
 const exec=promisify(execFile);
 if(process.platform!=='win32'||process.env.GITHUB_ACTIONS!=='true')throw Error('Installed activation tests require a disposable Windows Actions runner');
 const exe=resolve(process.argv[2]),root=resolve('desktop/reader-tests/test-results/native-activation');
@@ -368,6 +369,14 @@ try{
     storageType:'not measured',debugTransport:'test-only CDP enabled; not a retail latency baseline'};
   await writeFile(join(root,'installed-performance.json'),JSON.stringify(measurements,null,2));
   log.push({case:'installed-ten-tabs-and-100-pages',measurements});
+
+  // Real WebView2 must load the packaged worker decoder, not silently omit a
+  // CCITT QR image. This public fixture contains no customer/eSIM data.
+  const qrPath=join(root,'synthetic-qr.pdf'),qrBytes=await qrPdf();await writeFile(qrPath,qrBytes);
+  await secondary([qrPath]);
+  await expect.poll(()=>qrMatches(page.locator('.readerContainer:not([hidden]) .page canvas').first()),{timeout:15000}).toBe(qrFixture.modules.length**2);
+  expect(await readFile(qrPath)).toEqual(qrBytes);
+  log.push({case:'installed-CCITT-QR-worker-decoder',matchedModules:qrFixture.modules.length**2});
 
   // Real installed native window persistence; normal placement, maximized and
   // presentation close are checked across separate EXE launches.

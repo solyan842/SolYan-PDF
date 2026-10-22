@@ -1,4 +1,5 @@
 import {linkifyText,installLinkGuard} from './reader-link-guard.js';
+import {pdfAssetOptions} from './reader-pdf-assets.js';
 import * as pdfjs from './vendor/pdfjs/build/pdf.mjs';
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor/pdfjs/web/pdf_viewer.mjs';
 import { installR2 } from './reader-r2.js';
@@ -54,7 +55,7 @@ async function openFile(file, source = null) {
   message(`Đang mở ${file.name}…`);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const task = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, enableXfa: false,
-    cMapUrl: './vendor/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: './vendor/pdfjs/standard_fonts/', wasmUrl: './vendor/pdfjs/wasm/' });
+    ...pdfAssetOptions });
   task.onPassword = (update, reason) => {
     const password = prompt(t(reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD ? 'Mật khẩu chưa đúng. Nhập lại:' : 'Mật khẩu PDF:'));
     if (password === null) { task.destroy(); message('Đã hủy mở PDF.'); } else update(password);
