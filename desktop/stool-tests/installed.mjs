@@ -22,6 +22,17 @@ async function psJSON(script,args=[],timeout=30000){const {stdout}=await exec('p
 const inspect=()=>psJSON(helper,['-Exe',exe,'-OwnerPid',String(app.pid)]);
 async function roots(expected){const s=await inspect();expect(s.roots.map(p=>p.name).sort()).toEqual(expected.map(n=>'solyan-'+n+'.exe').sort());return s;}
 async function go(file){await page.goto(new URL(file,report.origin).href);}
+async function recognizeOcr(){
+  await page.locator('#outputPreview').evaluate(node=>node.value='');
+  await page.locator('#runOcr').click();
+  await page.waitForFunction(()=>{
+    const status=document.querySelector('#status');
+    return status.classList.contains('error')||(!document.querySelector('#runOcr').disabled&&status.classList.contains('success'));
+  },null,{timeout:300000});
+  const status=await page.locator('#status').textContent();
+  if(await page.locator('#status').evaluate(node=>node.classList.contains('error')))throw Error('OCR tool failed: '+status);
+  await expect(page.locator('#outputPreview')).toHaveValue(expectedOcrLine,{timeout:300000});
+}
 async function concurrent(service){
   const results=await page.evaluate(async service=>Promise.all(Array.from({length:8},()=>window.__TAURI__.core.invoke('desktop_service_ready',{service}))),service);
   expect(results).toEqual(Array(8).fill(true));
@@ -96,20 +107,16 @@ try{
   await freezeAndRecover('office',()=>output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office-unfrozen.pdf','office'));await roots(['core','office']);
   await go('ocr.html');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.png'));
   const ocrStarted=performance.now();await watch('ocr');
-  await page.locator('#runOcr').click();
-  await expect(page.locator('#outputPreview')).toHaveValue(expectedOcrLine,{timeout:300000});
+  await recognizeOcr();
   report.firstOcr={observedMs:performance.now()-ocrStarted,memory:await endWatch()};
   await roots(['core','office','ocr']);const ocrBefore=(await inspect()).roots;await concurrent('ocr');expect((await inspect()).roots).toEqual(ocrBefore);
-  await page.locator('#runOcr').click();await expect(page.locator('#status')).toHaveClass(/success/,{timeout:300000});
+  await recognizeOcr();
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','ocr']);
-  await page.locator('#runOcr').click();await expect(page.locator('#status')).toHaveClass(/success/,{timeout:300000});
+  await recognizeOcr();
   await roots(['core','office','ocr']);
   await page.screenshot({path:join(out,'ocr.png')});
   report.cases.push('Offline OCR real text, first-use sampled peak and concurrent reuse');
-  await freezeAndRecover('ocr',async()=>{
-    await page.locator('#outputPreview').evaluate(node=>node.value='');
-    await page.locator('#runOcr').click();await expect(page.locator('#outputPreview')).toHaveValue(expectedOcrLine,{timeout:300000});
-  });await roots(['core','office','ocr']);
+  await freezeAndRecover('ocr',recognizeOcr);await roots(['core','office','ocr']);
   await concurrent('sign');await roots(['core','office','ocr','sign']);
   await go('sign.html');await page.locator('#pdfInput').setInputFiles(join(fixtures,'source.pdf'));
   await page.locator('#certInput').setInputFiles(join(fixtures,'certificate.p12'));await page.locator('#certPassword').fill('wrong');
@@ -142,7 +149,14 @@ try{
   });
   report.cases.push('Acknowledged normal close, exit code zero and all owned descendant PIDs gone');
   report.status='PASS';
-}catch(e){report.status='FAIL';report.error=e.stack;if(page)await page.screenshot({path:join(out,'failure.png')}).catch(()=>{});throw e;}
+}catch(e){
+  report.status='FAIL';report.error=e.stack;
+  if(page){
+    report.toolStatus=await page.locator('#status').textContent({timeout:2000}).catch(()=>null);
+    await page.screenshot({path:join(out,'failure.png')}).catch(()=>{});
+  }
+  throw e;
+}
 finally{
   report.pendingMonitor=await endWatch().catch(e=>({error:e.message}));
   if(browser)await browser.close().catch(()=>{});

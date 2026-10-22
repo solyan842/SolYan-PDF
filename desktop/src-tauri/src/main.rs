@@ -25,6 +25,8 @@ use windows_sys::Win32::{
     System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
         SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        TerminateJobObject, QueryInformationJobObject, JobObjectBasicAccountingInformation,
+        JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     },
 };
@@ -40,6 +42,25 @@ struct WindowsJob(usize);
 
 #[cfg(windows)]
 impl WindowsJob {
+    fn active_processes(&self) -> Result<u32,String> {
+        let mut info:JOBOBJECT_BASIC_ACCOUNTING_INFORMATION=unsafe{std::mem::zeroed()};
+        if unsafe{QueryInformationJobObject(self.0 as HANDLE,JobObjectBasicAccountingInformation,
+            &mut info as *mut _ as *mut _,std::mem::size_of_val(&info) as u32,std::ptr::null_mut())}==0 {
+            return Err(format!("Cannot query sidecar job: {}",std::io::Error::last_os_error()));
+        }
+        Ok(info.ActiveProcesses)
+    }
+    fn terminate_and_wait(&self) -> Result<(),String> {
+        if unsafe{TerminateJobObject(self.0 as HANDLE,1)}==0 {
+            return Err(format!("Cannot terminate sidecar job: {}",std::io::Error::last_os_error()));
+        }
+        let started=std::time::Instant::now();
+        loop {
+            if self.active_processes()?==0{return Ok(());}
+            if started.elapsed()>=Duration::from_secs(10){return Err("Sidecar job did not finish terminating in ten seconds".into());}
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
     fn attach(child: &Child) -> Result<Self, String> {
         let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
         if handle.is_null() {
@@ -119,8 +140,15 @@ struct ArchiveProcess {
     _job: WindowsJob,
 }
 
+trait ManagedJob {
+    #[cfg(windows)] fn job(&self)->Option<&WindowsJob>;
+}
+
 macro_rules! owned_health {
-    ($($kind:ty),+) => {$(impl $kind{
+    ($($kind:ty),+) => {$(impl ManagedJob for $kind{
+        #[cfg(windows)] fn job(&self)->Option<&WindowsJob>{Some(&self._job)}
+    }
+    impl $kind{
         fn healthy(&self,port:u16,token:Option<&str>,engine:&str)->bool{
             service_health::probe(port,token,engine,|stream|{
                 #[cfg(windows)]{port_owner::connection_belongs_to_job(stream,self._job.0)}
@@ -182,43 +210,54 @@ fn service_plan(state:&CoreState)->Result<ServicePlan,String>{
     slot.clone().ok_or("sTool service plan unavailable".into())
 }
 // Check the owned Child, not a stale cached session or an arbitrary TCP port.
-// A exited process releases its Windows Job Object when removed from the slot.
-fn managed_child_alive<T>(
-    process: &mut Option<T>,
-    select: impl FnOnce(&mut T) -> &mut Child,
-    label: &str,
-) -> Result<bool,String> {
-    let Some(item)=process.as_mut() else{return Ok(false);};
-    match select(item).try_wait() {
-        Ok(None)=>Ok(true),
-        Ok(Some(_status))=>{*process=None;Ok(false)},
-        Err(error)=>Err(format!("Cannot inspect {label} process: {error}"))
-    }
-}
-fn managed_child_healthy<T>(
+// Even an exited launcher may leave a worker in its job; retire that job first.
+fn managed_child_healthy<T:ManagedJob>(
     process:&mut Option<T>,
     select:impl Fn(&mut T)->&mut Child,
     healthy:impl FnOnce(&T)->bool,
     label:&str,
 )->Result<bool,String>{
-    if !managed_child_alive(process,|p|select(p),label)?{return Ok(false);}
-    if healthy(process.as_ref().ok_or("Managed process unavailable")?){return Ok(true);}
-    // Only the managed child/job is retired. Never kill by name or interfere
-    // with another tool. Dropping the wrapper releases its existing Job Object.
-    if let Some(mut stale)=process.take(){
-        let child=select(&mut stale);
+    let Some(stale)=process.as_mut() else{return Ok(false);};
+    let alive=select(stale).try_wait().map_err(|e|format!("Cannot inspect {label} process: {e}"))?.is_none();
+    if alive&&healthy(stale){return Ok(true);}
+    // Child::wait only covers the launcher. Closing a KILL_ON_JOB_CLOSE handle
+    // initiates descendant termination but does not wait for the worker's port.
+    // Keep the slot/handle on errors: no replacement before this job is empty.
+    #[cfg(windows)] if let Some(job)=stale.job(){
+        job.terminate_and_wait().map_err(|e|format!("Cannot retire {label}: {e}"))?;
+    }
+    {
+        let child=select(stale);
         if let Err(error)=child.kill(){
             if child.try_wait().map_err(|e|e.to_string())?.is_none(){return Err(format!("Cannot retire unresponsive {label}: {error}"));}
         }
         child.wait().map_err(|e|format!("Cannot reap unresponsive {label}: {e}"))?;
     }
+    *process=None;
     Ok(false)
+}
+
+// Job accounting can reach zero before Windows releases the worker's TCP
+// endpoint. Wait for exclusive bindability BEFORE spawning a replacement.
+// Never send requests/credentials to the old or a foreign listener.
+fn wait_for_available_port(port:u16,label:&str)->Result<(),String>{
+    let started=std::time::Instant::now();
+    loop{
+        match TcpListener::bind(("127.0.0.1",port)){
+            Ok(listener)=>{drop(listener);return Ok(());},
+            Err(error)=>{
+                if started.elapsed()>=Duration::from_secs(10){return Err(format!("{label} port did not become available: {error}"));}
+            }
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
 }
 
 #[cfg(all(test,windows))]
 mod recovery_tests{
     use super::*;
     struct OwnedTestChild{child:Child}
+    impl ManagedJob for OwnedTestChild{fn job(&self)->Option<&WindowsJob>{None}}
     impl Drop for OwnedTestChild{fn drop(&mut self){let _=self.child.kill();let _=self.child.wait();}}
     fn child()->OwnedTestChild{
         let mut command=Command::new("ping.exe");
@@ -290,6 +329,41 @@ mod recovery_tests{
             assert!(started.elapsed()<Duration::from_secs(10),"owned endpoint was not ready");std::thread::sleep(Duration::from_millis(50));
         }
         assert!(owned.child.wait().unwrap().success());
+        }
+    }
+    #[test]fn frozen_descendant_is_gone_before_same_port_replacement_even_if_launcher_exited(){
+        use std::io::{BufRead,BufReader};
+        for exited_launcher in [false,true]{
+            let mut other=child();
+            let port=free_loopback_port().unwrap();
+            let python=std::env::var_os("STOOL_TEST_PYTHON").unwrap_or_else(||"python.exe".into());
+            let worker="import socket,os,time,sys\ns=socket.socket();s.bind(('127.0.0.1',int(sys.argv[1])));s.listen();print(os.getpid(),flush=True);time.sleep(60)";
+            let launcher="import subprocess,sys\nsys.stdin.readline();p=subprocess.Popen([sys.executable,'-u','-c',sys.argv[1],sys.argv[2]],stdout=subprocess.PIPE,text=True)\nprint(p.stdout.readline(),end='',flush=True);sys.stdin.readline()";
+            let mut command=Command::new(python);
+            command.args(["-u","-c",launcher,worker,&port.to_string()]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).creation_flags(0x08000000);
+            let mut owned=CoreProcess{child:command.spawn().unwrap(),_job:WindowsJob(0)};
+            owned._job=WindowsJob::attach(&owned.child).unwrap();
+            owned.child.stdin.as_mut().unwrap().write_all(b"go\n").unwrap();
+            let output=owned.child.stdout.take().unwrap();
+            let(sender,receiver)=std::sync::mpsc::channel();
+            std::thread::spawn(move||{let mut line=String::new();let read=BufReader::new(output).read_line(&mut line);let _=sender.send(read.map(|_|line));});
+            let line=receiver.recv_timeout(Duration::from_secs(10)).expect("worker readiness deadline").unwrap();
+            let worker_pid:u32=line.trim().parse().unwrap();
+            // Exercise the production native suspension implementation; only a
+            // test-owned PID is passed, no CIM, executable-name or global kill.
+            let helper=Path::new(env!("CARGO_MANIFEST_DIR")).join("../backend/stool-process-smoke.ps1");
+            let script=format!("$ErrorActionPreference='Stop';$s=Get-Content -Raw '{}';$n=[regex]::Match($s,\"(?s)Add-Type @'\\r?\\n(.*?)\\r?\\n'@\").Groups[1].Value;Add-Type $n;[StoolFreeze]::Freeze([Diagnostics.Process[]]@([Diagnostics.Process]::GetProcessById({worker_pid})))",helper.display());
+            assert!(Command::new("powershell.exe").args(["-NoProfile","-NonInteractive","-Command",&script]).creation_flags(0x08000000).status().unwrap().success());
+            assert!(TcpStream::connect(("127.0.0.1",port)).is_ok(),"frozen worker still owns its listener");
+            if exited_launcher{owned.child.stdin.take().unwrap().write_all(b"exit\n").unwrap();owned.child.wait().unwrap();}
+            let mut slot=Some(owned);
+            assert!(!managed_child_healthy(&mut slot,|p|&mut p.child,|_|false,"frozen-test").unwrap());
+            assert!(slot.is_none());
+            // Immediate exclusive rebind verifies that the descendant is gone
+            // before a replacement may start. Unrelated engine stays alive.
+            wait_for_available_port(port,"test replacement").unwrap();
+            let replacement=TcpListener::bind(("127.0.0.1",port)).expect("old worker must release the port before replacement");
+            assert!(other.child.try_wait().unwrap().is_none());drop(replacement);
         }
     }
 }
@@ -547,6 +621,7 @@ fn prepend_paths(directories: &[&Path]) -> Result<OsString, String> {
 }
 
 fn start_office(app: &tauri::AppHandle, port: u16) -> Result<(OfficeProcess, String), String> {
+    wait_for_available_port(port,"Office")?;
     let office_exe = app
         .path()
         .resolve("office/solyan-office.exe", BaseDirectory::Resource)
@@ -611,6 +686,7 @@ fn start_office(app: &tauri::AppHandle, port: u16) -> Result<(OfficeProcess, Str
 
 
 fn start_ocr(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(OcrProcess, String, String), String> {
+    wait_for_available_port(port,"OCR")?;
     let ocr_exe = app
         .path()
         .resolve("ocr/solyan-ocr.exe", BaseDirectory::Resource)
@@ -689,6 +765,7 @@ fn start_ocr(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(OcrProce
 }
 
 fn start_sign(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(SignProcess, String, String), String> {
+    wait_for_available_port(port,"Signing")?;
     let exe = app
         .path()
         .resolve("sign/solyan-sign.exe", BaseDirectory::Resource)
@@ -741,6 +818,7 @@ fn start_sign(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(SignPro
 }
 
 fn start_archive(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(ArchiveProcess, String, String), String> {
+    wait_for_available_port(port,"Archive")?;
     let exe = app
         .path()
         .resolve("archive/solyan-archive.exe", BaseDirectory::Resource)
@@ -832,6 +910,7 @@ fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str,
     }
 
     let port = free_loopback_port()?;
+    wait_for_available_port(port,"Core")?;
     let token = random_token();
     let mut command = Command::new(&core_exe);
     command

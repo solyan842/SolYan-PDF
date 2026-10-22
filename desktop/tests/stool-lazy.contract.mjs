@@ -47,7 +47,8 @@ test('fast CI only creates empty compile-only resource roots and never builds Re
 
 test('stale cached sessions and exited heavy sidecars are checked before reuse',()=>{
   const main=read('desktop/src-tauri/src/main.rs');
-  assert.ok(main.includes('fn managed_child_alive<T>('));
+  assert.ok(main.includes('fn managed_child_healthy<T:ManagedJob>('));
+  assert.ok(main.includes('job.terminate_and_wait()'));
   assert.ok(main.includes('.try_wait()'));
   assert.ok(main.includes('state.session.lock()'));
   for(const service of ['Office','OCR','Signing','Archive'])
