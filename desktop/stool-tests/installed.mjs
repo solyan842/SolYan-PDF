@@ -1,5 +1,6 @@
 import {chromium,expect} from '@playwright/test';
 import {expectedOcrLine} from './ocr-assertion.mjs';
+import {downloadOutput} from './tool-download.mjs';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
@@ -39,9 +40,7 @@ async function concurrent(service){
 }
 async function output(file,input,button,name,kind='pdf'){
   await go(file);await page.locator('#fileInput').setInputFiles(join(fixtures,input));
-  const download=page.waitForEvent('download',{timeout:300000});await page.locator(button).click();
-  const failure=page.locator('#status.error').waitFor({state:'visible',timeout:300000}).then(async()=>{throw Error('Tool failed: '+await page.locator('#status').textContent());});
-  const saved=await Promise.race([download,failure]);expect(await saved.failure()).toBeNull();await saved.saveAs(join(out,name));
+  await downloadOutput(page,button,join(out,name));
   await exec('python',['desktop/backend/tests/stool_fixtures.py',kind,join(out,name)],{windowsHide:true,timeout:30000});
 }
 async function watch(name){
@@ -123,12 +122,17 @@ try{
   await page.locator('#runBtn').click();await expect(page.locator('#status')).toHaveClass(/error/,{timeout:90000});
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','sign']);
   await page.locator('#certPassword').fill('CI-only-testing-passphrase');
-  const signed=page.waitForEvent('download',{timeout:180000});await page.locator('#runBtn').click();await(await signed).saveAs(join(out,'signed.pdf'));
+  await downloadOutput(page,'#runBtn',join(out,'signed.pdf'),180000);
   await exec('python',['desktop/backend/tests/stool_fixtures.py','signed',join(out,'signed.pdf')],{windowsHide:true});
   await concurrent('sign');await roots(['core','office','ocr','sign']);
   report.cases.push('PKCS12 UI signing, wrong-passphrase retry; separate D6 cryptographic validation retained');
+  await expect(page.locator('#certPassword')).toHaveValue('');
   await freezeAndRecover('sign',async()=>{
-    const saved=page.waitForEvent('download',{timeout:180000});await page.locator('#runBtn').click();await(await saved).saveAs(join(out,'signed-unfrozen.pdf'));
+    // The real UI clears credentials after EVERY attempt. A second signing
+    // must re-enter the fixture password, just as a user would.
+    await page.locator('#certPassword').fill('CI-only-testing-passphrase');
+    await downloadOutput(page,'#runBtn',join(out,'signed-unfrozen.pdf'),180000);
+    await expect(page.locator('#certPassword')).toHaveValue('');
     await exec('python',['desktop/backend/tests/stool_fixtures.py','signed',join(out,'signed-unfrozen.pdf')],{windowsHide:true});
   });await roots(['core','office','ocr','sign']);
   await concurrent('archive');await roots(['core','office','ocr','sign','archive']);
