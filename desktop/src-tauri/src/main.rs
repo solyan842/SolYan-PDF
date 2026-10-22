@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod service_health;
+mod output_save;
 #[cfg(windows)] mod port_owner;
 use rand::RngCore;
 use std::{
@@ -1019,6 +1020,31 @@ fn stop_archive(app: &tauri::AppHandle) {
 fn main() {
     let app=tauri::Builder::default()
         .manage(CoreState::default())
+        .setup(|app|{
+            tauri::WebviewWindowBuilder::from_config(app,&app.config().app.windows[0])?
+                .on_download(|webview,event|{
+                    if let tauri::webview::DownloadEvent::Requested{destination,..}=event{
+                        #[cfg(windows)]{
+                            let chosen=webview.window().hwnd().map_err(|e|e.to_string())
+                                .and_then(|owner|output_save::choose(owner.0,destination));
+                            match chosen{
+                                Ok(Some(path))=>{*destination=path;return true;},
+                                Ok(None)=>{
+                                    let _=webview.eval("{const s=document.querySelector('#status');if(s){s.textContent='Đã hủy lưu kết quả.';s.classList.remove('success','error');}}");
+                                    return false;
+                                },
+                                Err(_)=>{
+                                    let _=webview.eval("{const s=document.querySelector('#status');if(s){s.textContent='Không mở được hộp thoại lưu. Hãy thử lại.';s.classList.remove('success');s.classList.add('error');}}");
+                                    return false;
+                                }
+                            }
+                        }
+                        #[cfg(not(windows))]{let _=(webview,destination);return false;}
+                    }
+                    true
+                }).build()?;
+            Ok(())
+        })
         // No PyInstaller/Paddle/LibreOffice/pyHanko/OCRmyPDF launched while
         // the Home window is displayed. Core starts on first tool execution;
         // specialized services start only for their matching tool.

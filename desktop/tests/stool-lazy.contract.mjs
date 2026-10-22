@@ -9,7 +9,9 @@ test('sTool startup is lightweight', () => {
   for (const name of ['start_office(', 'start_ocr(', 'start_sign(', 'start_archive(', 'start_core(']) {
     assert.equal(start.includes(name), false, 'eager sidecar: ' + name);
   }
-  assert.equal(start.includes('.setup('), false);
+  // Setup creates only the native window/download handler. The engine start
+  // functions above must remain absent from every startup/setup path.
+  assert.ok(start.includes('.on_download('));
   assert.ok(main.includes('fn desktop_service_ready('));
   assert.ok(main.includes('fn desktop_core_session('));
   assert.ok(main.includes('spawn_blocking'));

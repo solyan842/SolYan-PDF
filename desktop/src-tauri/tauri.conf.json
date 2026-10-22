@@ -11,6 +11,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "SolYan PDF",
         "width": 1440,
         "height": 920,
