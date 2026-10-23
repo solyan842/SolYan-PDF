@@ -6,6 +6,7 @@ param(
   [int]$TimeoutSeconds=30
 )
 $ErrorActionPreference='Stop'
+[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') { throw 'Disposable Windows runner required' }
 if ($Action -ne 'Cancel' -and -not [IO.Path]::IsPathRooted($Destination)) { throw 'Absolute destination required' }
 Get-Process -Id $OwnerPid -ErrorAction Stop | Out-Null

@@ -2,13 +2,17 @@
 // The fixture chooses paths only; installed.mjs proves application file writes.
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm,realpath} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import assert from 'node:assert/strict';
 const exec=promisify(execFile);
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_OS!=='Windows')throw Error('Disposable Windows runner required');
-const root=await mkdtemp(join(tmpdir(),'stool-dialog-'));
+// TEMP can use an 8.3 user alias; the native dialog returns the long path.
+// Canonicalize the existing parent before creating any fixture destinations,
+// then keep exact full-path comparisons (never basename-only acceptance).
+const root=await mkdtemp(join(await realpath(tmpdir()),'stool-dialog-'));
+assert.equal(root,await realpath(root),'Fixture root must contain no 8.3 alias');
 async function run(action,name,{overwrite=false}={}){
   const child=spawn('powershell.exe',['-STA','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',resolve('desktop/stool-tests/native-dialog-fixture.ps1'),'-InitialDirectory',root],{windowsHide:true,stdio:['ignore','pipe','pipe']});
   let stdout='',stderr='';child.stdout.on('data',d=>stdout+=d);child.stderr.on('data',d=>stderr+=d);

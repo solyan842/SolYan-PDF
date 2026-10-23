@@ -163,3 +163,25 @@ References:
 Local PowerShell parse, C# compile, seven installer/lifecycle tests and workflow
 checks PASS. Actual native dialog regression awaits the next Fast CI. Installed
 Save matrix and new installer remain pending; do not claim native Save PASS.
+
+## Fast CI #18 path identity fix — 2026-10-23
+
+Run 39907941845 / job 120264093384 at c4021f6036fe18d448164205a7bd54d01e509a75
+FAIL. Raw log fetched once: Cancel PASS and the first Save returns OK with the
+chosen leaf in the intended directory. The strict comparison fails because
+TEMP supplies C:/Users/RUNNER~1 while the common dialog returns the same user
+directory as C:/Users/runneradmin. The previous filename-control fix is working
+for this case. This fixture selects paths only, so it does not prove PDF writes.
+
+Canonicalize the existing TEMP parent using filesystem realpath before creating
+the fixture directory. Keep strict complete path equality and assert that the
+new root itself is canonical; do not reduce acceptance to basename or ignore
+directory mismatches. Set explicit UTF-8 stdout in both PowerShell helpers so
+the already-required Vietnamese filename case cannot lose characters in the
+JSON transport. No application logic or gate removed.
+
+Local syntax, seven contracts and workflow checks PASS. An actual Windows
+PowerShell subprocess roundtrips the Vietnamese JSON path using the helper's
+encoding configuration; canonical fixture root check PASS. All native dialog
+cases and installed application writes still require CI evidence. Heavy
+installer remains gated on the complete Fast CI result.
