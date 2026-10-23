@@ -94,3 +94,29 @@ including gutter and horizontal-overflow assertions plus existing Save flow
 checks. Workflow contracts and UI validation also PASS. This CSS-only follow-up
 does not complete the installed native Save integration gate above; no new
 installer has been built for it.
+
+## Batched native Save acceptance — 2026-10-23
+
+Fast CI #15 PASS at aa858388612f089efadaa91c3c0d70c2f11c6615 validates the
+aligned Save shelf. The next change migrates installed acceptance away from
+automatic Playwright downloads to visible Save buttons and real, PID-scoped
+Windows common dialogs. Existing engine, crypto/PDF-A, source-hash, process
+recovery, normal-close and uninstall acceptance remains mandatory.
+
+The installed batch now covers first-save Cancel/retry, Save destination reuse,
+Save As Cancel/new destination, overwrite No/Yes, native source-collision
+refusal, locked-output failure/retry, OCR TXT and ZIP-format CBZ bytes, and
+Core/Office/sign/archive PDF saves. ZIP integrity and PNG signature, recognized
+TXT content and existing PDF semantic checks are retained. The file lock is
+restricted to disposable artifacts/stool-native outputs.
+
+A lightweight Fast CI test exercises the dialog driver against real Windows
+common dialogs (including spaced/Unicode paths, PDF/TXT/ZIP and overwrite),
+without models, sidecars or an installer. This proves driver mechanics only;
+it does not replace installed sTool acceptance or prove application writes.
+
+Local checks: 15 Node contracts PASS; browser Save production-CSP and signing
+retry regressions PASS; workflow isolation/UI validation PASS; all added
+PowerShell scripts parse and the Win32 helper C# compiles. Native GUI driver
+execution is pending Windows Fast CI; full installed matrix remains pending
+the next deliberate sTool-only installer milestone. No Reader or stable edits.

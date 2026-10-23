@@ -65,12 +65,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --check desktop/stool-tests/installed.mjs 2>&1 | Tee-Object artifacts/stool-installed-script.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($file in @('stool-installer-smoke.ps1','stool-process-smoke.ps1','stool-close-response.ps1','stool-webview-policy.ps1')) {
+          foreach ($file in @('stool-installer-smoke.ps1','stool-process-smoke.ps1','stool-close-response.ps1','stool-webview-policy.ps1','stool-save-dialog.ps1','stool-save-lock.ps1')) {
             $tokens=$null; $errorsInScript=$null
             [Management.Automation.Language.Parser]::ParseFile((Resolve-Path "desktop/backend/$file"),[ref]$tokens,[ref]$errorsInScript) | Out-Null
             if ($errorsInScript.Count) { throw ($errorsInScript | Out-String) }
           }
           'PowerShell acceptance scripts parse PASS' | Tee-Object artifacts/stool-installed-powershell.log
+      - name: Test actual Windows Save dialogs without heavy runtimes
+        shell: pwsh
+        run: |
+          node desktop/stool-tests/native-dialog.windows.mjs 2>&1 | Tee-Object artifacts/stool-native-dialog.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test visible Save controls under production CSP using installed Edge
         shell: pwsh
         run: |

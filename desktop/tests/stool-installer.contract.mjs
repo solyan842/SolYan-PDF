@@ -21,7 +21,11 @@ test('installed acceptance retains D6 signing, PDF-A and uninstall gates',()=>{
   const native=read('desktop/stool-tests/installed.mjs');
   assert.match(native,/await roots\(\[\]\)/);
   for(const service of ['core','office','ocr','sign','archive'])assert.ok(native.includes(`'-Service','${service}'`));
-  assert.ok(native.includes('createHash'));assert.ok(native.includes('await downloadOutput('));
+  assert.ok(native.includes('createHash'));assert.ok(native.includes('await saveNativeOutput('));
+  assert.doesNotMatch(native,/downloadOutput|\.saveAs\(/);
+  for(const gate of ['saveMatrix','DeclineOverwrite','expectError:true','stool-save-lock.ps1','pages.cbz','ocr text.txt'])assert.ok(native.includes(gate));
+  const save=read('desktop/stool-tests/native-save.mjs');
+  assert.ok(save.includes('stool-save-dialog.ps1'));assert.ok(save.includes('ownerPid'));assert.doesNotMatch(save,/core\.invoke|\.saveAs\(/);
   const download=read('desktop/stool-tests/tool-download.mjs');
   assert.ok(download.includes('page.waitForEvent(\'download\''));
   assert.ok(download.includes('await saved.saveAs(path)'));

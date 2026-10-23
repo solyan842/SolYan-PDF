@@ -1,6 +1,6 @@
 import {chromium,expect} from '@playwright/test';
 import {expectedOcrLine} from './ocr-assertion.mjs';
-import {downloadOutput} from './tool-download.mjs';
+import {saveNativeOutput,saveNativeResult,produceNativeOutput} from './native-save.mjs';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
@@ -40,8 +40,38 @@ async function concurrent(service){
 }
 async function output(file,input,button,name,kind='pdf'){
   await go(file);await page.locator('#fileInput').setInputFiles(join(fixtures,input));
-  await downloadOutput(page,button,join(out,name));
+  const row=await saveNativeOutput(page,button,join(out,name),app.pid);
   await exec('python',['desktop/backend/tests/stool_fixtures.py',kind,join(out,name)],{windowsHide:true,timeout:30000});
+  return row;
+}
+async function saveMatrix(row){
+  const first=join(out,'compressed.pdf'),copy=join(out,'save-as copy.pdf'),existing=join(out,'overwrite.pdf');
+  const bytes=await readFile(first),hash=digest(bytes);
+  await saveNativeResult(page,row,null,{ownerPid:app.pid,action:'Cancel',saveAs:true});
+  // Save must reuse the previous destination after Save As is cancelled.
+  await writeFile(first,'test output sentinel');
+  await row.locator('.output-save').click();await expect(row.locator('[role=status]')).toHaveClass(/success/);
+  expect(digest(await readFile(first))).toBe(hash);
+  await saveNativeResult(page,row,copy,{ownerPid:app.pid,saveAs:true});
+  expect(digest(await readFile(copy))).toBe(hash);
+  await writeFile(existing,'overwrite sentinel');
+  await saveNativeResult(page,row,existing,{ownerPid:app.pid,action:'DeclineOverwrite',saveAs:true});
+  expect(await readFile(existing,'utf8')).toBe('overwrite sentinel');
+  await saveNativeResult(page,row,existing,{ownerPid:app.pid,saveAs:true,overwrite:true});
+  expect(digest(await readFile(existing))).toBe(hash);
+  await saveNativeResult(page,row,join(fixtures,'source.pdf'),{ownerPid:app.pid,saveAs:true,overwrite:true,expectError:true});
+  await expect(row.locator('[role=status]')).toContainText('PDF nguồn');
+  expect(digest(await readFile(join(fixtures,'source.pdf')))).toBe(originals.get('source.pdf'));
+  // Native write failure: lock the selected OUTPUT only, then retry after release.
+  const ready=join(out,'save-lock.ready'),stop=join(out,'save-lock.stop');
+  const locking=exec('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',resolve('desktop/backend/stool-save-lock.ps1'),'-Path',existing,'-Ready',ready,'-Stop',stop],{windowsHide:true,timeout:45000});locking.catch(()=>{});
+  try{
+    await expect.poll(()=>readFile(ready,'utf8').catch(()=>''),{timeout:10000}).toBe('ready');
+    await row.locator('.output-save').click();await expect(row.locator('[role=status]')).toHaveClass(/error/);
+  }finally{await writeFile(stop,'release');await locking;}
+  await row.locator('.output-save').click();await expect(row.locator('[role=status]')).toHaveClass(/success/);
+  expect(digest(await readFile(existing))).toBe(hash);
+  report.cases.push('Native Save reuse, Save As Cancel/new path, overwrite No/Yes, source protection, locked-output failure/retry');
 }
 async function watch(name){
   const stop=join(out,name+'.stop');
@@ -82,7 +112,12 @@ try{
   await roots([]);await page.waitForTimeout(1500);await roots([]);
   report.home={observedUsableMs:homeUsableMs,memory:await endWatch(),scope:'fresh profile; OS cache uncontrolled; includes test transport/polling; not retail cold-start guarantee'};
   await page.screenshot({path:join(out,'home.png')});
-  await output('transform.html?tool=compress','source.pdf','#runBtn','compressed.pdf');
+  await go('transform.html?tool=compress');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.pdf'));
+  const firstResult=await produceNativeOutput(page,'#runBtn');
+  await saveNativeResult(page,firstResult,null,{ownerPid:app.pid,action:'Cancel'});
+  await saveNativeResult(page,firstResult,join(out,'compressed.pdf'),{ownerPid:app.pid});
+  await exec('python',['desktop/backend/tests/stool_fixtures.py','pdf',join(out,'compressed.pdf')],{windowsHide:true});
+  await saveMatrix(firstResult);
   await roots(['core']);const coreBefore=(await inspect()).roots;
   const denied=await page.evaluate(async()=>{
     const [endpoint]=String(await window.__TAURI__.core.invoke('desktop_core_session')).split('\n');
@@ -97,6 +132,10 @@ try{
   await output('transform.html?tool=compress','source.pdf','#runBtn','core-recovered.pdf');await roots(['core']);
   report.cases.push('Core real output, concurrent session reuse, invalid input retry and crashed Core recovery');
   await freezeAndRecover('core',()=>output('transform.html?tool=compress','source.pdf','#runBtn','core-unfrozen.pdf'));await roots(['core']);
+  await go('poppler-convert.html?tool=cbz');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.pdf'));
+  await saveNativeOutput(page,'#runBtn',join(out,'pages.cbz'),app.pid);
+  await exec('python',['-c','import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; files=z.namelist(); assert len(files)==1 and files[0].endswith(".png"); assert z.read(files[0]).startswith(bytes.fromhex("89504e470d0a1a0a"))',join(out,'pages.cbz')],{windowsHide:true});
+  report.cases.push('Native Save ZIP-format CBZ: exact destination, valid archive and PNG page');
   await concurrent('office');await roots(['core','office']);
   await output('office-convert.html?tool=rtf-pdf','source.rtf','#runBtn','office.pdf','office');
   const officeBefore=(await inspect()).roots;await concurrent('office');expect((await inspect()).roots).toEqual(officeBefore);
@@ -108,6 +147,8 @@ try{
   const ocrStarted=performance.now();await watch('ocr');
   await recognizeOcr();
   report.firstOcr={observedMs:performance.now()-ocrStarted,memory:await endWatch()};
+  await saveNativeOutput(page,'#downloadTxt',join(out,'ocr text.txt'),app.pid);
+  expect((await readFile(join(out,'ocr text.txt'),'utf8')).trim()).toMatch(expectedOcrLine);
   await roots(['core','office','ocr']);const ocrBefore=(await inspect()).roots;await concurrent('ocr');expect((await inspect()).roots).toEqual(ocrBefore);
   await recognizeOcr();
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','ocr']);
@@ -122,7 +163,7 @@ try{
   await page.locator('#runBtn').click();await expect(page.locator('#status')).toHaveClass(/error/,{timeout:90000});
   await psJSON(helper,['-Mode','Crash','-Exe',exe,'-OwnerPid',String(app.pid),'-Service','sign']);
   await page.locator('#certPassword').fill('CI-only-testing-passphrase');
-  await downloadOutput(page,'#runBtn',join(out,'signed.pdf'),180000);
+  await saveNativeOutput(page,'#runBtn',join(out,'signed.pdf'),app.pid,180000);
   await exec('python',['desktop/backend/tests/stool_fixtures.py','signed',join(out,'signed.pdf')],{windowsHide:true});
   await concurrent('sign');await roots(['core','office','ocr','sign']);
   report.cases.push('PKCS12 UI signing, wrong-passphrase retry; separate D6 cryptographic validation retained');
@@ -131,7 +172,7 @@ try{
     // The real UI clears credentials after EVERY attempt. A second signing
     // must re-enter the fixture password, just as a user would.
     await page.locator('#certPassword').fill('CI-only-testing-passphrase');
-    await downloadOutput(page,'#runBtn',join(out,'signed-unfrozen.pdf'),180000);
+    await saveNativeOutput(page,'#runBtn',join(out,'signed-unfrozen.pdf'),app.pid,180000);
     await expect(page.locator('#certPassword')).toHaveValue('');
     await exec('python',['desktop/backend/tests/stool_fixtures.py','signed',join(out,'signed-unfrozen.pdf')],{windowsHide:true});
   });await roots(['core','office','ocr','sign']);
