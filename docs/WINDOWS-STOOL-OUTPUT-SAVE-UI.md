@@ -120,3 +120,21 @@ retry regressions PASS; workflow isolation/UI validation PASS; all added
 PowerShell scripts parse and the Win32 helper C# compiles. Native GUI driver
 execution is pending Windows Fast CI; full installed matrix remains pending
 the next deliberate sTool-only installer milestone. No Reader or stable edits.
+
+## Fast CI #16 diagnostic checkpoint — 2026-10-23
+
+Run 39905085699, job 120255093799, exact HEAD
+f97e6861909aa0ba482446a2b5839021cabd5cc4: FAILURE. Raw job log fetched once.
+The actual Cancel dialog case PASS is visible. The next case fails, but the
+outer finally reports EBUSY while removing the fixture directory and masks
+the original error. No conclusion about the Save command or filename control
+can be drawn from that masked failure.
+
+Narrow diagnostic follow-up: log the original case/helper error before cleanup,
+wait for the owned fixture process close (including stdio drain) after killing
+it on failure, retry transient Windows directory removal and preserve the
+primary failure if cleanup also fails. Keep every native dialog case and all
+installed acceptance gates. No product Save logic changed. Local JavaScript
+syntax, seven lifecycle/installer contracts and workflow checks PASS. Next
+exact-head Fast CI must expose the real failing case before any product fix
+or heavyweight installer attempt.
