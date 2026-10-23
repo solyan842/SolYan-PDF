@@ -30,6 +30,23 @@ try{
   await page.locator('#mergeBtn').click();
   await expect(page.locator('.output-save')).toBeVisible();await expect(page.locator('.output-save-as')).toBeVisible();
   await expect(page.locator('.output-result [role=status]')).toContainText('Chưa lưu');assert.equal(downloads,0);
+  for(const width of [1024,1200,1440]){
+    await page.setViewportSize({width,height:850});
+    await page.locator('#output-results').scrollIntoViewIfNeeded();
+    const layout=await page.evaluate(()=>{
+      const card=document.querySelector('#output-results').getBoundingClientRect();
+      const content=document.querySelector('.merge-layout').getBoundingClientRect();
+      const actions=document.querySelector('.output-result-actions').getBoundingClientRect();
+      const name=document.querySelector('.output-result>strong').getBoundingClientRect();
+      return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
+        cardOffset:Math.abs(card.left-content.left),inset:name.left-card.left,
+        rightInset:card.right-actions.right};
+    });
+    assert.ok(layout.overflow<=1,`No horizontal overflow at ${width}: ${JSON.stringify(layout)}`);
+    assert.ok(layout.cardOffset<=1,'Result card follows the tool content gutter');
+    assert.ok(layout.inset>=20&&layout.rightInset>=20,'Filename and Save controls stay inset from card borders');
+    if(process.env.STOOL_SAVE_SCREENSHOT_PREFIX)await page.screenshot({path:process.env.STOOL_SAVE_SCREENSHOT_PREFIX+'-'+width+'.png',fullPage:true});
+  }
   // Cancel must retain the result and never display "saved".
   await page.locator('.output-save').click();await expect(page.locator('.output-result [role=status]')).toContainText('Đã hủy lưu');
   await page.evaluate(()=>window.nextSave='C:\\QA\\chosen.pdf');await page.locator('.output-save').click();

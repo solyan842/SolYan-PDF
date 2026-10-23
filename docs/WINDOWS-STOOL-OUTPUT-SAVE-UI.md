@@ -80,3 +80,17 @@ Only then run one deliberate sTool installer milestone and provide that new
 installer for owner QA. Do not claim #7 includes this code or native Save is
 release-accepted from local merge coverage alone. Keep Reader QR separately
 checkpointed and keep native GUI interaction scoped to the test application.
+
+## Save shelf alignment checkpoint — 2026-10-23
+
+After Fast CI #14 passed at 0df8e83910e53cd0f4bdee73dfd0d249fcba25aa,
+align the result shelf with the tool content, add 24px internal gutters and
+place Save / Save As at the right of the filename row. Allow grid children to
+shrink so the tool and result shelf do not overflow horizontally. At narrow
+widths the actions wrap while retaining their right alignment.
+
+The actual merge UI browser regression passes at 1024, 1200 and 1440px,
+including gutter and horizontal-overflow assertions plus existing Save flow
+checks. Workflow contracts and UI validation also PASS. This CSS-only follow-up
+does not complete the installed native Save integration gate above; no new
+installer has been built for it.
