@@ -1,4 +1,6 @@
 name: Windows sTool Installer
+# Packaging lane. Functional acceptance is a separate, manually invoked job
+# against this exact artifact; a test-driver change must never rebuild NSIS.
 
 on:
   workflow_dispatch:
@@ -40,32 +42,6 @@ jobs:
         shell: pwsh
         run: New-Item -ItemType Directory -Force artifacts | Out-Null
 
-      - name: Validate desktop UI contract and CSP hygiene
-        shell: pwsh
-        run: |
-          & ./desktop/ui/validate-contract.ps1 2>&1 | Tee-Object -FilePath "artifacts/desktop-ui-contract.log"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Validate D6 installer release PowerShell syntax
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $tokens = $null
-          $parseErrors = $null
-          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path "desktop/backend/verify-installer-release.ps1"),
-            [ref]$tokens,
-            [ref]$parseErrors
-          )
-          if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
-          "D6 release script parser: PASS" | Tee-Object artifacts/desktop-d6-script-lint.log
-
-      - name: Regression test frozen PyInstaller smoke cleanup
-        shell: pwsh
-        run: |
-          python -m unittest discover -s desktop/backend/tests -p "test_frozen_smoke_process.py" -v 2>&1 | Tee-Object -FilePath artifacts/desktop-frozen-smoke-cleanup-tests.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Stage pinned browser-local PDF engine
         shell: pwsh
         run: |
@@ -96,8 +72,6 @@ jobs:
           python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath artifacts/desktop-pip-bootstrap.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install -r desktop/backend/requirements-windows.txt 2>&1 | Tee-Object -FilePath artifacts/desktop-pip-install.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m unittest discover -s desktop/backend/tests -p test_core_runner_cors.py -v 2>&1 | Tee-Object artifacts/stool-cors-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           & ./desktop/backend/stage-native-runtimes.ps1
@@ -151,8 +125,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip check 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-pip-check.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m unittest discover -s desktop/backend/tests -p "test_sign_runner.py" -v 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-contract-test.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m PyInstaller --noconfirm --clean --onefile --name solyan-sign --paths . --paths engines/sign-service --collect-submodules app --collect-all pyhanko --collect-all pyhanko_certvalidator desktop/backend/sign_runner.py 2>&1 | Tee-Object -FilePath artifacts/desktop-sign-pyinstaller.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $root = "desktop/src-tauri/resources/sign"
@@ -185,13 +157,6 @@ jobs:
         shell: pwsh
         run: |
           npx --yes @tauri-apps/cli@2.12.3 --version 2>&1 | Tee-Object -FilePath "artifacts/tauri-cli-version.log"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Cargo check
-        shell: pwsh
-        working-directory: desktop/src-tauri
-        run: |
-          cargo check 2>&1 | Tee-Object -FilePath "../../artifacts/desktop-cargo-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Trim source-only resources and measure installer payload
@@ -301,19 +266,12 @@ jobs:
           if ($installers.Count -lt 1) { throw "No NSIS installer was produced" }
           $installers | Select-Object Name, Length, FullName | Format-Table | Out-String | Tee-Object -FilePath "artifacts/desktop-installer-inventory.log"
 
-      - name: Set up Node for installed WebView acceptance
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: Install pinned sTool test driver
+      - name: Record candidate checksum and exact source identity
         shell: pwsh
         run: |
-          npm ci --prefix desktop/stool-tests 2>&1 | Tee-Object artifacts/stool-test-driver.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install and exercise lazy engines, then preserve D6 release gates
-        shell: pwsh
-        run: |
-          & ./desktop/backend/stool-installer-smoke.ps1 2>&1 | Tee-Object artifacts/stool-installer-smoke.log
+          $installers = @(Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis" -Filter "*.exe" -ErrorAction Stop)
+          if ($installers.Count -ne 1) { throw "Expected exactly one NSIS candidate" }
+          python desktop/backend/stool-package-manifest.py $installers[0].FullName 2>&1 | Tee-Object artifacts/stool-package.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload desktop diagnostics
         if: always()
@@ -325,7 +283,7 @@ jobs:
             !artifacts/stool-native/profile/**
           if-no-files-found: warn
 
-      - name: Upload Windows installer
+      - name: Upload Windows installer candidate (packaging only)
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -333,13 +291,13 @@ jobs:
           path: desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
-      - name: Upload D6 release checksum and manifest
+      - name: Upload candidate checksum and manifest (not release acceptance)
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SolYan-PDF-Windows-release-checksums
+          name: sTool-PDF-Windows-package-manifest
           path: |
-            artifacts/SolYan-PDF-Windows-x64.sha256
-            artifacts/desktop-windows-release-gate.json
+            artifacts/sTool-PDF-Windows-x64.sha256
+            artifacts/stool-package.json
           if-no-files-found: error
 

@@ -12,6 +12,12 @@ test('heavy installer runs only manually or on a deliberate sTool build mileston
   assert.doesNotMatch(wf,/reader-only|tauri\.reader|SolYan-PDF-Reader/);
   assert.match(wf,/name: sTool-PDF-Windows-x64/);
   assert.match(wf,/if: always\(\)/);
+  assert.doesNotMatch(wf,/stool-installer-smoke\.ps1|installed\.mjs|python -m unittest|cargo check/);
+  assert.match(wf,/stool-package-manifest\.py/);
+  const acceptance=read('.github/workflows/windows-stool-acceptance.yml');
+  assert.match(acceptance,/stool-installer-smoke\.ps1/);
+  assert.match(acceptance,/actions\/download-artifact@v4/);
+  assert.doesNotMatch(acceptance,/tauri.*build|PyInstaller|stage-ocr-runtime/);
 });
 test('installed acceptance retains D6 signing, PDF-A and uninstall gates',()=>{
   const script=read('desktop/backend/stool-installer-smoke.ps1');
