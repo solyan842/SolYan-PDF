@@ -92,7 +92,7 @@
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-      setStatus(`Đã nối ${files.length} tệp. Kết quả đã được gửi tới Windows để lưu.`, 'success');
+      setStatus(`Đã nối ${files.length} tệp. Chọn Lưu hoặc Lưu thành trong phần Kết quả.`, 'success');
     } catch (cause) {
       setStatus(`Không thể nối PDF: ${cause instanceof Error ? cause.message : 'tệp không hợp lệ hoặc được mã hóa.'}`, 'error');
     } finally {
