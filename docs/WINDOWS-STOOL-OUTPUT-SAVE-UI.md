@@ -138,3 +138,28 @@ installed acceptance gates. No product Save logic changed. Local JavaScript
 syntax, seven lifecycle/installer contracts and workflow checks PASS. Next
 exact-head Fast CI must expose the real failing case before any product fix
 or heavyweight installer attempt.
+
+## Fast CI #17 root error and scoped driver fix — 2026-10-23
+
+Run 39907560067, job 120262881292, HEAD
+548d3b255ff0858126f3e7c6e05c9ee6604896b5: FAILURE. Raw log fetched once.
+The original error is now visible: Filename throws Common dialog filename
+Edit 1001 not found in the first Save case; Cancel still PASS. Cleanup no
+longer masks the error. This is test-driver control discovery, not evidence
+of an application Save command failure.
+
+The driver now recognizes documented OPENFILENAME edt1 (0x480), the edit
+inside cmb13 (0x47c), and newer Edit 1001, within the exact owned dialog only.
+It briefly waits for controls to initialize and reports class/ID inventory if
+none is found. Exact cross-process filename read-back uses timeout-bounded
+WM_GETTEXT instead of GetWindowText, which Microsoft documents cannot read
+another application's edit control. Every destination/content/overwrite
+assertion remains; no product code or release gate changes.
+
+References:
+- https://learn.microsoft.com/en-us/windows/win32/dlgbox/open-and-save-as-dialog-boxes
+- https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtextw
+
+Local PowerShell parse, C# compile, seven installer/lifecycle tests and workflow
+checks PASS. Actual native dialog regression awaits the next Fast CI. Installed
+Save matrix and new installer remain pending; do not claim native Save PASS.

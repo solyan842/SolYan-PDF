@@ -26,8 +26,10 @@ public static class StoolSaveDialog {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr h, int id);
   [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr h);
+  [DllImport("user32.dll")] static extern IntPtr GetParent(IntPtr h);
   [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h, uint m, IntPtr w, string l, uint flags, uint timeout, out IntPtr result);
+  [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadMessageTimeout(IntPtr h, uint m, IntPtr w, StringBuilder l, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   public static string Text(IntPtr h) { var b=new StringBuilder(32768); GetWindowText(h,b,b.Capacity); return b.ToString(); }
   static string Class(IntPtr h) { var b=new StringBuilder(256); GetClassName(h,b,b.Capacity); return b.ToString(); }
@@ -40,10 +42,29 @@ public static class StoolSaveDialog {
   }
   public static void Filename(IntPtr dialog,string path) {
     IntPtr edit=IntPtr.Zero;
-    EnumChildWindows(dialog,(h,p)=>{if(Class(h)=="Edit" && GetDlgCtrlID(h)==1001)edit=h; return true;},IntPtr.Zero);
-    if(edit==IntPtr.Zero)throw new Exception("Common dialog filename Edit 1001 not found");
+    var controls=new List<string>();
+    var deadline=DateTime.UtcNow.AddSeconds(3);
+    do {
+      controls.Clear();
+      EnumChildWindows(dialog,(h,p)=>{
+        string kind=Class(h); int id=GetDlgCtrlID(h); controls.Add(kind+":"+id);
+        if(kind!="Edit")return true;
+        // OPENFILENAME uses edt1 (0x480) or an edit inside cmb13 (0x47c).
+        // Newer common-dialog templates also expose filename Edit 1001.
+        bool filename=id==0x480 || id==1001;
+        for(var parent=GetParent(h);parent!=IntPtr.Zero && parent!=dialog;parent=GetParent(parent))
+          if(GetDlgCtrlID(parent)==0x47c)filename=true;
+        if(filename)edit=h; return true;
+      },IntPtr.Zero);
+      if(edit==IntPtr.Zero)System.Threading.Thread.Sleep(100);
+    } while(edit==IntPtr.Zero && DateTime.UtcNow<deadline);
+    if(edit==IntPtr.Zero)throw new Exception("Common dialog filename control not found; controls: "+String.Join(",",controls));
     IntPtr result;
-    if(SendMessageTimeout(edit,12,IntPtr.Zero,path,2,2000,out result)==IntPtr.Zero || Text(edit)!=path)
+    var actual=new StringBuilder(32768);
+    // GetWindowText cannot read a control owned by a different process.
+    // WM_GETTEXT is system-marshalled and bounded with the same timeout.
+    if(SendMessageTimeout(edit,12,IntPtr.Zero,path,2,2000,out result)==IntPtr.Zero ||
+       ReadMessageTimeout(edit,13,new IntPtr(actual.Capacity),actual,2,2000,out result)==IntPtr.Zero || actual.ToString()!=path)
       throw new Exception("Common dialog did not accept exact destination");
   }
   public static void Click(IntPtr dialog,int id) {
