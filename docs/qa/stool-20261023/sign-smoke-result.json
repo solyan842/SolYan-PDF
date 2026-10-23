@@ -1,0 +1,11 @@
+{
+  "engine": "pyHanko",
+  "unauthorized_health": 401,
+  "unauthorized_sign": 401,
+  "wrong_passphrase": 422,
+  "signed_pdf_bytes": 5656,
+  "signature_count": 1,
+  "cryptographically_valid": true,
+  "trusted": false,
+  "network_fetching": false
+}

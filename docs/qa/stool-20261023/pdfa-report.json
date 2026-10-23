@@ -1,0 +1,11 @@
+{
+  "scope": "production source route + real local engine; not native UI/installer acceptance",
+  "engine": "pdfa",
+  "cases": [
+    "real output content verified"
+  ],
+  "output_bytes": 4517,
+  "source_sha256_unchanged": true,
+  "status": "PASS",
+  "elapsed_seconds": 9.59
+}

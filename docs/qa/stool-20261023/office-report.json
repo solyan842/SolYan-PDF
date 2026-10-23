@@ -1,0 +1,11 @@
+{
+  "scope": "production source route + real local engine; not native UI/installer acceptance",
+  "engine": "office",
+  "cases": [
+    "real output content verified"
+  ],
+  "output_bytes": 25974,
+  "source_sha256_unchanged": true,
+  "status": "PASS",
+  "elapsed_seconds": 45.14
+}

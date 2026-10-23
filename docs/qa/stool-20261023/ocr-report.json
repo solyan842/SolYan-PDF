@@ -1,0 +1,13 @@
+{
+  "scope": "production source route + real local engine; not native UI/installer acceptance",
+  "engine": "ocr",
+  "cases": [
+    "health does not load OCR models",
+    "real output content verified"
+  ],
+  "recognized": "SOL YAN OCR TEST 12345",
+  "fallback_used": false,
+  "source_sha256_unchanged": true,
+  "status": "PASS",
+  "elapsed_seconds": 82.14
+}
