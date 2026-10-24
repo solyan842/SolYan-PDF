@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "scope": "Normal title-bar Close, Core/archive process pairs present in this session",
+  "owned_pids": [
+    31016,
+    46856,
+    39740,
+    41944
+  ],
+  "remaining": [],
+  "forced_termination": false
+}

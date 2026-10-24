@@ -1,5 +1,5 @@
 {
-  "status": "PARTIAL",
+  "status": "PASS_RECORDED_NATIVE_CASES",
   "application_sha256": "76cd15ebd7bd1c8492f88cd588419eb1517246e9959172bc7e86915d886bc74e",
   "application_bytes": 13314048,
   "scope": "Current native Tauri debug app with reused frozen installed sidecars; actual Windows UI. Not NSIS acceptance.",
@@ -10,12 +10,12 @@
     "OCR: frozen PaddleOCR, recognized SOL YAN OCR TEST 12345 without fallback; native TXT Save and content verified",
     "Office: frozen LibreOffice RTF to one-page PDF; native Save and SOLYAN OFFICE TEST 12345 verified",
     "Signing: frozen pyHanko; native Save; one intact cryptographically valid signature; synthetic certificate correctly untrusted",
-    "PDF/A conversion UI reported success before session ended; output not yet saved"
+    "PDF/A: frozen archive engine, native Windows Save to exact path; one-page readback, Metadata/OutputIntents; source unchanged",
+    "Normal title-bar Close: current Core/archive parent-worker pairs exited, no forced termination"
   ],
   "pending": [
-    "PDF/A native Save and readback",
-    "Normal application close and owned-process cleanup",
-    "Installer install/uninstall acceptance for next candidate"
+    "Installer install/uninstall acceptance for next candidate",
+    "Full five-engine simultaneous normal-close acceptance and failure-recovery matrix remain separate from recorded happy paths"
   ],
   "source_hashes_unchanged": true,
   "outputs": [
@@ -43,6 +43,11 @@
       "file": "native-sign-output.pdf",
       "bytes": 5656,
       "sha256": "4efb1bb2383c5573668c35e962dcebc3f49edd7cc54d7be87f1b6701fa37b33e"
+    },
+    {
+      "file": "native-pdfa-output.pdf",
+      "bytes": 4517,
+      "sha256": "df97c1433780c661c13132aba02c5520c4f35d0175351dc352579462a47a63b9"
     }
   ],
   "sign_validation": {
@@ -58,7 +63,20 @@
     "normal_close_not_proven": true,
     "pdfa_file_absent": true,
     "new_demo_window_id": 4065884,
-    "blocker": "Windows capture black; coordinate geometry unavailable; activation failed after one recovery. Await visible unlocked desktop."
+    "blocker": null,
+    "resolved": "Desktop visible after user unlock; PDF/A saved and normal Close checked"
   },
-  "ci": "No new build or functional CI launched."
+  "ci": "No new build or functional CI launched.",
+  "normal_close": {
+    "status": "PASS",
+    "scope": "Normal title-bar Close, Core/archive process pairs present in this session",
+    "owned_pids": [
+      31016,
+      46856,
+      39740,
+      41944
+    ],
+    "remaining": [],
+    "forced_termination": false
+  }
 }

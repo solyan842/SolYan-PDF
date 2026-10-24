@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "scope": "native Save readback and existing structural gate, not external full PDF-A validation",
+  "pages": 1,
+  "metadata": true,
+  "output_intents": true,
+  "source_unchanged": true,
+  "bytes": 4517,
+  "sha256": "df97c1433780c661c13132aba02c5520c4f35d0175351dc352579462a47a63b9"
+}
