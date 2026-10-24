@@ -1,0 +1,64 @@
+{
+  "status": "PARTIAL",
+  "application_sha256": "76cd15ebd7bd1c8492f88cd588419eb1517246e9959172bc7e86915d886bc74e",
+  "application_bytes": 13314048,
+  "scope": "Current native Tauri debug app with reused frozen installed sidecars; actual Windows UI. Not NSIS acceptance.",
+  "completed": [
+    "Home responsive, no sidecar before tool execution; search and Ctrl+K",
+    "PDF to TXT: frozen Core, native Windows Save, exact path and expected text",
+    "PDF to CBZ: reused Core, native Save; 12 ordered 625x625 PNGs and valid ZIP CRC",
+    "OCR: frozen PaddleOCR, recognized SOL YAN OCR TEST 12345 without fallback; native TXT Save and content verified",
+    "Office: frozen LibreOffice RTF to one-page PDF; native Save and SOLYAN OFFICE TEST 12345 verified",
+    "Signing: frozen pyHanko; native Save; one intact cryptographically valid signature; synthetic certificate correctly untrusted",
+    "PDF/A conversion UI reported success before session ended; output not yet saved"
+  ],
+  "pending": [
+    "PDF/A native Save and readback",
+    "Normal application close and owned-process cleanup",
+    "Installer install/uninstall acceptance for next candidate"
+  ],
+  "source_hashes_unchanged": true,
+  "outputs": [
+    {
+      "file": "native-demo-output.txt",
+      "bytes": 39,
+      "sha256": "ac4b955a81bdda0ebc00ed4592d8c8ecf9becdf571386d80d1ee5017c46ec09d"
+    },
+    {
+      "file": "native-demo-output.cbz",
+      "bytes": 62815,
+      "sha256": "ee11f1776773e63b1c5b39587372aa44f84678af8a2c95a26162573da9368749"
+    },
+    {
+      "file": "native-ocr-output.txt",
+      "bytes": 22,
+      "sha256": "cd94260d122ed602997371c9c0469bf8e8abe5fde06d4a8d4a20174a5c38aadc"
+    },
+    {
+      "file": "native-office-output.pdf",
+      "bytes": 25974,
+      "sha256": "c25164fa940a16156b83116f3d3f525201248fdc927bb9cc54481e972646d18b"
+    },
+    {
+      "file": "native-sign-output.pdf",
+      "bytes": 5656,
+      "sha256": "4efb1bb2383c5573668c35e962dcebc3f49edd7cc54d7be87f1b6701fa37b33e"
+    }
+  ],
+  "sign_validation": {
+    "intact": true,
+    "cryptographically_valid": true,
+    "trusted": false,
+    "network_fetching": false,
+    "trust_scope": "Explicit empty roots for offline cryptographic check: restricted token denied system certificate store. Native production signing succeeded."
+  },
+  "resume_20261024": {
+    "previous_demo_window_gone": true,
+    "no_engine_processes_observed": true,
+    "normal_close_not_proven": true,
+    "pdfa_file_absent": true,
+    "new_demo_window_id": 4065884,
+    "blocker": "Windows capture black; coordinate geometry unavailable; activation failed after one recovery. Await visible unlocked desktop."
+  },
+  "ci": "No new build or functional CI launched."
+}
