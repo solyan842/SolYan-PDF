@@ -1,0 +1,21 @@
+{
+  "run": 40055090631,
+  "number": 9,
+  "status": "completed",
+  "conclusion": "success",
+  "source_commit": "6bb5a26c3a8c6890cd051ff75175e9a9d6372e7f",
+  "branch": "build/windows-stool-demo-20261023-save",
+  "installer": {
+    "artifact_id": 12545369569,
+    "artifact_zip_bytes": 885355797,
+    "artifact_url": "https://github.com/solyan842/SolYan-PDF/actions/runs/40055090631/artifacts/12545369569",
+    "name": "SolYan PDF_0.1.0_x64-setup.exe",
+    "bytes": 885104837,
+    "sha256": "890b0ca21a4bead7562d7dc9aef0aadf2cf4ad0724b10287c9037133e0be056b"
+  },
+  "manifest_downloaded_and_read": true,
+  "scope": "packaging-only",
+  "release_accepted": false,
+  "functional_acceptance": "native local cases recorded separately; next candidate install/uninstall not yet run",
+  "blocker": "GitHub connector artifact limit 536870912 bytes; exact installer artifact is 885355797 bytes. In-app browser GitHub is signed out. Requires download through user's signed-in GitHub browser or explicit GitHub CLI credentials; do not rebuild or split package as a workaround."
+}
