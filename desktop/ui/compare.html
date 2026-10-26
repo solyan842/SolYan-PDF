@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>So sánh PDF — SolYan PDF</title>
+  <link rel="stylesheet" href="./tool.css">
+  <link rel="stylesheet" href="./compare.css">
+</head>
+<body class="tool-shell">
+  <div class="tool-layout">
+    <aside class="tool-sidebar">
+      <a class="back-link" href="./index.html">← Trang chủ</a>
+      <div class="desktop-brand">SolYan PDF</div>
+      <p class="desktop-subtitle">Windows Desktop</p>
+      <hr class="tool-divider">
+      <div class="sidebar-links">Sắp xếp PDF<br>Chuyển đổi<br>Chỉnh sửa<br>Bảo mật<br>OCR &amp; Scan<br>Tiện ích Việt Nam</div>
+    </aside>
+    <main class="tool-main">
+      <div class="tool-top"><a class="back-link" href="./index.html">Công cụ › So sánh PDF</a><span class="muted-small">Local · Poppler</span></div>
+      <div class="tool-title">
+        <div class="big-icon info-icon"><img class="tool-svg" src="./icons/phosphor-duotone/arrows-left-right-duotone.svg" alt="" aria-hidden="true"></div>
+        <div><h1>So sánh PDF</h1><p>Đối chiếu văn bản và hình ảnh theo từng trang ngay trên máy. Tệp nguồn không bị thay đổi.</p></div>
+      </div>
+      <div class="compare-layout">
+        <section class="surface">
+          <div class="compare-pickers">
+            <label class="field"><span>PDF A</span><input id="leftFile" class="tool-input" type="file" accept="application/pdf,.pdf"><small id="leftName">Chưa chọn tệp</small></label>
+            <label class="field"><span>PDF B</span><input id="rightFile" class="tool-input" type="file" accept="application/pdf,.pdf"><small id="rightName">Chưa chọn tệp</small></label>
+          </div>
+          <p class="local-note">Tối đa 100 trang và 100 MB cho mỗi tài liệu. Phần hiển thị ảnh được thu nhỏ để so sánh nhanh.</p>
+          <button id="runBtn" class="primary merge-btn" type="button" disabled>So sánh hai PDF →</button>
+          <p id="status" class="status-text">Chọn hai tệp PDF để bắt đầu.</p>
+        </section>
+        <section id="result" class="surface compare-result" hidden>
+          <div class="compare-summary">
+            <article class="summary-card"><strong id="leftPages">—</strong><span id="leftSummary">PDF A</span></article>
+            <article class="summary-card"><strong id="rightPages">—</strong><span id="rightSummary">PDF B</span></article>
+            <article class="summary-card"><strong id="similarity">—</strong><span>Tương đồng hình ảnh trung bình</span></article>
+            <article class="summary-card"><strong id="textCounts">—</strong><span>Dòng thêm / xóa</span></article>
+          </div>
+          <p id="pageCountWarning" class="local-note" hidden>Hai tài liệu có số trang khác nhau. So sánh hình ảnh chỉ tính các trang cùng số thứ tự có mặt ở cả hai tệp.</p>
+          <div><h2>So sánh theo trang</h2><div id="pageResults" class="compare-pages"></div></div>
+          <div><h2>Khác biệt văn bản</h2><div id="textChanges" class="diff-box"></div></div>
+          <p id="truncatedNotice" class="local-note" hidden>Đã giới hạn phần hiển thị khác biệt ở 300 dòng.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="./icons.js"></script>
+  <script src="./compare.js"></script>
+</body>
+</html>

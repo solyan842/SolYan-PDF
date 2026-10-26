@@ -55,6 +55,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s desktop/backend/tests -p test_core_runner_cors.py -v 2>&1 | Tee-Object artifacts/stool-cors-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest desktop.backend.tests.test_pdf_compare -v 2>&1 | Tee-Object artifacts/stool-pdf-compare-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check sTool cold-start and service mapping contracts
         shell: pwsh
         run: |
@@ -125,6 +127,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/workflow.browser.mjs 2>&1 | Tee-Object artifacts/stool-workflow-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/compare.browser.mjs 2>&1 | Tee-Object artifacts/stool-compare-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check UI contracts, not the Reader build
         shell: pwsh
         run: |
@@ -160,4 +164,3 @@ jobs:
           name: stool-fast-diagnostics
           path: artifacts/stool-*.log
           if-no-files-found: warn
-

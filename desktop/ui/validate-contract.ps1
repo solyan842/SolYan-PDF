@@ -10,7 +10,7 @@ $required = @(
   "desktop/ui/transform.html", "desktop/ui/transform.js", "desktop/ui/security-transform.html", "desktop/ui/security-transform.js",
   "desktop/ui/remove-signature.html", "desktop/ui/remove-signature.js", "desktop/ui/permissions.html", "desktop/ui/permissions.js",
   "desktop/ui/remove-annotations.html", "desktop/ui/remove-annotations.js", "desktop/ui/unlock-forms.html", "desktop/ui/unlock-forms.js",
-  "desktop/ui/remove-blank.html", "desktop/ui/remove-blank.js", "desktop/ui/page-labels.html", "desktop/ui/page-labels.js", "desktop/ui/bookmarks.html", "desktop/ui/bookmarks.js", "desktop/ui/bookmarks-core.js", "desktop/ui/split-bookmarks.html", "desktop/ui/split-bookmarks.js", "desktop/ui/bookmark-tools.css", "desktop/stool-tests/bookmarks.browser.mjs", "desktop/ui/workflow.html", "desktop/ui/workflow.js", "desktop/stool-tests/workflow.browser.mjs",
+  "desktop/ui/remove-blank.html", "desktop/ui/remove-blank.js", "desktop/ui/page-labels.html", "desktop/ui/page-labels.js", "desktop/ui/bookmarks.html", "desktop/ui/bookmarks.js", "desktop/ui/bookmarks-core.js", "desktop/ui/split-bookmarks.html", "desktop/ui/split-bookmarks.js", "desktop/ui/bookmark-tools.css", "desktop/stool-tests/bookmarks.browser.mjs", "desktop/ui/workflow.html", "desktop/ui/workflow.js", "desktop/stool-tests/workflow.browser.mjs", "desktop/ui/compare.html", "desktop/ui/compare.js", "desktop/ui/compare.css", "desktop/stool-tests/compare.browser.mjs", "desktop/backend/tests/test_pdf_compare.py", "backend/app/pdf_compare.py",
   "desktop/ui/poppler-convert.html", "desktop/ui/poppler-convert.js", "desktop/stool-tests/pdf-images.browser.mjs", "desktop/ui/network-tool.html", "desktop/ui/network-tool.js", "desktop/stool-tests/network-tools.browser.mjs", "desktop/backend/tests/test_network_ping.py", "backend/app/network_command.py", "desktop/ui/office-convert.html", "desktop/ui/office-convert.js",
   "desktop/ui/portfolio.html", "desktop/ui/portfolio.js", "desktop/ui/workspace.html", "desktop/ui/page-tools.html", "desktop/ui/page-tools.js", "desktop/ui/page-layout.html", "desktop/ui/page-layout.js", "desktop/ui/stamp.html", "desktop/ui/stamp.js", "desktop/ui/image-to-pdf.html", "desktop/ui/image-to-pdf.js", "desktop/ui/utilities.html", "desktop/ui/utility-tools.js", "desktop/ui/form-fill.html", "desktop/ui/form-fill.js", "desktop/ui/overlay.html", "desktop/ui/overlay.js", "desktop/stool-tests/page-layout.browser.mjs", "desktop/stool-tests/stamp.browser.mjs",
   "desktop/ui/ocr.html", "desktop/ui/ocr.js", "desktop/ui/ocr.css", "desktop/ui/ocr-tools.html", "desktop/ui/ocr-tools.js", "desktop/stool-tests/ocr-tools.browser.mjs", "desktop/stool-tests/ocr-export.browser.mjs",
@@ -31,7 +31,7 @@ if ($iconBytes.Length -lt 6 -or $iconBytes[0] -ne 0 -or $iconBytes[1] -ne 0 -or 
 $html = Get-Content "desktop/ui/index.html" -Raw
 $catalog = (Get-Content "desktop/ui/catalog.js" -Raw) + (Get-Content "desktop/ui/catalog-additions.js" -Raw)
 $app = Get-Content "desktop/ui/app.js" -Raw
-$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'workflow':", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "ping:", "ranking:", "ip:", "'fill-form':", "overlay:", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "'bookmarks':", "'split-bookmark':", "'auto-rotate':", "'qr-split':", "'pdf-excel':", "'scan-table':", "orientation:", "'layout-analysis':", "watermark:", "stamp:")
+$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'workflow':", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "ping:", "ranking:", "ip:", "'fill-form':", "overlay:", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "'bookmarks':", "'split-bookmark':", "'auto-rotate':", "'qr-split':", "'pdf-excel':", "'scan-table':", "orientation:", "'layout-analysis':", "watermark:", "stamp:", "compare:")
 foreach ($route in $requiredRoutes) { if (-not $app.Contains($route)) { throw "Missing sTool UI route: $route" } }
 $scripts = @{
   repair = Get-Content "desktop/ui/repair.js" -Raw
@@ -57,6 +57,7 @@ $scripts = @{
   ocr = Get-Content "desktop/ui/ocr.js" -Raw
   ocrTools = Get-Content "desktop/ui/ocr-tools.js" -Raw
   network = Get-Content "desktop/ui/network-tool.js" -Raw
+  compare = Get-Content "desktop/ui/compare.js" -Raw
 }
 
 foreach ($text in @("Công cụ phổ biến", "Tất cả công cụ", "Ctrl K", "catalog-additions.js")) { if (-not $html.Contains($text)) { throw "Desktop UI contract missing: $text" } }
@@ -108,12 +109,12 @@ $contracts = @(
   @{ n='OCR PDF/Image'; s=$scripts.ocr; t=@('desktop_core_session','/ocr/text','X-SolYan-Desktop-Token','payload.text','SOLYAN_OUTPUT_NAME','renameOnly','auto-rename') },
   @{ n='Auto rotate, QR split and PDF to Excel'; s=$scripts.ocrTools; t=@('desktop_service_ready','/ocr/auto-rotate','/ocr/auto-split','/ocr/xlsx','/ocr/orientation','/ocr/structured','SOLYAN_OUTPUT_NAME_FROM_DISPOSITION','confidence_threshold','infer_undetected','duplex') },
   @{ n='Network utilities'; s=$scripts.network; t=@('desktop_core_session','/net/ping','/net/site-rank','/net/local-ip','X-SolYan-Desktop-Token') },
-  @{ n='PDF Portfolio'; s=$scripts.portfolio; t=@('desktop_core_session','/pdf/portfolio','X-SolYan-Desktop-Token','X-SolYan-Portfolio-Files') }
+  @{ n='PDF Portfolio'; s=$scripts.portfolio; t=@('desktop_core_session','/pdf/portfolio','X-SolYan-Desktop-Token','X-SolYan-Portfolio-Files') },
+  @{ n='PDF Compare'; s=$scripts.compare; t=@('desktop_core_session','/pdf/compare','X-SolYan-Desktop-Token','left','right','averageSimilarity') }
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html")
+$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"
-

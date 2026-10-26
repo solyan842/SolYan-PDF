@@ -24,6 +24,7 @@ from .office_proxy import router as office_router
 from .page_labels import router as page_labels_router
 from .pdf_info import router as pdf_info_router
 from .pdf_to_cbz import router as pdf_to_cbz_router
+from .pdf_compare import router as pdf_compare_router
 from .pdf_to_csv import router as pdf_to_csv_router
 from .pdf_to_html import router as pdf_to_html_router
 from .pdf_to_markdown import router as pdf_to_markdown_router
@@ -150,6 +151,7 @@ app.include_router(active_content_router)
 app.include_router(page_labels_router)
 app.include_router(pdf_info_router)
 app.include_router(pdf_to_cbz_router)
+app.include_router(pdf_compare_router)
 app.include_router(pdf_to_csv_router)
 app.include_router(pdf_to_html_router)
 app.include_router(pdf_to_markdown_router)

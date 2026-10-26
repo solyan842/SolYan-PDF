@@ -1,0 +1,14 @@
+.compare-layout{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+.compare-pickers{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:18px}
+.compare-pickers .field{display:grid;gap:8px;color:var(--text-secondary,#667085);font-size:13px}
+.compare-pickers input{max-width:100%;padding:9px}
+.compare-pickers small{overflow-wrap:anywhere;color:var(--text-secondary,#667085)}
+.compare-summary{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:24px}
+.compare-pages{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:12px 0 22px}
+.compare-page{display:grid;gap:5px;border:1px solid var(--border,#e4e7ec);border-radius:10px;padding:12px}
+.compare-page strong{font-size:14px}.compare-page span{font-weight:650}.compare-page small{color:var(--text-secondary,#667085)}
+.compare-page.good span{color:var(--success,#16804a)}.compare-page.warn span{color:var(--warning,#b54708)}.compare-page.bad span{color:var(--danger,#b42318)}
+.compare-result>div+div{margin-top:18px}.compare-result h2{font-size:16px;margin:0 0 10px}
+.compare-result .diff-box{max-height:460px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.diff-line{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:4px 8px}.diff-line.added{background:#ecfdf3;color:#067647}.diff-line.removed{background:#fef3f2;color:#b42318}
+@media(max-width:760px){.compare-pickers,.compare-summary{grid-template-columns:1fr 1fr}}
