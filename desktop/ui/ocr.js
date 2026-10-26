@@ -116,7 +116,7 @@
     if (renameOnly) {
       const suggestion = result.split(/\r?\n/).map(line => line.replace(/\s+/g, ' ').trim()).find(line => line.length >= 2) || '';
       const base = suggestion.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100).replace(/[ .]+$/, '');
-      name = \`\${base || 'Tai lieu'}.pdf\`;
+      name = `${base || 'Tai lieu'}.pdf`;
       blob = selected;
     } else {
       name = window.SOLYAN_OUTPUT_NAME(selected.name, 'ocr', '.txt');
