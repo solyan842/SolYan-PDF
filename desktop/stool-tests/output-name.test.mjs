@@ -40,4 +40,5 @@ test('keeps meaningful server filenames and decodes UTF-8 Content-Disposition', 
 
 test('uses the selected source name for generic SolYan engine output names', () => {
   assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('attachment; filename="solyan-auto-split.zip"', 'Batch Scan.pdf', 'qr-split', '.zip'), 'Batch Scan-qr-split.zip');
+  assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('attachment; filename="solyan-ocr.xlsx"', 'Bảng dữ liệu.pdf', 'excel', '.xlsx'), 'Bảng dữ liệu-excel.xlsx');
 });
