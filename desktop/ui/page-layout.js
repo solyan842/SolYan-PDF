@@ -12,7 +12,7 @@ const config={
 const cfg=config[mode],input=$('fileInput'),run=$('run'),status=$('status'),selected=$('selected'),pick=$('pick'),clear=$('clear');
 let file=null,bytes=null,count=0,busy=false,loading=false;
 if(!cfg){$('title').textContent='Công cụ chưa khả dụng';$('description').textContent='Chế độ bố cục không hợp lệ.';return}
-document.title=cfg.title+' — SolYan PDF';$('title').textContent=cfg.title;$('description').textContent=cfg.description;
+document.title=cfg.title+' — SolYan PDF';$('title').textContent=cfg.title;$('description').textContent=cfg.description;$('toolIcon').innerHTML=window.SOLYAN_PHOSPHOR.tool(mode,'organize');
 for(const id of ['split','sections','resize','long','nup','booklet'])$(id+'Group').hidden=cfg.group!==id;
 function say(text,kind=''){status.textContent=text;status.className='status-text'+(kind?' '+kind:'')}
 function update(){run.disabled=!file||busy||loading;pick.disabled=busy||loading;clear.disabled=busy||loading}

@@ -6,8 +6,11 @@ import assert from 'node:assert/strict';
 
 const ui=new URL('../ui/',import.meta.url),assets=new Map();
 for(const path of ['page-layout.html','page-layout.js','tool.css','output-name.js','output-save.js'])assets.set('/'+path,await readFile(new URL(path,ui)));
+const iconNames=['arrows-split','grid-four','resize','article','squares-four','book-open'];
+assets.set('/icons.js',await readFile(new URL('icons.js',ui)));
+for(const name of iconNames)assets.set('/icons/phosphor-duotone/'+name+'-duotone.svg',await readFile(new URL('icons/phosphor-duotone/'+name+'-duotone.svg',ui)));
 assets.set('/vendor/pdf-lib.min.js',await readFile(new URL('vendor/pdf-lib.min.js',ui)));
-const server=createServer((req,res)=>{const path=new URL(req.url,'http://localhost').pathname,body=assets.get(path);res.writeHead(body?200:404,{'Content-Type':path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript','Content-Security-Policy':"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'"});res.end(body||'not found')});
+const server=createServer((req,res)=>{const path=new URL(req.url,'http://localhost').pathname,body=assets.get(path);res.writeHead(body?200:404,{'Content-Type':path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':path.endsWith('.svg')?'image/svg+xml':'text/javascript','Content-Security-Policy':"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'"});res.end(body||'not found')});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({channel:process.env.STOOL_BROWSER_CHANNEL||undefined});
 try{
@@ -28,6 +31,7 @@ try{
   console.log(JSON.stringify({tool:test.tool,phase:'start'}));
   const page=await browser.newPage();await page.addInitScript(()=>{window.saved=[];window.__TAURI__={core:{invoke:async(command,args)=>{if(command!=='stool_save_output')throw Error(command);window.saved.push(args);return 'C:\\QA\\'+args.name}}}});
   await page.goto('http://127.0.0.1:'+server.address().port+'/page-layout.html?tool='+test.tool);await page.waitForFunction(()=>window.PDFLib?.PDFDocument);
+  const slug={ 'advanced-split':'arrows-split','split-sections':'grid-four',resize:'resize','long-page':'article',nup:'squares-four',booklet:'book-open'}[test.tool];await page.waitForFunction(()=>document.querySelector('#toolIcon img')?.complete&&document.querySelector('#toolIcon img')?.naturalWidth>0);assert.equal(await page.locator('#toolIcon img').getAttribute('src'),'./icons/phosphor-duotone/'+slug+'-duotone.svg');
   await page.locator('#fileInput').setInputFiles({name:'layout.pdf',mimeType:'application/pdf',buffer:fixtures});await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Sẵn sàng xử lý'));
   await test.configure(page);await page.locator('#run').click();try{await page.waitForFunction(n=>document.querySelectorAll('#output-results .output-result').length===n,test.expectedCount,{timeout:10000})}catch(error){throw Error(test.tool+' did not create results; status='+await page.locator('#status').textContent()+': '+error.message)}
   const outputs=[];for(let i=0;i<test.expectedCount;i++){await page.locator('.output-result').nth(i).locator('.output-save').click();await page.waitForFunction(n=>window.saved.length===n,i+1);outputs.push(await page.evaluate(i=>window.saved[i],i))}
