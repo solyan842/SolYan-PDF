@@ -43,7 +43,7 @@ public static class StoolSaveDialog {
     for(int i=0;i<12 && h!=IntPtr.Zero;i++){h=GetWindow(h,4); if(h==owner)return true;} return false;
   }
   public static void Filename(IntPtr dialog,string path) {
-    IntPtr edit=IntPtr.Zero,combo=IntPtr.Zero; int editId=0;
+    IntPtr edit=IntPtr.Zero; int editId=0;
     var controls=new List<string>();
     var deadline=DateTime.UtcNow.AddSeconds(3);
     do {
@@ -53,31 +53,27 @@ public static class StoolSaveDialog {
         if(kind!="Edit")return true;
         // OPENFILENAME uses edt1 (0x480) or an edit inside cmb13 (0x47c).
         // Newer common-dialog templates also expose filename Edit 1001.
-        bool filename=id==0x480 || id==1001; IntPtr filenameCombo=IntPtr.Zero;
+        bool filename=id==0x480 || id==1001;
         for(var parent=GetParent(h);parent!=IntPtr.Zero && parent!=dialog;parent=GetParent(parent))
-          if(GetDlgCtrlID(parent)==0x47c){filename=true;filenameCombo=parent;}
-        if(filename){edit=h;editId=id;combo=filenameCombo;} return true;
+          if(GetDlgCtrlID(parent)==0x47c)filename=true;
+        if(filename){edit=h;editId=id;} return true;
       },IntPtr.Zero);
       if(edit==IntPtr.Zero)System.Threading.Thread.Sleep(100);
     } while(edit==IntPtr.Zero && DateTime.UtcNow<deadline);
     if(edit==IntPtr.Zero)throw new Exception("Common dialog filename control not found; controls: "+String.Join(",",controls));
     IntPtr result;
+    // Use the common-dialog API so the dialog updates its parsed path state,
+    // not only the visible edit text.
+    if(SendMessageTimeout(dialog,0x0468,new IntPtr(editId),path,2,2000,out result)==IntPtr.Zero)
+      throw new Exception("Common dialog did not accept filename control update");
     var actual=new StringBuilder(32768);
-    // GetWindowText cannot read a control owned by a different process.
-    // WM_GETTEXT is system-marshalled and bounded with the same timeout.
-    if(SendMessageTimeout(edit,12,IntPtr.Zero,path,2,2000,out result)==IntPtr.Zero ||
-       ReadMessageTimeout(edit,13,new IntPtr(actual.Capacity),actual,2,2000,out result)==IntPtr.Zero || actual.ToString()!=path)
-      throw new Exception("Common dialog did not accept exact destination");
-    // WM_SETTEXT changes the edit's displayed value but does not produce the
-    // user-edit notifications consumed by the common dialog to resolve a path.
-    IntPtr notification=new IntPtr(((0x0300 & 0xffff)<<16)|(editId & 0xffff));
-    if(SendNotificationTimeout(dialog,273,notification,edit,2,2000,out result)==IntPtr.Zero)
-      throw new Exception("Common dialog did not process filename edit notification");
-    if(combo!=IntPtr.Zero){
-      notification=new IntPtr(((5 & 0xffff)<<16)|(0x47c & 0xffff)); // CBN_EDITCHANGE
-      if(SendNotificationTimeout(dialog,273,notification,combo,2,2000,out result)==IntPtr.Zero)
-        throw new Exception("Common dialog did not process filename combo notification");
-    }
+    if(ReadMessageTimeout(edit,13,new IntPtr(actual.Capacity),actual,2,2000,out result)==IntPtr.Zero || actual.ToString()!=path)
+      throw new Exception("Common dialog filename field differs from exact destination");
+    var resolved=new StringBuilder(32768);
+    if(ReadMessageTimeout(dialog,0x0465,new IntPtr(resolved.Capacity),resolved,2,2000,out result)==IntPtr.Zero)
+      throw new Exception("Common dialog could not resolve the selected file path");
+    if(!String.Equals(resolved.ToString(),path,StringComparison.OrdinalIgnoreCase))
+      throw new Exception("Common dialog resolved a different destination. Requested: "+path+"; resolved: "+resolved.ToString());
   }
     public static void Click(IntPtr dialog,int id) {
     var button=GetDlgItem(dialog,id); if(button==IntPtr.Zero)throw new Exception("Dialog button missing: "+id);
