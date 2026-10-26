@@ -1,4 +1,6 @@
 (() => {
+  const mode = new URLSearchParams(location.search).get('tool') || 'ocr-pdf';
+  const exportOnly = mode === 'ocr-export';
   const pickFile = document.getElementById('pickFile');
   const fileInput = document.getElementById('fileInput');
   const dropzone = document.getElementById('dropzone');
@@ -13,6 +15,13 @@
   const engineInfo = document.getElementById('engineInfo');
   const download = document.getElementById('downloadTxt');
   const allowed = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp', 'tif', 'tiff', 'bmp']);
+  const title = document.getElementById('ocrTitle');
+  const description = document.getElementById('ocrDescription');
+  document.title = exportOnly ? 'Xuất kết quả OCR — SolYan PDF' : 'Nhận dạng OCR — SolYan PDF';
+  title.textContent = exportOnly ? 'Xuất kết quả OCR' : 'OCR PDF và ảnh';
+  description.textContent = exportOnly ? 'Nhận dạng văn bản tiếng Việt/Anh rồi lưu nội dung TXT theo tên tài liệu gốc.' : 'Nhận dạng văn bản tiếng Việt/Anh, xem trước rồi lưu thành TXT.';
+  document.getElementById('toolIcon').innerHTML = window.SOLYAN_PHOSPHOR.tool(exportOnly ? 'ocr-export' : 'ocr-pdf', 'ocr');
+  if (exportOnly) document.getElementById('runOcr').textContent = 'Nhận dạng và xuất TXT →';
   let selected = null;
   let result = '';
 
@@ -101,7 +110,7 @@
 
   function downloadTxt() {
     if (!selected || !result) return;
-    const name = (selected.name.replace(/\.[^.]+$/, '') || 'solyan-ocr').replace(/[\\/:*?"<>|]/g, '-') + '-ocr.txt';
+    const name = window.SOLYAN_OUTPUT_NAME(selected.name, 'ocr', '.txt');
     const url = URL.createObjectURL(new Blob([result], {type: 'text/plain;charset=utf-8'}));
     const link = document.createElement('a');
     link.href = url;

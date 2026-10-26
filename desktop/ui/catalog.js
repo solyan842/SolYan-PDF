@@ -66,7 +66,7 @@ window.SOLYAN_TOOL_CATALOG = {
     { id:"ocr-image", name:"OCR ảnh", desc:"Nhận dạng chữ từ JPG/PNG và ảnh scan", category:"ocr", icon:"⌗", tone:"purple" },
     { id:"scan-table", name:"Bảng scan sang Excel", desc:"PP-StructureV3 nhận diện bảng và xuất XLSX", category:"ocr", icon:"X", tone:"green" },
     { id:"layout-analysis", name:"Phân tích bố cục", desc:"Nhận diện layout, bảng và thứ tự đọc", category:"ocr", icon:"▦", tone:"blue" },
-    { id:"ocr-export", name:"Xuất kết quả OCR", desc:"Xuất TXT, Markdown hoặc JSON", category:"ocr", icon:"↥", tone:"blue" },
+    { id:"ocr-export", name:"Xuất kết quả OCR", desc:"Nhận dạng và lưu nội dung thành TXT theo tên tệp gốc", category:"ocr", icon:"↥", tone:"blue" },
     { id:"orientation", name:"Nhận diện hướng trang", desc:"Tesseract OSD phân tích hướng trang scan", category:"ocr", icon:"↻", tone:"cyan" },
 
     { id:"protect", name:"Bảo vệ PDF", desc:"Mã hóa AES-256 và đặt mật khẩu", category:"security", icon:"♢", tone:"blue" },
