@@ -3,6 +3,10 @@ name: Windows sTool Existing Installer Acceptance
 # Optional release/integration gate. Reuse a packaged candidate: never rebuild
 # engines/models/NSIS just to rerun a test or repair its driver.
 on:
+  push:
+    branches:
+      - 'test/stool-installer9-acceptance'
+      - 'test/stool-installer10-acceptance'
   workflow_dispatch:
     inputs:
       installer_run_id:
@@ -23,7 +27,7 @@ jobs:
         id: candidate
         uses: actions/github-script@v7
         env:
-          CANDIDATE_RUN: ${{ inputs.installer_run_id }}
+          CANDIDATE_RUN: ${{ inputs.installer_run_id || '40340094919' }}
         with:
           script: |
             if (!/^\d+$/.test(process.env.CANDIDATE_RUN)) throw new Error('Numeric run ID required');
@@ -54,14 +58,14 @@ jobs:
         with:
           name: sTool-PDF-Windows-x64
           path: desktop/src-tauri/target/release/bundle/nsis
-          run-id: ${{ inputs.installer_run_id }}
+          run-id: ${{ inputs.installer_run_id || '40340094919' }}
           github-token: ${{ github.token }}
       - name: Download candidate checksum identity
         uses: actions/download-artifact@v4
         with:
           name: sTool-PDF-Windows-package-manifest
           path: candidate-manifest
-          run-id: ${{ inputs.installer_run_id }}
+          run-id: ${{ inputs.installer_run_id || '40340094919' }}
           github-token: ${{ github.token }}
       - name: Verify installer bytes against candidate source
         shell: pwsh

@@ -115,7 +115,7 @@ try{
   await go('transform.html?tool=compress');await page.locator('#fileInput').setInputFiles(join(fixtures,'source.pdf'));
   const firstResult=await produceNativeOutput(page,'#runBtn');
   await saveNativeResult(page,firstResult,null,{ownerPid:app.pid,action:'Cancel'});
-  await saveNativeResult(page,firstResult,join(out,'compressed.pdf'),{ownerPid:app.pid});
+  await saveNativeResult(page,firstResult,join(out,'compressed.pdf'),{ownerPid:app.pid,saveAs:true});
   await exec('python',['desktop/backend/tests/stool_fixtures.py','pdf',join(out,'compressed.pdf')],{windowsHide:true});
   await saveMatrix(firstResult);
   await roots(['core']);const coreBefore=(await inspect()).roots;
