@@ -9,18 +9,23 @@
     return base + (safeSuffix ? '-' + safeSuffix : '') + safeExtension;
   }
   function outputFilenameFromDisposition(contentDisposition, sourceName, suffix = '', extension = '.pdf') {
-    const header = String(contentDisposition || '');
-    const extended = header.match(/filename\\*\\s*=\\s*(?:UTF-8''|UTF-8'[^']*')?([^;]+)/i);
-    const basic = header.match(/filename\\s*=\\s*"([^"]*)"|filename\\s*=\\s*([^;\\s]+)/i);
+    const parts = String(contentDisposition || '').split(';').map(part => part.trim());
+    const extended = parts.find(part => part.toLowerCase().startsWith('filename*='));
+    const basic = parts.find(part => part.toLowerCase().startsWith('filename='));
     let candidate = '';
     if (extended) {
-      candidate = extended[1].trim().replace(/^"|"$/g, '');
+      candidate = extended.slice(10).trim();
+      const languageEnd = candidate.indexOf("''");
+      if (languageEnd >= 0) candidate = candidate.slice(languageEnd + 2);
+      if ((candidate.startsWith('"') && candidate.endsWith('"')) || (candidate.startsWith("'") && candidate.endsWith("'"))) candidate = candidate.slice(1, -1);
       try { candidate = decodeURIComponent(candidate); } catch (_) {}
     } else if (basic) {
-      candidate = (basic[1] || basic[2] || '').trim();
+      candidate = basic.slice(9).trim();
+      if ((candidate.startsWith('"') && candidate.endsWith('"')) || (candidate.startsWith("'") && candidate.endsWith("'"))) candidate = candidate.slice(1, -1);
     }
-    const leaf = candidate.split(/[\\\\/]/).pop() || '';
-    const stem = leaf.replace(/\\.[^.]*$/, '').trim();
+    const leaf = candidate.replaceAll(String.fromCharCode(92), '/').split('/').pop() || '';
+    const dot = leaf.lastIndexOf('.');
+    const stem = (dot > 0 ? leaf.slice(0, dot) : leaf).trim();
     if (!stem || /^(?:solyan(?:-converted)?|converted|output|document(?:-output)?)$/i.test(stem)) {
       return outputFilename(sourceName, suffix, extension);
     }
