@@ -98,6 +98,10 @@ jobs:
           Copy-Item desktop/stool-tests/node_modules/pdf-lib/dist/pdf-lib.min.js desktop/ui/vendor/pdf-lib.min.js
           $hash = (Get-FileHash desktop/ui/vendor/pdf-lib.min.js -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -ne '0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f') { throw 'Pinned pdf-lib bytes mismatch' }
+          & ./desktop/stool-tests/stage-pdfjs.ps1 2>&1 | Tee-Object artifacts/stool-pdfjs-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test desktop/stool-tests/visual-effects.test.mjs 2>&1 | Tee-Object artifacts/stool-visual-effects.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:STOOL_BROWSER_CHANNEL = 'msedge'
           node desktop/stool-tests/output-save.browser.mjs 2>&1 | Tee-Object artifacts/stool-save-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -128,6 +132,8 @@ jobs:
           node desktop/stool-tests/workflow.browser.mjs 2>&1 | Tee-Object artifacts/stool-workflow-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/compare.browser.mjs 2>&1 | Tee-Object artifacts/stool-compare-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/visual-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-visual-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check UI contracts, not the Reader build
         shell: pwsh

@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $required = @(
   "desktop/ui/index.html", "desktop/ui/styles.css", "desktop/ui/catalog.js", "desktop/ui/catalog-additions.js", "desktop/ui/app.js",
+  "desktop/ui/visual-tools.html", "desktop/ui/visual-tools.js", "desktop/ui/visual-tools.css", "desktop/ui/visual-effects.js", "desktop/stool-tests/visual-effects.test.mjs", "desktop/stool-tests/visual-tools.browser.mjs", "desktop/stool-tests/stage-pdfjs.ps1",
   "desktop/ui/merge.html", "desktop/ui/merge.js", "desktop/ui/repair.html", "desktop/ui/repair.js",
   "desktop/ui/extract-images.html", "desktop/ui/extract-images.js", "desktop/ui/info.html", "desktop/ui/info.js",
   "desktop/ui/active-content.html", "desktop/ui/active-content.js", "desktop/ui/attachments.html", "desktop/ui/attachments.js",
@@ -114,7 +115,7 @@ $contracts = @(
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html")
+$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html","desktop/ui/visual-tools.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"

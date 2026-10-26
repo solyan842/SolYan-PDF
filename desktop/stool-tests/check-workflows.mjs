@@ -23,4 +23,7 @@ const browserStep=fast.jobs['stool-fast'].steps.find(s=>s.name==='Test visible S
 assert.ok(browserStep,'Fast CI must retain the grouped installed-Edge browser checks');
 assert.match(browserStep.run,/node desktop\/stool-tests\/bookmarks\.browser\.mjs[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\r?\n\s*node desktop\/stool-tests\/workflow\.browser\.mjs/,'a failed bookmarks check must stop CI before the workflow check can overwrite its exit code');
 assert.match(browserStep.run,/node desktop\/stool-tests\/compare\.browser\.mjs[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}/,'a failed compare browser check must fail Fast CI');
+assert.match(browserStep.run,/node desktop\/stool-tests\/visual-tools\.browser\.mjs[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}/,'a failed visual tools browser check must fail Fast CI');
+assert.ok(browserStep.run.includes('stage-pdfjs.ps1'),'Fast CI must stage the integrity-pinned PDF.js runtime before the browser checks');
+assert.ok(steps.some(s=>s.run?.includes('stage-pdfjs.ps1')),'Installer must stage PDF.js for the packaged visual tools');
 console.log('Parsed workflow isolation, milestone triggers and durable diagnostics PASS');

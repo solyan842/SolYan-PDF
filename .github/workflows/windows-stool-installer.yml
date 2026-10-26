@@ -64,6 +64,8 @@ jobs:
           if (-not (Test-Path desktop/ui/vendor/pdf-lib.min.js)) { throw "pdf-lib browser bundle was not staged" }
           $bundleHash = (Get-FileHash desktop/ui/vendor/pdf-lib.min.js -Algorithm SHA256).Hash.ToLowerInvariant()
           "pdf-lib 1.17.1 $bundleHash" | Tee-Object -FilePath artifacts/desktop-pdf-lib.log
+          & ./desktop/stool-tests/stage-pdfjs.ps1 2>&1 | Tee-Object artifacts/desktop-pdfjs-stage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build local core and Office resources
         shell: pwsh

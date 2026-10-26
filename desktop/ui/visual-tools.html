@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Công cụ ảnh PDF — SolYan PDF</title>
+  <link rel="stylesheet" href="./tool.css">
+  <link rel="stylesheet" href="./visual-tools.css">
+</head>
+<body class="tool-shell">
+  <div class="tool-layout">
+    <aside class="tool-sidebar">
+      <a class="back-link" href="./index.html">← Trang chủ</a>
+      <div class="desktop-brand">SolYan PDF</div>
+      <p class="desktop-subtitle">Windows Desktop</p>
+      <hr class="tool-divider">
+      <div class="sidebar-links">Sắp xếp PDF<br>Chuyển đổi<br>Chỉnh sửa<br>Bảo mật<br>OCR &amp; Scan</div>
+    </aside>
+    <main class="tool-main">
+      <div class="tool-top"><a class="back-link" href="./index.html">Công cụ › <span id="crumbName">Xử lý ảnh PDF</span></a><span class="muted-small">Local · chỉ rasterize khi bạn bấm xử lý</span></div>
+      <div class="tool-title"><div id="toolIcon" class="big-icon" aria-hidden="true"></div><div><h1 id="toolName">Xử lý ảnh PDF</h1><p id="toolDesc"></p></div></div>
+      <div class="visual-layout">
+        <section class="surface visual-main">
+          <label class="visual-file"><span>Chọn PDF</span><input id="fileInput" type="file" accept="application/pdf,.pdf"><small id="fileLabel">Chưa chọn tệp</small></label>
+          <div id="colorOptions" class="visual-options" hidden>
+            <label class="option-group"><span>Chế độ màu</span><select id="colorMode" class="tool-input"><option value="invert">Đảo màu</option><option value="grayscale">Thang xám</option><option value="white-on-black">Chữ trắng · nền đen</option><option value="black-on-white">Chữ đen · nền trắng</option><option value="yellow-on-black">Chữ vàng · nền đen</option><option value="green-on-black">Chữ xanh · nền đen</option><option value="custom">Màu tùy chỉnh</option></select></label>
+            <label class="option-group"><span>Độ phân giải <b id="dpiLabel">150 DPI</b></span><input id="dpi" type="range" min="75" max="300" step="25" value="150"></label>
+            <label class="option-group"><span>Ngưỡng chuyển màu <b id="thresholdLabel">160</b></span><input id="threshold" type="range" min="0" max="255" step="1" value="160"></label>
+            <div id="customColors" class="color-pair" hidden><label class="option-group"><span>Màu chữ</span><input id="textColor" type="color" value="#ffffff"></label><label class="option-group"><span>Màu nền</span><input id="backgroundColor" type="color" value="#000000"></label></div>
+          </div>
+          <div id="scannerOptions" class="visual-options" hidden>
+            <label class="option-group"><span>Chất lượng</span><select id="quality" class="tool-input"><option value="high">Cao · 150 DPI</option><option value="medium">Vừa · 100 DPI</option><option value="low">Thấp · 75 DPI</option></select></label>
+            <label class="option-group"><span>Màu đầu ra</span><select id="colorspace" class="tool-input"><option value="grayscale">Thang xám</option><option value="color">Giữ màu</option></select></label>
+            <label class="option-group"><span>Độ lệch trang</span><select id="rotation" class="tool-input"><option value="none">Không lệch</option><option value="slight" selected>Nhẹ · ±2°</option><option value="moderate">Vừa · ±5°</option><option value="severe">Mạnh · ±8°</option></select></label>
+            <label class="option-group"><span>Viền scan <b id="borderLabel">20 px</b></span><input id="border" type="range" min="0" max="80" step="1" value="20"></label>
+            <label class="checkbox-option"><input id="yellowish" type="checkbox"><span>Giấy hơi ngả vàng</span></label>
+          </div>
+          <div id="rasterWarning" class="visual-warning">Đầu ra được raster hóa: không giữ chữ, vector, biểu mẫu hoặc chú thích tương tác. Tệp PDF nguồn không bị thay đổi.</div>
+          <button id="runBtn" class="primary visual-run" type="button" disabled></button>
+          <p id="status" class="status-text" role="status">Chọn PDF để bắt đầu.</p>
+          <progress id="progressBar" max="100" value="0" hidden></progress>
+        </section>
+        <aside class="surface options visual-aside"><h2>Giới hạn và lưu</h2><div class="local-note">Xử lý tuần tự trên thiết bị · tối đa 100 MB và 100 trang. Kết quả mang tên dựa trên PDF nguồn; chọn <b>Lưu</b> hoặc <b>Lưu thành</b> sau khi xử lý.</div><div class="local-note">Các trang đầu ra là ảnh ở độ phân giải đã chọn. Giảm DPI hoặc chia nhỏ tài liệu nếu vượt giới hạn pixel.</div></aside>
+      </div>
+    </main>
+  </div>
+  <script src="./icons.js"></script>
+  <script src="./vendor/pdf-lib.min.js"></script>
+  <script src="./output-name.js"></script>
+  <script src="./output-save.js"></script>
+  <script type="module" src="./visual-tools.js"></script>
+</body>
+</html>
