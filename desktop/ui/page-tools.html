@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Công cụ trang PDF — SolYan PDF</title>
+  <link rel="stylesheet" href="./tool.css">
+</head>
+<body class="tool-shell">
+  <div class="tool-layout">
+    <aside class="tool-sidebar">
+      <a class="back-link" href="./index.html">← Trang chủ</a>
+      <div class="desktop-brand">SolYan PDF</div>
+      <p class="desktop-subtitle">Windows Desktop</p>
+      <hr class="tool-divider">
+      <div class="sidebar-links">Sắp xếp PDF<br>Chuyển đổi<br>Chỉnh sửa<br>Bảo mật<br>OCR &amp; Scan<br>Cloud</div>
+    </aside>
+    <main class="tool-main">
+      <div class="tool-top"><a id="breadcrumb" class="back-link" href="./index.html">Công cụ</a><span class="muted-small">Xử lý cục bộ · PDF-lib</span></div>
+      <div class="tool-title"><div id="toolIcon" class="big-icon">▤</div><div><h1 id="toolTitle">Công cụ trang PDF</h1><p id="toolDescription"></p></div></div>
+      <div class="repair-layout">
+        <section class="surface">
+          <div id="dropzone" class="dropzone">
+            <div class="upload-icon">⇧</div><h2>Chọn tệp PDF</h2>
+            <p>Kéo PDF vào đây hoặc chọn từ máy tính.</p>
+            <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden>
+            <button id="pickFile" class="primary" type="button">＋ Chọn tệp PDF</button>
+            <div class="upload-helper">Tối đa 100 MB · PDF nguồn luôn giữ nguyên</div>
+          </div>
+          <div id="selectedFile" class="selected-file" hidden>
+            <div class="selected-file-icon">PDF</div>
+            <div class="selected-file-body"><strong id="fileName"></strong><span id="fileMeta"></span></div>
+            <button id="removeFile" class="secondary-button" type="button">Xóa</button>
+          </div>
+          <div id="result" class="active-report" hidden><div id="resultMessage" class="verdict-card clear"></div></div>
+        </section>
+        <aside class="surface options">
+          <h2 id="optionTitle">Tùy chọn</h2>
+          <div id="pageRangeGroup" class="option-group">
+            <label id="pageRangeLabel" for="pageRange">Trang cần xử lý</label>
+            <input id="pageRange" class="text-input" type="text" value="1" autocomplete="off">
+            <p id="pageRangeHint" class="option-note">Nhập trang như 1,3-5.</p>
+          </div>
+          <div id="orderGroup" class="option-group" hidden>
+            <label for="pageOrder">Thứ tự trang mới</label>
+            <input id="pageOrder" class="text-input" type="text" value="" autocomplete="off" placeholder="Ví dụ: 3,1,2">
+            <p class="option-note">Liệt kê mỗi trang đúng một lần, theo thứ tự muốn dùng.</p>
+          </div>
+          <div id="splitGroup" class="option-group" hidden>
+            <label for="pagesPerPart">Số trang mỗi tệp</label>
+            <input id="pagesPerPart" class="text-input" type="number" min="1" max="500" value="1">
+            <p class="option-note">Tối đa 20 tệp kết quả cho một lần chạy.</p>
+          </div>
+          <div id="rotationGroup" class="option-group" hidden>
+            <label for="rotation">Xoay thêm</label>
+            <select id="rotation" class="text-input"><option value="90">90° theo chiều kim đồng hồ</option><option value="180">180°</option><option value="270">270° theo chiều kim đồng hồ</option></select>
+          </div>
+          <button id="runBtn" class="primary merge-btn" type="button" disabled>Thực hiện →</button>
+          <p id="status" class="status-text" role="status">Chọn một tệp PDF để bắt đầu.</p>
+          <div id="operationNote" class="local-note"></div>
+        </aside>
+      </div>
+    </main>
+  </div>
+  <script src="./vendor/pdf-lib.min.js"></script>
+  <script src="./output-name.js"></script>
+  <script src="./output-save.js"></script>
+  <script src="./page-tools.js"></script>
+</body>
+</html>
+
+
+
