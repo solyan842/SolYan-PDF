@@ -26,5 +26,15 @@ try{
  const result=await page.evaluate(()=>({saved:window.saved[0],call:window.calls[0]}));
  assert.equal(Buffer.from(result.saved.bytes).toString(),'SOL YAN OCR TEST');assert.equal(result.call.url.endsWith('/ocr/text'),true);assert.equal(result.call.token,'local-token');assert.equal(result.call.name,'Báo cáo Scan.pdf');
  assert.ok(result.saved.sourceHashes.includes(createHash('sha256').update(bytes).digest('hex')));
- console.log(JSON.stringify({tool:'ocr-export',route:'/ocr/text',filename:'Báo cáo Scan-ocr.txt',saveControl:'PASS',sourceSha256Unchanged:true}));await page.close();
+ await page.goto('http://127.0.0.1:'+server.address().port+'/ocr.html?tool=auto-rename');
+ await page.locator('#fileInput').setInputFiles({name:'scan.pdf',mimeType:'application/pdf',buffer:bytes});
+ await page.locator('#runOcr').click();await page.waitForFunction(()=>document.querySelector('#resultPanel')&&!document.querySelector('#resultPanel').hidden);
+ await page.locator('#downloadTxt').click();await page.waitForFunction(()=>document.querySelector('#output-results .output-result'));
+ assert.equal(await page.locator('#output-results strong').textContent(),'SOL YAN OCR TEST.pdf');
+ await page.locator('.output-save').click();await page.waitForFunction(()=>window.saved.length===1);
+ const renamed=await page.evaluate(()=>window.saved[0]);
+ assert.deepEqual(Buffer.from(renamed.bytes),bytes);
+ assert.ok(renamed.sourceHashes.includes(createHash('sha256').update(bytes).digest('hex')));
+ console.log(JSON.stringify({tool:'ocr-export',route:'/ocr/text',filename:'Báo cáo Scan-ocr.txt',autoRename:'SOL YAN OCR TEST.pdf',saveControl:'PASS',sourceSha256Unchanged:true}));await page.close();
 }finally{await browser.close();server.close()}
+

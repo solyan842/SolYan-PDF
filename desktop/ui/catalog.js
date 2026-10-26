@@ -43,7 +43,7 @@ window.SOLYAN_TOOL_CATALOG = {
     { id:"stamp", name:"Đóng dấu", desc:"Đóng dấu chữ hoặc hình lên trang đã chọn", category:"edit", icon:"◇", tone:"red" },
     { id:"page-numbers", name:"Đánh số trang", desc:"Thêm số trang theo vị trí và định dạng", category:"edit", icon:"#", tone:"blue" },
     { id:"metadata", name:"Sửa thông tin PDF", desc:"Chỉnh title, author, subject và metadata", category:"edit", icon:"ⓘ", tone:"blue" },
-    { id:"auto-rename", name:"Tự đặt tên PDF", desc:"Gợi ý tên tệp từ nội dung PDF", category:"edit", icon:"Aa", tone:"purple" },
+    { id:"auto-rename", name:"Tự đặt tên PDF", desc:"OCR trang đầu và lưu bản PDF với tên được gợi ý", category:"edit", icon:"Aa", tone:"purple" },
     { id:"bookmarks", name:"Sửa Bookmark", desc:"Tạo, đổi tên và sắp xếp mục lục", category:"edit", icon:"🔖", tone:"blue" },
     { id:"fill-form", name:"Điền biểu mẫu PDF", desc:"Phát hiện và điền AcroForm", category:"edit", icon:"▤", tone:"green" },
     { id:"highlight", name:"Đánh dấu nội dung", desc:"Highlight và chú thích tài liệu", category:"edit", icon:"▰", tone:"amber" },
