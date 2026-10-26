@@ -37,3 +37,7 @@ test('replaces generic SolYan server filenames with the selected source basename
 test('keeps meaningful server filenames and decodes UTF-8 Content-Disposition', () => {
   assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION("attachment; filename*=UTF-8''H%E1%BB%93%20s%C6%A1%202026.pdf", 'source.docx', '', '.pdf'), 'Hồ sơ 2026.pdf');
 });
+
+test('uses the selected source name for generic SolYan engine output names', () => {
+  assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('attachment; filename="solyan-auto-split.zip"', 'Batch Scan.pdf', 'qr-split', '.zip'), 'Batch Scan-qr-split.zip');
+});

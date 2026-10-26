@@ -26,7 +26,7 @@
     const leaf = candidate.replaceAll(String.fromCharCode(92), '/').split('/').pop() || '';
     const dot = leaf.lastIndexOf('.');
     const stem = (dot > 0 ? leaf.slice(0, dot) : leaf).trim();
-    if (!stem || /^(?:solyan(?:-converted)?|converted|output|document(?:-output)?)$/i.test(stem)) {
+    if (!stem || /^(?:solyan(?:-[a-z0-9_-]+)?|converted|output|document(?:-output)?)$/i.test(stem)) {
       return outputFilename(sourceName, suffix, extension);
     }
     return outputFilename(leaf, '', extension);
