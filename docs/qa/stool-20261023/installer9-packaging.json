@@ -13,9 +13,18 @@
     "bytes": 885104837,
     "sha256": "890b0ca21a4bead7562d7dc9aef0aadf2cf4ad0724b10287c9037133e0be056b"
   },
-  "manifest_downloaded_and_read": true,
+  "local_verification": {
+    "download": "C:/Users/Admin/Downloads/sTool-PDF-Windows-x64.zip",
+    "archive_bytes": 885355797,
+    "embedded_installer_bytes": 885104837,
+    "embedded_installer_sha256": "890b0ca21a4bead7562d7dc9aef0aadf2cf4ad0724b10287c9037133e0be056b",
+    "manifest_match": true,
+    "extracted_to": "work/stool9-candidate/SolYan PDF_0.1.0_x64-setup.exe"
+  },
   "scope": "packaging-only",
   "release_accepted": false,
-  "functional_acceptance": "native local cases recorded separately; next candidate install/uninstall not yet run",
-  "blocker": "GitHub connector artifact limit 536870912 bytes; exact installer artifact is 885355797 bytes. In-app browser GitHub is signed out. Requires download through user's signed-in GitHub browser or explicit GitHub CLI credentials; do not rebuild or split package as a workaround."
+  "installer_acceptance": "not yet established by repo-prescribed smoke",
+  "local_safety": "An existing SolYan PDF installation is present and running from %LOCALAPPDATA%/SolYan PDF, with a user document open and Core processes running. Repository stool-installer-smoke.ps1 explicitly refuses to overwrite any existing sTool install or continue when app/engine processes are present. No install or uninstall was run.",
+  "next": "Run the existing installed-app acceptance on a disposable Windows runner against the exact artifact without rebuilding, or use a truly clean Windows profile/VM. Do not close or overwrite the user's active document. The currently available acceptance workflow dispatch connector is unavailable in this session.",
+  "ci": "No additional CI/build after #9"
 }
