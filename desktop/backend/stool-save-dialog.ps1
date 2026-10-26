@@ -31,7 +31,7 @@ public static class StoolSaveDialog {
   [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h, uint m, IntPtr w, string l, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadMessageTimeout(IntPtr h, uint m, IntPtr w, StringBuilder l, uint flags, uint timeout, out IntPtr result);
-  [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW")] static extern IntPtr SendNotificationTimeout(IntPtr h, uint m, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+  [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW")] static extern IntPtr SendCharacterTimeout(IntPtr h, uint m, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   public static string Text(IntPtr h) { var b=new StringBuilder(32768); GetWindowText(h,b,b.Capacity); return b.ToString(); }
   static string Class(IntPtr h) { var b=new StringBuilder(256); GetClassName(h,b,b.Capacity); return b.ToString(); }
@@ -43,37 +43,35 @@ public static class StoolSaveDialog {
     for(int i=0;i<12 && h!=IntPtr.Zero;i++){h=GetWindow(h,4); if(h==owner)return true;} return false;
   }
   public static void Filename(IntPtr dialog,string path) {
-    IntPtr edit=IntPtr.Zero; int editId=0;
-    var controls=new List<string>();
-    var deadline=DateTime.UtcNow.AddSeconds(3);
-    do {
-      controls.Clear();
+    IntPtr edit=IntPtr.Zero;int editId=0;var fallback=IntPtr.Zero;int fallbackId=0;
+    var controls=new List<string>();var deadline=DateTime.UtcNow.AddSeconds(3);
+    do{
+      controls.Clear();edit=IntPtr.Zero;fallback=IntPtr.Zero;
       EnumChildWindows(dialog,(h,p)=>{
-        string kind=Class(h); int id=GetDlgCtrlID(h); controls.Add(kind+":"+id);
+        string kind=Class(h);int id=GetDlgCtrlID(h);controls.Add(kind+":"+id);
         if(kind!="Edit")return true;
-        // OPENFILENAME uses edt1 (0x480) or an edit inside cmb13 (0x47c).
-        // Newer common-dialog templates also expose filename Edit 1001.
-        bool filename=id==0x480 || id==1001;
-        for(var parent=GetParent(h);parent!=IntPtr.Zero && parent!=dialog;parent=GetParent(parent))
-          if(GetDlgCtrlID(parent)==0x47c)filename=true;
-        if(filename){edit=h;editId=id;} return true;
+        bool inCombo=false;
+        for(var parent=GetParent(h);parent!=IntPtr.Zero&&parent!=dialog;parent=GetParent(parent))
+          if(GetDlgCtrlID(parent)==0x47c)inCombo=true;
+        if(id==0x480||inCombo){edit=h;editId=id;}
+        else if(id==1001&&fallback==IntPtr.Zero){fallback=h;fallbackId=id;}
+        return true;
       },IntPtr.Zero);
-      if(edit==IntPtr.Zero)System.Threading.Thread.Sleep(100);
-    } while(edit==IntPtr.Zero && DateTime.UtcNow<deadline);
+      if(edit==IntPtr.Zero&&fallback==IntPtr.Zero)System.Threading.Thread.Sleep(100);
+    }while(edit==IntPtr.Zero&&fallback==IntPtr.Zero&&DateTime.UtcNow<deadline);
+    if(edit==IntPtr.Zero){edit=fallback;editId=fallbackId;}
     if(edit==IntPtr.Zero)throw new Exception("Common dialog filename control not found; controls: "+String.Join(",",controls));
     IntPtr result;
-    // Use the common-dialog API so the dialog updates its parsed path state,
-    // not only the visible edit text.
-    if(SendMessageTimeout(dialog,0x0468,new IntPtr(editId),path,2,2000,out result)==IntPtr.Zero)
-      throw new Exception("Common dialog did not accept filename control update");
+    // Type into the filename control. WM_SETTEXT changes visible text but does
+    // not reliably update the Explorer Save dialog's selected path.
+    if(SendMessageTimeout(edit,12,IntPtr.Zero,"",2,2000,out result)==IntPtr.Zero)
+      throw new Exception("Common dialog filename control "+editId+" could not be cleared");
+    foreach(char ch in path)
+      if(SendCharacterTimeout(edit,0x0102,new IntPtr((int)ch),new IntPtr(1),2,2000,out result)==IntPtr.Zero)
+        throw new Exception("Common dialog filename control "+editId+" rejected character input");
     var actual=new StringBuilder(32768);
-    if(ReadMessageTimeout(edit,13,new IntPtr(actual.Capacity),actual,2,2000,out result)==IntPtr.Zero || actual.ToString()!=path)
-      throw new Exception("Common dialog filename field differs from exact destination");
-    var resolved=new StringBuilder(32768);
-    if(ReadMessageTimeout(dialog,0x0465,new IntPtr(resolved.Capacity),resolved,2,2000,out result)==IntPtr.Zero)
-      throw new Exception("Common dialog could not resolve the selected file path");
-    if(!String.Equals(resolved.ToString(),path,StringComparison.OrdinalIgnoreCase))
-      throw new Exception("Common dialog resolved a different destination. Requested: "+path+"; resolved: "+resolved.ToString());
+    if(ReadMessageTimeout(edit,13,new IntPtr(actual.Capacity),actual,2,2000,out result)==IntPtr.Zero||actual.ToString()!=path)
+      throw new Exception("Filename control "+editId+" mismatch: "+actual.ToString());
   }
     public static void Click(IntPtr dialog,int id) {
     var button=GetDlgItem(dialog,id); if(button==IntPtr.Zero)throw new Exception("Dialog button missing: "+id);
