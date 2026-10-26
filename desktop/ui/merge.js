@@ -9,6 +9,7 @@
   const status = document.getElementById('status');
   let files = [];
   let busy = false;
+  let outputNameEdited = false;
 
   const formatSize = bytes => {
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -26,6 +27,7 @@
   }
 
   function render() {
+    if (!outputNameEdited && files.length && window.SOLYAN_OUTPUT_NAME) outputName.value = window.SOLYAN_OUTPUT_NAME(files[0].name, 'merged');
     count.textContent = `Danh sách tệp (${files.length} tệp)`;
     list.innerHTML = files.map((file, index) => `<article class="file-card" draggable="${busy ? 'false' : 'true'}" data-index="${index}"><div class="page">PDF<br>${index + 1}</div><strong title="${file.name}">${file.name}</strong><span>${formatSize(file.size)}</span></article>`).join('');
     mergeBtn.disabled = busy || files.length < 2;
@@ -43,6 +45,7 @@
 
   pick.addEventListener('click', () => input.click());
   input.addEventListener('change', () => add(input.files));
+  outputName.addEventListener('input', () => { outputNameEdited = true; });
   ['dragenter', 'dragover'].forEach(type => zone.addEventListener(type, event => { event.preventDefault(); if (!busy) zone.classList.add('drag'); }));
   ['dragleave', 'drop'].forEach(type => zone.addEventListener(type, event => { event.preventDefault(); zone.classList.remove('drag'); }));
   zone.addEventListener('drop', event => add(event.dataTransfer.files));

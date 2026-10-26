@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $required = @(
   "desktop/ui/index.html", "desktop/ui/styles.css", "desktop/ui/catalog.js", "desktop/ui/catalog-additions.js", "desktop/ui/app.js",
   "desktop/ui/visual-tools.html", "desktop/ui/visual-tools.js", "desktop/ui/visual-tools.css", "desktop/ui/visual-effects.js", "desktop/stool-tests/visual-effects.test.mjs", "desktop/stool-tests/visual-tools.browser.mjs", "desktop/stool-tests/stage-pdfjs.ps1",
+  "desktop/ui/redaction-tools.html", "desktop/ui/redaction-tools.js", "desktop/ui/redaction-tools.css", "desktop/ui/redaction-tools-core.js", "desktop/stool-tests/redaction-tools-core.test.mjs", "desktop/stool-tests/redaction-tools.browser.mjs",
   "desktop/ui/merge.html", "desktop/ui/merge.js", "desktop/ui/repair.html", "desktop/ui/repair.js",
   "desktop/ui/extract-images.html", "desktop/ui/extract-images.js", "desktop/ui/info.html", "desktop/ui/info.js",
   "desktop/ui/active-content.html", "desktop/ui/active-content.js", "desktop/ui/attachments.html", "desktop/ui/attachments.js",
@@ -32,8 +33,13 @@ if ($iconBytes.Length -lt 6 -or $iconBytes[0] -ne 0 -or $iconBytes[1] -ne 0 -or 
 $html = Get-Content "desktop/ui/index.html" -Raw
 $catalog = (Get-Content "desktop/ui/catalog.js" -Raw) + (Get-Content "desktop/ui/catalog-additions.js" -Raw)
 $app = Get-Content "desktop/ui/app.js" -Raw
-$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'workflow':", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "ping:", "ranking:", "ip:", "'fill-form':", "overlay:", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "'bookmarks':", "'split-bookmark':", "'auto-rotate':", "'qr-split':", "'pdf-excel':", "'scan-table':", "orientation:", "'layout-analysis':", "watermark:", "stamp:", "compare:")
+$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'workflow':", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "ping:", "ranking:", "ip:", "'fill-form':", "overlay:", "highlight:", "'manual-redact':", "'auto-redact':", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "'bookmarks':", "'split-bookmark':", "'auto-rotate':", "'qr-split':", "'pdf-excel':", "'scan-table':", "orientation:", "'layout-analysis':", "watermark:", "stamp:", "compare:")
 foreach ($route in $requiredRoutes) { if (-not $app.Contains($route)) { throw "Missing sTool UI route: $route" } }
+$resultPages = Get-ChildItem "desktop/ui" -Filter "*.html" | Where-Object { (Get-Content $_.FullName -Raw).Contains('./output-save.js') }
+foreach ($page in $resultPages) {
+  $source = Get-Content $page.FullName -Raw
+  if (-not $source.Contains('./output-name.js') -or $source.IndexOf('./output-name.js') -gt $source.IndexOf('./output-save.js')) { throw "Result page must load output-name.js before output-save.js: $($page.Name)" }
+}
 $scripts = @{
   repair = Get-Content "desktop/ui/repair.js" -Raw
   extractImages = Get-Content "desktop/ui/extract-images.js" -Raw
@@ -115,7 +121,7 @@ $contracts = @(
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html","desktop/ui/visual-tools.html")
+$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html","desktop/ui/visual-tools.html","desktop/ui/redaction-tools.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"

@@ -102,6 +102,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test desktop/stool-tests/visual-effects.test.mjs 2>&1 | Tee-Object artifacts/stool-visual-effects.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test desktop/stool-tests/redaction-tools-core.test.mjs 2>&1 | Tee-Object artifacts/stool-redaction-tools-core.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:STOOL_BROWSER_CHANNEL = 'msedge'
           node desktop/stool-tests/output-save.browser.mjs 2>&1 | Tee-Object artifacts/stool-save-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -134,6 +136,8 @@ jobs:
           node desktop/stool-tests/compare.browser.mjs 2>&1 | Tee-Object artifacts/stool-compare-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/visual-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-visual-tools-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/redaction-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-redaction-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check UI contracts, not the Reader build
         shell: pwsh

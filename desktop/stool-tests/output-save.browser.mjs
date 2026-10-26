@@ -7,13 +7,12 @@ import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 
 const assets=new Map();
-for(const path of ['merge.html','merge.js','tool.css','vendor/pdf-lib.min.js'])assets.set('/'+path,await readFile(new URL('../ui/'+path,import.meta.url)));
+for(const path of ['merge.html','merge.js','tool.css','output-name.js','output-save.js','vendor/pdf-lib.min.js'])assets.set('/'+path,await readFile(new URL('../ui/'+path,import.meta.url)));
 const server=createServer((req,res)=>{const body=assets.get(req.url);res.writeHead(body?200:404,{'Content-Type':req.url.endsWith('.html')?'text/html':req.url.endsWith('.css')?'text/css':'text/javascript','Content-Security-Policy':"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' http://127.0.0.1:*"});res.end(body||'not found');});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({channel:process.env.STOOL_BROWSER_CHANNEL||undefined});
 try{
   const page=await browser.newPage();let downloads=0;page.on('download',()=>downloads++);
-  await page.addInitScript({path:fileURLToPath(new URL('../ui/output-save.js',import.meta.url))});
   await page.addInitScript(()=>{
     window.saveCalls=[];window.nextSave=null;
     window.__TAURI__={core:{invoke:async(command,args)=>{
@@ -27,6 +26,7 @@ try{
   const pdf=await page.evaluate(async()=>{const p=await PDFLib.PDFDocument.create();p.addPage([200,300]).drawText('PUBLIC SAVE UI FIXTURE');return Array.from(await p.save());});
   const input=Buffer.from(pdf),hash=createHash('sha256').update(input).digest('hex');
   await page.locator('#fileInput').setInputFiles(['one.pdf','two.pdf'].map(name=>({name,mimeType:'application/pdf',buffer:input})));
+  await expect(page.locator('#outputName')).toHaveValue('one-merged.pdf');
   await page.locator('#mergeBtn').click();
   await expect(page.locator('.output-save')).toBeVisible();await expect(page.locator('.output-save-as')).toBeVisible();
   await expect(page.locator('.output-result [role=status]')).toContainText('Chưa lưu');assert.equal(downloads,0);
@@ -60,5 +60,10 @@ try{
   assert.equal(await page.evaluate(async bytes=>(await PDFLib.PDFDocument.load(new Uint8Array(bytes))).getPageCount(),calls[0].bytes),2);
   await page.evaluate(()=>window.nextSave='error');await page.locator('.output-save').click();
   await expect(page.locator('.output-result [role=status]')).toContainText('Fixture disk error');await expect(page.locator('.output-save')).toBeEnabled();
+  await page.evaluate(()=>{const a=document.createElement('a'),url=URL.createObjectURL(new Blob(['fixture'],{type:'application/pdf'}));a.href=url;a.download='solyan-sanitized.pdf';document.body.append(a);a.click();a.remove();});
+  await expect(page.locator('.output-result').last().locator('strong')).toHaveText('one-sanitized.pdf');
+  await expect(page.locator('.output-result').last().locator('.output-save-as')).toBeVisible();
+  await page.evaluate(()=>{const picker=document.createElement('input');picker.type='file';picker.accept='.docx';Object.defineProperty(picker,'files',{value:[new File(['fixture'],'Agreement.docx',{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'})]});document.body.append(picker);picker.dispatchEvent(new Event('change',{bubbles:true}));const a=document.createElement('a'),url=URL.createObjectURL(new Blob(['fixture']));a.href=url;a.download='solyan-converted.pdf';document.body.append(a);a.click();a.remove();picker.remove();});
+  await expect(page.locator('.output-result').last().locator('strong')).toHaveText('Agreement-converted.pdf');
   assert.equal(downloads,0);console.log('Actual merge -> visible Save/Save As, Cancel/retry, PDF bytes, source hash and errors PASS (native transport mocked)');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

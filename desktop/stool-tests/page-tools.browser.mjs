@@ -57,7 +57,13 @@ try{
     await configure(page);
     await page.locator('#runBtn').click();
     const count=tool==='split'?2:1;
-    await page.waitForFunction(expected=>document.querySelectorAll('#output-results .output-result').length===expected,count);
+    await page.waitForFunction(()=>{
+      const status=document.querySelector('#status');
+      return status?.classList.contains('success')||status?.classList.contains('error');
+    },{timeout:45000});
+    const operationStatus=await page.locator('#status').textContent();
+    assert.equal(await page.locator('#status').evaluate(el=>el.classList.contains('error')),false,tool+' UI reported: '+operationStatus);
+    await page.waitForFunction(expected=>document.querySelectorAll('#output-results .output-result').length===expected,count,{timeout:15000});
     const rows=page.locator('#output-results .output-result');
     const filenames=[];
     for(let index=0;index<count;index++){
@@ -89,6 +95,7 @@ try{
   await browser.close();
   server.close();
 }
+
 
 
 

@@ -1,6 +1,6 @@
 // Shared result shelf. Runs before tool scripts, but does no processing at Home.
 (()=>{
-  const bypass=new WeakSet(),sourceHashes=new Set(),blobs=new Map();
+  const bypass=new WeakSet(),sourceHashes=new Set(),blobs=new Map();let sourceNames=[];
   const createObjectURL=URL.createObjectURL.bind(URL),revokeObjectURL=URL.revokeObjectURL.bind(URL);
   URL.createObjectURL=blob=>{const url=createObjectURL(blob);blobs.set(url,blob);return url;};
   URL.revokeObjectURL=url=>{blobs.delete(url);return revokeObjectURL(url);};
@@ -8,14 +8,16 @@
   const english=()=>document.documentElement.lang==='en';
   const label=(vi,en)=>english()?en:vi;
   function remember(files){
-    const pdfs=Array.from(files||[]).filter(f=>/\.pdf$/i.test(f.name));
+    const selected=Array.from(files||[]).filter(f=>f?.name);
+    if(selected.length)sourceNames=selected.map(file=>file.name);
+    const pdfs=selected.filter(f=>/\.pdf$/i.test(f.name));
     pendingSources=Promise.all([pendingSources,...pdfs.map(async file=>{
       const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
       sourceHashes.add(Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join(''));
     })]);
     pendingSources.catch(()=>{});
   }
-  document.addEventListener('change',e=>{if(e.target?.type==='file')remember(e.target.files);},true);
+  document.addEventListener('change',e=>{if(e.target?.type==='file'){const files=Array.from(e.target.files||[]),isPdfPicker=/\.pdf/i.test(e.target.accept||'');if(isPdfPicker&&!files.length)sourceNames=[];remember(files);}},true);
   document.addEventListener('drop',e=>remember(e.dataTransfer?.files),true);
   function message(row,text,kind=''){
     row.status.textContent=text;row.status.className='status-text'+(kind?' '+kind:'');
@@ -42,6 +44,8 @@
   }
   async function offer(url,name){
     const blob=blobs.get(url);if(!blob)throw Error('Output Blob unavailable');blobs.delete(url);
+    const placeholder=/^solyan(?:-([a-z0-9][a-z0-9_-]*))?(\.[a-z0-9]+)$/i.exec(String(name||''));
+    if(placeholder&&sourceNames.length&&window.SOLYAN_OUTPUT_NAME){let suffix=(placeholder[1]||'').replace(/^pdf-/i,'').replace(/^pdf$/i,'');name=window.SOLYAN_OUTPUT_NAME(sourceNames[0],suffix,placeholder[2])}
     if(!shelf){
       shelf=document.createElement('section');shelf.id='output-results';shelf.className='surface output-results';
       const title=document.createElement('h2');title.textContent=label('Kết quả — Lưu tệp','Results — Save files');shelf.append(title);
@@ -65,7 +69,7 @@
     if(!a||bypass.has(a)||!a.href.startsWith('blob:'))return;
     event.preventDefault();
     // Start reading before the producing tool revokes its object URL.
-    const reading=offer(a.href,a.download||'document-output.pdf');
+    const reading=offer(a.href,a.download||'solyan-output.pdf');
     queue=queue.then(()=>reading).catch(error=>{
       const status=document.querySelector('#status');if(status){status.textContent=label('Không chuẩn bị được kết quả: ','Could not prepare output: ')+(error?.message||error);status.classList.add('error');}
     });
