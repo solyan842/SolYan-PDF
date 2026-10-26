@@ -89,7 +89,7 @@
         $('verdict').textContent=value.signature_count?'Đã kiểm tra offline. Kết quả không thay thế xác minh trực tuyến.':'Không tìm thấy chữ ký số.';
         setStatus('Kiểm tra chữ ký hoàn tất.','success');
       } else {
-        save(await response.blob(),'solyan-signed.pdf');
+        save(await response.blob(),window.SOLYAN_OUTPUT_NAME(pdf.name, 'signed'));
         addSummary('Đầu ra','PDF đã ký');
         $('verdict').textContent='Đã tạo PDF có chữ ký. Hãy dùng Kiểm tra chữ ký để xác minh.';
         setStatus('Ký số hoàn tất. Tệp nguồn không bị thay đổi.','success');

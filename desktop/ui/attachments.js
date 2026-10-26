@@ -116,7 +116,7 @@
       const { endpoint, token } = await coreSession(); const body = new FormData(); body.append('file', sourceFile, sourceFile.name); body.append('key', item.key);
       const response = await fetch(`${endpoint}/pdf/attachments/remove`, { method:'POST', headers:auth(token), body });
       if (!response.ok) throw new Error(await responseError(response));
-      downloadBlob(await response.blob(), responseFilename(response, 'solyan-without-attachment.pdf'));
+      downloadBlob(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'without-attachment'));
       setStatus('Đã tạo PDF mới. File nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể xóa attachment: ${error?.message || error}`, 'error'); }
     finally { busy = false; updateControls(); }
@@ -135,7 +135,7 @@
       const { endpoint, token } = await coreSession(); const body = new FormData(); body.append('file', sourceFile, sourceFile.name); pendingFiles.forEach(file => body.append('attachments', file, file.name));
       const response = await fetch(`${endpoint}/pdf/attachments/add`, { method:'POST', headers:auth(token), body });
       if (!response.ok) throw new Error(await responseError(response));
-      downloadBlob(await response.blob(), responseFilename(response, 'solyan-with-attachments.pdf'));
+      downloadBlob(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'with-attachments'));
       setStatus('Đã tạo PDF mới có attachment. File nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể thêm attachment: ${error?.message || error}`, 'error'); }
     finally { busy = false; updateControls(); }

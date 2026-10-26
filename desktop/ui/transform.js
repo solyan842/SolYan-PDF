@@ -1,7 +1,7 @@
 (() => {
   const configs = {
     compress: {
-      title: 'Nén PDF', icon: '↘', endpoint: '/pdf/compress', filename: 'solyan-compressed.pdf',
+      title: 'Nén PDF', icon: '↘', endpoint: '/pdf/compress', outputSuffix: 'compressed',
       engine: 'Xử lý cục bộ · qpdf',
       description: 'Tối ưu stream và object stream để giảm dung lượng mà không ghi đè tệp nguồn.',
       optionTitle: 'Nén cấu trúc PDF',
@@ -12,7 +12,7 @@
       done: 'Đã tạo PDF nén mới và giữ nguyên tệp nguồn.'
     },
     flatten: {
-      title: 'Flatten PDF', icon: '▤', endpoint: '/pdf/flatten', filename: 'solyan-flattened.pdf',
+      title: 'Flatten PDF', icon: '▤', endpoint: '/pdf/flatten', outputSuffix: 'flattened',
       engine: 'Xử lý cục bộ · qpdf appearances',
       description: 'Làm phẳng annotation/form appearance vào bản PDF mới khi cần chia sẻ hoặc lưu trữ ổn định hơn.',
       optionTitle: 'Làm phẳng annotation',
@@ -23,7 +23,7 @@
       done: 'Đã tạo bản PDF flatten mới. Tệp nguồn không bị thay đổi.'
     },
     'image-opt': {
-      title: 'Tối ưu hình ảnh', icon: '▧', endpoint: '/pdf/compress-images', filename: 'solyan-image-compressed.pdf',
+      title: 'Tối ưu hình ảnh', icon: '▧', endpoint: '/pdf/compress-images', outputSuffix: 'image-compressed',
       engine: 'Xử lý cục bộ · qpdf image optimization',
       description: 'Tối ưu các image stream được qpdf hỗ trợ để giảm dung lượng tài liệu.',
       optionTitle: 'Tối ưu image stream',
@@ -99,7 +99,7 @@
       const body = new FormData(); body.append('file', sourceFile, sourceFile.name);
       const response = await fetch(`${endpoint}${config.endpoint}`, { method:'POST', headers:{ 'X-SolYan-Desktop-Token': token }, body });
       if (!response.ok) throw new Error(await errorText(response));
-      download(await response.blob(), config.filename);
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, config.outputSuffix));
       document.getElementById('resultMessage').textContent = config.done;
       result.hidden = false; setStatus('Hoàn tất. PDF nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể xử lý PDF: ${error?.message || error}`, 'error'); }

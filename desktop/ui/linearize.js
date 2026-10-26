@@ -42,7 +42,7 @@
       const body = new FormData(); body.append('file', sourceFile, sourceFile.name);
       const response = await fetch(`${endpoint}/pdf/web-optimize`, { method:'POST', headers:{ 'X-SolYan-Desktop-Token': token }, body });
       if (!response.ok) throw new Error(await errorText(response));
-      download(await response.blob(), 'solyan-web-optimized.pdf');
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'web-optimized'));
       result.hidden = false; setStatus('Hoàn tất. PDF nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể tối ưu PDF: ${error?.message || error}`, 'error'); }
     finally { busy = false; pickFile.disabled = false; updateControls(); }

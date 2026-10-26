@@ -42,7 +42,7 @@
       const body = new FormData(); body.append('file', sourceFile, sourceFile.name);
       const response = await fetch(`${endpoint}/pdf/decompress`, { method:'POST', headers:{ 'X-SolYan-Desktop-Token': token }, body });
       if (!response.ok) throw new Error(await errorText(response));
-      download(await response.blob(), 'solyan-decompressed.pdf');
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'decompressed'));
       result.hidden = false; setStatus('Hoàn tất. PDF nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể giải nén cấu trúc PDF: ${error?.message || error}`, 'error'); }
     finally { busy = false; pickFile.disabled = false; updateControls(); }

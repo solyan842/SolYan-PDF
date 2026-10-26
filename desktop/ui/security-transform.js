@@ -1,14 +1,14 @@
 (() => {
   const configs = {
     protect: {
-      title: 'Bảo vệ PDF', icon: '♢', endpoint: '/pdf/protect', filename: 'solyan-protected.pdf',
+      title: 'Bảo vệ PDF', icon: '♢', endpoint: '/pdf/protect', outputSuffix: 'protected',
       description: 'Mã hóa PDF bằng AES-256 và đặt quyền in, chỉnh sửa, trích xuất theo nhu cầu.',
       button: 'Bảo vệ và tạo PDF mới →',
       working: 'Đang mã hóa PDF bằng AES-256 và kiểm tra file kết quả…',
       done: 'Đã tạo PDF được bảo vệ mới. Tệp nguồn không bị thay đổi.'
     },
     unlock: {
-      title: 'Mở khóa PDF', icon: '◇', endpoint: '/pdf/unlock', filename: 'solyan-unlocked.pdf',
+      title: 'Mở khóa PDF', icon: '◇', endpoint: '/pdf/unlock', outputSuffix: 'unlocked',
       description: 'Gỡ mã hóa khỏi PDF khi bạn có mật khẩu hoặc quyền truy cập hợp pháp vào tài liệu.',
       button: 'Mở khóa và tạo PDF mới →',
       working: 'Đang giải mã PDF và kiểm tra file kết quả…',
@@ -100,7 +100,7 @@
       }
       const response = await fetch(`${endpoint}${config.endpoint}`, { method:'POST', headers:{ 'X-SolYan-Desktop-Token': token }, body });
       if (!response.ok) throw new Error(await errorText(response));
-      download(await response.blob(), config.filename);
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, config.outputSuffix));
       resultMessage.textContent = config.done; result.hidden = false; setStatus('Hoàn tất. PDF nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể ${mode === 'protect' ? 'bảo vệ' : 'mở khóa'} PDF: ${error?.message || error}`, 'error'); }
     finally { busy = false; pickFile.disabled = false; updateControls(); }

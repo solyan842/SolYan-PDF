@@ -59,7 +59,7 @@
         dss: Number(response.headers.get('X-SolYan-Signature-DSS-Removed') || 0)
       };
       const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
-      download(await response.blob(), 'solyan-unsigned.pdf');
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'unsigned'));
       clearNode(signatureSummary);
       addSummary('Signature fields', counts.fields); addSummary('Widgets', counts.widgets); addSummary('Values', counts.values); addSummary('Permissions', counts.permissions); addSummary('DSS', counts.dss);
       resultVerdict.textContent = total ? `Đã loại ${total} mục cấu trúc chữ ký khỏi bản PDF mới.` : 'Không tìm thấy cấu trúc chữ ký cần loại; đã tạo bản PDF mới đã kiểm tra.';

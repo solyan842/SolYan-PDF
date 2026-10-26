@@ -65,7 +65,7 @@
     if(!a||bypass.has(a)||!a.href.startsWith('blob:'))return;
     event.preventDefault();
     // Start reading before the producing tool revokes its object URL.
-    const reading=offer(a.href,a.download||'solyan-output.pdf');
+    const reading=offer(a.href,a.download||'document-output.pdf');
     queue=queue.then(()=>reading).catch(error=>{
       const status=document.querySelector('#status');if(status){status.textContent=label('Không chuẩn bị được kết quả: ','Could not prepare output: ')+(error?.message||error);status.classList.add('error');}
     });

@@ -41,7 +41,7 @@
       const response = await fetch(`${endpoint}/pdf/remove-images`, { method:'POST', headers:{ 'X-SolYan-Desktop-Token': token }, body });
       if (!response.ok) throw new Error(await errorText(response));
       const removed = Number(response.headers.get('X-SolYan-Images-Removed') || 0);
-      download(await response.blob(), 'solyan-images-removed.pdf');
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'images-removed'));
       resultCard.textContent = removed > 0 ? `Đã loại ${removed} Image XObject và tạo PDF mới.` : 'Không tìm thấy Image XObject cần loại; đã tạo một bản PDF mới đã kiểm tra.';
       resultNote.hidden = false; setStatus('Hoàn tất. File nguồn không bị thay đổi.', 'success');
     } catch (error) { setStatus(`Không thể xóa hình ảnh: ${error?.message || error}`, 'error'); }

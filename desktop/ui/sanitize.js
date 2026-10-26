@@ -70,7 +70,7 @@
         annotations: Number(response.headers.get('X-SolYan-Sanitize-Active-Annotations-Removed') || 0)
       };
       const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
-      download(await response.blob(), 'solyan-sanitized.pdf');
+      download(await response.blob(), window.SOLYAN_OUTPUT_NAME(sourceFile.name, 'sanitized'));
       clearNode(sanitizeSummary);
       addSummary('Actions', counts.actions); addSummary('Links', counts.links); addSummary('Metadata', counts.metadata); addSummary('Attachments', counts.embedded); addSummary('Active annotations', counts.annotations);
       resultVerdict.textContent = total ? `Đã loại ${total} mục cấu trúc theo các nhóm đã chọn và tạo PDF mới.` : 'Không tìm thấy cấu trúc cần loại theo các nhóm đã chọn; đã tạo bản PDF mới đã kiểm tra.';
