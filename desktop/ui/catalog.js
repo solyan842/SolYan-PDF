@@ -106,6 +106,6 @@ window.SOLYAN_TOOL_CATALOG = {
     { id:"ip", name:"Kiểm tra IP", desc:"Xem thông tin IP công cộng", category:"vn", icon:"IP", tone:"blue" },
     { id:"ping", name:"Ping", desc:"Kiểm tra kết nối mạng", category:"vn", icon:"↯", tone:"orange" },
     { id:"keyword", name:"Vị trí từ khóa Google", desc:"Kiểm tra vị trí từ khóa trên Google", category:"vn", icon:"G", tone:"blue" },
-    { id:"ranking", name:"Website Ranking", desc:"Kiểm tra xếp hạng website", category:"vn", icon:"↗", tone:"green" }
+    { id:"ranking", name:"Website Ranking", desc:"Xem xếp hạng website từ danh sách Tranco công khai", category:"vn", icon:"↗", tone:"green" }
   ]
 };

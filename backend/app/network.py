@@ -94,13 +94,20 @@ def public_ip(request: Request) -> dict[str, str]:
     return {"ip": request.client.host if request.client else "unknown"}
 
 
+def _ping_command(host: str, *, windows: bool | None = None) -> list[str]:
+    use_windows = os.name == "nt" if windows is None else windows
+    if use_windows:
+        return ["ping", "-n", "4", "-w", "2000", host]
+    return ["ping", "-c", "4", "-W", "2", host]
+
+
 @router.post("/ping")
 def ping(payload: HostRequest) -> dict[str, object]:
     host = normalize_host(payload.host)
     _guard_ping_target(host)
     try:
         result = subprocess.run(
-            ["ping", "-c", "4", "-W", "2", host],
+            _ping_command(host),
             capture_output=True,
             text=True,
             timeout=12,

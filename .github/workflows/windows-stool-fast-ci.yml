@@ -42,6 +42,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Test Windows and POSIX ping argument contracts
+        shell: pwsh
+        run: |
+          python -m unittest discover -s desktop/backend/tests -p test_network_ping.py -v 2>&1 | Tee-Object artifacts/stool-network-ping-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Test real desktop ASGI authentication and CORS composition
         shell: pwsh
         run: |
@@ -94,6 +100,8 @@ jobs:
           node desktop/stool-tests/output-save.browser.mjs 2>&1 | Tee-Object artifacts/stool-save-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/pdf-images.browser.mjs 2>&1 | Tee-Object artifacts/stool-pdf-images-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/network-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-network-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/page-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-page-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

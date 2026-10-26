@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tiện ích mạng — SolYan PDF</title>
+  <link rel="stylesheet" href="./tool.css">
+</head>
+<body class="tool-shell">
+  <div class="tool-layout">
+    <aside class="tool-sidebar">
+      <a class="back-link" href="./index.html">← Trang chủ</a>
+      <div class="desktop-brand">SolYan PDF</div>
+      <p class="desktop-subtitle">Windows Desktop</p>
+      <hr class="tool-divider">
+      <div class="sidebar-links">Tiện ích mạng<br>Ping<br>Xếp hạng website</div>
+    </aside>
+    <main class="tool-main">
+      <div class="tool-top"><a class="back-link" href="./index.html">Công cụ › <span id="crumbName">Tiện ích mạng</span></a><span class="muted-small">Chỉ gọi dịch vụ sau khi bạn bấm kiểm tra</span></div>
+      <div class="tool-title"><div id="toolIcon" class="big-icon info-icon" aria-hidden="true"></div><div><h1 id="toolName">Tiện ích mạng</h1><p id="toolDesc">Kiểm tra mạng qua dịch vụ local của ứng dụng.</p></div></div>
+      <div class="repair-layout">
+        <section class="surface">
+          <div class="option-group"><label id="targetLabel" for="target">Máy chủ</label><input id="target" class="tool-input" type="text" maxlength="253" autocomplete="url" spellcheck="false"></div>
+          <button id="runBtn" class="primary merge-btn" type="button">Kiểm tra →</button>
+          <p id="status" class="status-text" role="status">Nhập máy chủ để bắt đầu.</p>
+          <pre id="result" class="local-note" hidden></pre>
+        </section>
+        <aside class="surface options"><h2>Lưu ý</h2><div id="note" class="local-note"></div></aside>
+      </div>
+    </main>
+  </div>
+  <script src="./icons.js"></script>
+  <script src="./network-tool.js"></script>
+</body>
+</html>
+
