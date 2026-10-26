@@ -24,7 +24,8 @@
   "scope": "packaging-only",
   "release_accepted": false,
   "installer_acceptance": "not yet established by repo-prescribed smoke",
-  "local_safety": "An existing SolYan PDF installation is present and running from %LOCALAPPDATA%/SolYan PDF, with a user document open and Core processes running. Repository stool-installer-smoke.ps1 explicitly refuses to overwrite any existing sTool install or continue when app/engine processes are present. No install or uninstall was run.",
-  "next": "Run the existing installed-app acceptance on a disposable Windows runner against the exact artifact without rebuilding, or use a truly clean Windows profile/VM. Do not close or overwrite the user's active document. The currently available acceptance workflow dispatch connector is unavailable in this session.",
-  "ci": "No additional CI/build after #9"
+  "local_safety": "Existing SolYan PDF installation present and running from %LOCALAPPDATA%/SolYan PDF. Core processes active. Installed window visibly contains a user PDF and unsaved compression results. Repository desktop/backend/stool-installer-smoke.ps1 explicitly refuses overwriting any existing install or running app/engine. No install, uninstall, app close, or file modification was performed.",
+  "acceptance_workflow": "The exact-commit workflow .github/workflows/windows-stool-acceptance.yml exists on checkpoint/build line but a GET of refs/heads/main/.github/workflows/windows-stool-acceptance.yml returns 404. GitHub workflow_dispatch requires workflow registered on default branch. No dispatch connector is available. WindowsSandbox.exe is absent on this host. Therefore cannot perform genuine isolated local or hosted acceptance without a repository default-branch decision or separate disposable Windows runner.",
+  "next": "Keep install alive. User must provide/enable a clean disposable Windows runner or authorize the acceptance workflow to be added to default branch through their normal repository process. Then run acceptance using artifact run ID 40055090631, no rebuild. Do not close app while PDF/results are open.",
+  "ci": "Installer #9 PASS. No further CI/build."
 }
