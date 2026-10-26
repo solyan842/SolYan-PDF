@@ -11,7 +11,11 @@ test('sTool startup is lightweight', () => {
   }
   // Setup creates only the native window and lightweight output UI. Engine start
   // functions above must remain absent from every startup/setup path.
-  assert.ok(start.includes('.initialization_script(include_str!("../../ui/output-save.js"))'));
+  const initStart = start.indexOf('.initialization_script(');
+  const initEnd = start.indexOf('.build()?;', initStart);
+  const initScript = start.slice(initStart, initEnd);
+  assert.ok(initScript.includes('output-name.js'), 'output-name helper is injected into Tauri');
+  assert.ok(initScript.indexOf('output-name.js') < initScript.indexOf('output-save.js'), 'filename helper is injected before the Save shelf');
   assert.ok(main.includes('fn desktop_service_ready('));
   assert.ok(main.includes('fn desktop_core_session('));
   assert.ok(main.includes('spawn_blocking'));
@@ -58,3 +62,4 @@ test('stale cached sessions and exited heavy sidecars are checked before reuse',
   assert.ok(main.includes('managed_child_healthy(&mut *owned,|p|&mut p.child'));
   assert.ok(main.includes('child.kill()')&&main.includes('child.wait()'));
 });
+
