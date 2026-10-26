@@ -25,3 +25,15 @@ test('sanitizes unsafe basename and suffix while preserving Vietnamese text', ()
 test('uses a safe fallback for an empty source name and normalizes the extension', () => {
   assert.equal(outputName('', 'compressed', 'pdf'), 'document-compressed.pdf');
 });
+
+test('uses the source basename when the converter omits a filename', () => {
+  assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('', 'Báo cáo quý 3.docx', '', '.pdf'), 'Báo cáo quý 3.pdf');
+});
+
+test('replaces generic SolYan server filenames with the selected source basename', () => {
+  assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('attachment; filename="solyan-converted.docx"', 'Hợp đồng.pdf', '', '.docx'), 'Hợp đồng.docx');
+});
+
+test('keeps meaningful server filenames and decodes UTF-8 Content-Disposition', () => {
+  assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION("attachment; filename*=UTF-8''H%E1%BB%93%20s%C6%A1%202026.pdf", 'source.docx', '', '.pdf'), 'Hồ sơ 2026.pdf');
+});
