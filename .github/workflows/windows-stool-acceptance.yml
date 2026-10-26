@@ -3,6 +3,9 @@ name: Windows sTool Existing Installer Acceptance
 # Optional release/integration gate. Reuse a packaged candidate: never rebuild
 # engines/models/NSIS just to rerun a test or repair its driver.
 on:
+  push:
+    branches:
+      - 'test/stool-installer9-acceptance'
   workflow_dispatch:
     inputs:
       installer_run_id:
@@ -23,7 +26,7 @@ jobs:
         id: candidate
         uses: actions/github-script@v7
         env:
-          CANDIDATE_RUN: ${{ inputs.installer_run_id }}
+          CANDIDATE_RUN: ${{ inputs.installer_run_id || '40055090631' }}
         with:
           script: |
             if (!/^\d+$/.test(process.env.CANDIDATE_RUN)) throw new Error('Numeric run ID required');
