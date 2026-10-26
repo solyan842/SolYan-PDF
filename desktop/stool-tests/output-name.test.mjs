@@ -38,7 +38,19 @@ test('keeps meaningful server filenames and decodes UTF-8 Content-Disposition', 
   assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION("attachment; filename*=UTF-8''H%E1%BB%93%20s%C6%A1%202026.pdf", 'source.docx', '', '.pdf'), 'Hồ sơ 2026.pdf');
 });
 
+test('remaining PDF tools derive output names from the selected source', async () => {
+  const cases = [['page-labels','page-labels-removed'],['portfolio','portfolio'],['remove-annotations','without-comments'],['remove-blank','without-blank-pages']];
+  for (const [tool,suffix] of cases) {
+    const html = await readFile(new URL('../ui/'+tool+'.html',import.meta.url),'utf8');
+    const script = await readFile(new URL('../ui/'+tool+'.js',import.meta.url),'utf8');
+    assert.match(html,/output-name\.js/);
+    assert.match(script,/SOLYAN_OUTPUT_NAME/);
+    assert.ok(script.includes("'"+suffix+"'"),tool+' uses the expected operation suffix');
+  }
+});
+
 test('uses the selected source name for generic SolYan engine output names', () => {
   assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('attachment; filename="solyan-auto-split.zip"', 'Batch Scan.pdf', 'qr-split', '.zip'), 'Batch Scan-qr-split.zip');
   assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION('attachment; filename="solyan-ocr.xlsx"', 'Bảng dữ liệu.pdf', 'excel', '.xlsx'), 'Bảng dữ liệu-excel.xlsx');
 });
+
