@@ -31,6 +31,7 @@ public static class StoolSaveDialog {
   [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h, uint m, IntPtr w, string l, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadMessageTimeout(IntPtr h, uint m, IntPtr w, StringBuilder l, uint flags, uint timeout, out IntPtr result);
+  [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW")] static extern IntPtr SendNotificationTimeout(IntPtr h, uint m, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   public static string Text(IntPtr h) { var b=new StringBuilder(32768); GetWindowText(h,b,b.Capacity); return b.ToString(); }
   static string Class(IntPtr h) { var b=new StringBuilder(256); GetClassName(h,b,b.Capacity); return b.ToString(); }
@@ -42,7 +43,7 @@ public static class StoolSaveDialog {
     for(int i=0;i<12 && h!=IntPtr.Zero;i++){h=GetWindow(h,4); if(h==owner)return true;} return false;
   }
   public static void Filename(IntPtr dialog,string path) {
-    IntPtr edit=IntPtr.Zero;
+    IntPtr edit=IntPtr.Zero,combo=IntPtr.Zero; int editId=0;
     var controls=new List<string>();
     var deadline=DateTime.UtcNow.AddSeconds(3);
     do {
@@ -52,10 +53,10 @@ public static class StoolSaveDialog {
         if(kind!="Edit")return true;
         // OPENFILENAME uses edt1 (0x480) or an edit inside cmb13 (0x47c).
         // Newer common-dialog templates also expose filename Edit 1001.
-        bool filename=id==0x480 || id==1001;
+        bool filename=id==0x480 || id==1001; IntPtr filenameCombo=IntPtr.Zero;
         for(var parent=GetParent(h);parent!=IntPtr.Zero && parent!=dialog;parent=GetParent(parent))
-          if(GetDlgCtrlID(parent)==0x47c)filename=true;
-        if(filename)edit=h; return true;
+          if(GetDlgCtrlID(parent)==0x47c){filename=true;filenameCombo=parent;}
+        if(filename){edit=h;editId=id;combo=filenameCombo;} return true;
       },IntPtr.Zero);
       if(edit==IntPtr.Zero)System.Threading.Thread.Sleep(100);
     } while(edit==IntPtr.Zero && DateTime.UtcNow<deadline);
@@ -67,8 +68,18 @@ public static class StoolSaveDialog {
     if(SendMessageTimeout(edit,12,IntPtr.Zero,path,2,2000,out result)==IntPtr.Zero ||
        ReadMessageTimeout(edit,13,new IntPtr(actual.Capacity),actual,2,2000,out result)==IntPtr.Zero || actual.ToString()!=path)
       throw new Exception("Common dialog did not accept exact destination");
+    // WM_SETTEXT changes the edit's displayed value but does not produce the
+    // user-edit notifications consumed by the common dialog to resolve a path.
+    IntPtr notification=new IntPtr(((0x0300 & 0xffff)<<16)|(editId & 0xffff));
+    if(SendNotificationTimeout(dialog,273,notification,edit,2,2000,out result)==IntPtr.Zero)
+      throw new Exception("Common dialog did not process filename edit notification");
+    if(combo!=IntPtr.Zero){
+      notification=new IntPtr(((5 & 0xffff)<<16)|(0x47c & 0xffff)); // CBN_EDITCHANGE
+      if(SendNotificationTimeout(dialog,273,notification,combo,2,2000,out result)==IntPtr.Zero)
+        throw new Exception("Common dialog did not process filename combo notification");
+    }
   }
-  public static void Click(IntPtr dialog,int id) {
+    public static void Click(IntPtr dialog,int id) {
     var button=GetDlgItem(dialog,id); if(button==IntPtr.Zero)throw new Exception("Dialog button missing: "+id);
     if(!PostMessage(dialog,273,new IntPtr(id),button))throw new Exception("Dialog click failed");
   }
