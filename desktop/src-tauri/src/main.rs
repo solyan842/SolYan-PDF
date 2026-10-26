@@ -254,6 +254,31 @@ fn wait_for_available_port(port:u16,label:&str)->Result<(),String>{
     }
 }
 
+// A failed health check can happen after a launcher has created worker
+// descendants. Reap its whole owned job before returning so a retry cannot
+// race a stale worker that still owns the service port.
+fn cleanup_failed_startup(child:&mut Child, #[cfg(windows)] job:&WindowsJob)->Result<(),String>{
+    #[cfg(windows)]
+    let job_result=job.terminate_and_wait();
+    #[cfg(not(windows))]
+    let job_result:Result<(),String>=Ok(());
+
+    let child_result=(||{
+        if child.try_wait().map_err(|e|format!("Cannot inspect failed sidecar launcher: {e}"))?.is_none(){
+            child.kill().map_err(|e|format!("Cannot stop failed sidecar launcher: {e}"))?;
+        }
+        child.wait().map_err(|e|format!("Cannot reap failed sidecar launcher: {e}"))?;
+        Ok(())
+    })();
+
+    match (job_result,child_result){
+        (Ok(()),Ok(()))=>Ok(()),
+        (Err(job),Ok(()))=>Err(job),
+        (Ok(()),Err(child))=>Err(child),
+        (Err(job),Err(child))=>Err(format!("{job}; {child}")),
+    }
+}
+
 #[cfg(all(test,windows))]
 mod recovery_tests{
     use super::*;
@@ -270,6 +295,13 @@ mod recovery_tests{
         assert!(managed_child_healthy(&mut slot,|p|&mut p.child,|_|true,"test").unwrap());
         assert_eq!(slot.as_ref().unwrap().child.id(),pid);
         assert!(slot.as_mut().unwrap().child.try_wait().unwrap().is_none());
+    }
+    #[test]fn failed_startup_reaps_owned_job_before_return(){
+        let mut owned=child();
+        let job=WindowsJob::attach(&owned.child).unwrap();
+        cleanup_failed_startup(&mut owned.child,&job).unwrap();
+        assert_eq!(job.active_processes().unwrap(),0,"startup failure must retire launcher and all owned workers before retry");
+        assert!(owned.child.try_wait().unwrap().is_some(),"failed launcher must be reaped");
     }
     #[test]fn unresponsive_process_is_reaped_without_touching_other_tools(){
         let mut other=child();let mut slot=Some(child());
@@ -670,9 +702,10 @@ fn start_office(app: &tauri::AppHandle, port: u16) -> Result<(OfficeProcess, Str
     };
 
     if let Err(error) = wait_for_office_health(port, #[cfg(windows)] &job) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(error);
+        return Err(match cleanup_failed_startup(&mut child,#[cfg(windows)] &job){
+            Ok(())=>error,
+            Err(cleanup)=>format!("{error}; cleanup failed: {cleanup}"),
+        });
     }
 
     Ok((
@@ -749,9 +782,10 @@ fn start_ocr(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(OcrProce
     };
 
     if let Err(error) = wait_for_ocr_health(port, &token, #[cfg(windows)] &job) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(error);
+        return Err(match cleanup_failed_startup(&mut child,#[cfg(windows)] &job){
+            Ok(())=>error,
+            Err(cleanup)=>format!("{error}; cleanup failed: {cleanup}"),
+        });
     }
 
     Ok((
@@ -802,9 +836,10 @@ fn start_sign(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(SignPro
     };
 
     if let Err(error) = wait_for_sign_health(port, &token, #[cfg(windows)] &job) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(error);
+        return Err(match cleanup_failed_startup(&mut child,#[cfg(windows)] &job){
+            Ok(())=>error,
+            Err(cleanup)=>format!("{error}; cleanup failed: {cleanup}"),
+        });
     }
 
     Ok((
@@ -867,9 +902,10 @@ fn start_archive(app: &tauri::AppHandle, port: u16, token: &str) -> Result<(Arch
         }
     };
     if let Err(error) = wait_for_archive_health(port, &token, #[cfg(windows)] &job) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(error);
+        return Err(match cleanup_failed_startup(&mut child,#[cfg(windows)] &job){
+            Ok(())=>error,
+            Err(cleanup)=>format!("{error}; cleanup failed: {cleanup}"),
+        });
     }
     Ok((
         ArchiveProcess {
@@ -949,9 +985,10 @@ fn start_core(app: &tauri::AppHandle, office_endpoint: &str, ocr_endpoint: &str,
     };
 
     if let Err(error) = wait_for_core_health(port, &token, #[cfg(windows)] &job) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(error);
+        return Err(match cleanup_failed_startup(&mut child,#[cfg(windows)] &job){
+            Ok(())=>error,
+            Err(cleanup)=>format!("{error}; cleanup failed: {cleanup}"),
+        });
     }
 
     Ok((
