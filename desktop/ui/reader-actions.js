@@ -1,11 +1,20 @@
-import {installReaderPrint} from './reader-print.js';
 import {t} from './reader-language.js';
 // Browser-only document transfer is loaded on demand; Windows native Reader uses IPC.
 const $=id=>document.getElementById(id);
 const element=(tag,props={})=>Object.assign(document.createElement(tag),props);
 export function installReaderActions(api){
   let preparing=false;
-  installReaderPrint(api);
+  const menu=$('readerMenuPanel'),print=element('button',{id:'printDocument',textContent:'In PDF…    Ctrl+P'}),layout=element('button',{id:'printLayoutOptions',textContent:'Bố trí in nâng cao…'});
+  menu.prepend(layout);menu.prepend(print);
+  let printFeature=null,printFeaturePromise=null;
+  const loadPrintFeature=()=>printFeature??(printFeaturePromise??=(async()=>{
+    await api.ensurePdfLib();
+    const {installReaderPrint}=await import('./reader-print.js');
+    printFeature=installReaderPrint(api,{printButton:print,layoutButton:layout});return printFeature;
+  })().catch(error=>{printFeaturePromise=null;throw error;}));
+  print.onclick=api.attempt(async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}const feature=await loadPrintFeature();await feature.print();});
+  layout.onclick=api.attempt(async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}const feature=await loadPrintFeature();feature.openLayout();});
+  document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key.toLowerCase()==='p'){event.preventDefault();print.click();}});
   const forms=element('button',{id:'fillForm',textContent:'Điền biểu mẫu PDF'});$('readerMenuPanel').prepend(forms);
   forms.onclick=api.attempt(async()=>{const doc=api.current();if(!doc)throw Error('Mở PDF trước.');const fields=await doc.pdf.getFieldObjects();const field=[...(fields?.values()||[])].flat().find(x=>x.type!=='Sig'&&x.editable&&Number.isInteger(x.page)&&x.page>=0);if(!field){api.message(t('PDF này không có trường biểu mẫu có thể điền.'));return;}doc.view.currentPageNumber=field.page+1;doc.view.update();api.message(t('Nhấn vào trường trên trang để điền; dùng Tab để chuyển trường.'));});
   $('tools').onclick=api.attempt(async event=>{

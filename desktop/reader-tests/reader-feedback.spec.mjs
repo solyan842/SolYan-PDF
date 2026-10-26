@@ -45,7 +45,7 @@ for(const deviceScaleFactor of [1,1.25])test.describe(`refined selection ${devic
   await page.locator('#query').fill('keep');await page.locator('#query').press('Delete');await expect(mark).toHaveAttribute('data-signature',id);
   await page.locator('#readerMenu').focus();await page.keyboard.press('Delete');await expect(page.locator('.signature')).toHaveCount(0);await command(page,'undo');await expect(page.locator('.signature')).toHaveCount(1);
   const canvas=page.locator('.readerContainer:not([hidden]) .page').first(),box=await canvas.boundingBox(),container=await page.locator('.readerContainer:not([hidden])').boundingBox();const point={x:Math.max(box.x,container.x)+100,y:Math.max(box.y,container.y)+100};
-  const relative=b=>({x:(point.x-b.x)/b.width,y:(point.y-b.y)/b.height}),origin=relative(box),oldScale=await canvas.evaluate(el=>parseFloat(getComputedStyle(el).getPropertyValue('--scale-factor')));
+  const center={x:container.x+container.width/2,y:container.y+container.height/2};const relative=b=>({x:(center.x-b.x)/b.width,y:(center.y-b.y)/b.height}),origin=relative(box),oldScale=await canvas.evaluate(el=>parseFloat(getComputedStyle(el).getPropertyValue('--scale-factor')));
   await page.mouse.move(point.x,point.y);await page.keyboard.down('Control');await page.mouse.wheel(0,-100);await page.keyboard.up('Control');
   await expect.poll(()=>canvas.evaluate(el=>parseFloat(getComputedStyle(el).getPropertyValue('--scale-factor')))).toBeGreaterThan(oldScale);
   const after=relative(await canvas.boundingBox());expect(after.x).toBeCloseTo(origin.x,2);expect(after.y).toBeCloseTo(origin.y,2);await expect(page.locator('.signature')).toHaveAttribute('data-signature',id);

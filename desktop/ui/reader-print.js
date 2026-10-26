@@ -1,6 +1,6 @@
 import {sheets} from './reader-print-layout.js';
 const el=(tag,props={})=>Object.assign(document.createElement(tag),props);
-export function installReaderPrint(api){
+export function installReaderPrint(api,{printButton,layoutButton}){
   const dialog=el('dialog',{id:'readerPrintDialog'}),grid=el('div',{className:'reader-print-controls'});
   const select=(id,label,values)=>{const s=el('select',{id});for(const [value,text]of values)s.append(el('option',{value,textContent:text}));const l=el('label',{textContent:label});l.append(s);grid.append(l);return s;};
   const input=(id,label,value,type='number')=>{const s=el('input',{id,type,value});const l=el('label',{textContent:label});l.append(s);grid.append(l);return s;};
@@ -26,8 +26,7 @@ export function installReaderPrint(api){
   const start=el('button',{id:'printStart',textContent:'In…',className:'primary'}),cancel=el('button',{id:'printCancel',textContent:'Hủy / Đóng'});
   const previewPanel=el('section',{className:'reader-print-preview'}),previewNav=el('div',{className:'reader-print-preview-nav'}),body=el('div',{className:'reader-print-body'}),footer=el('div',{className:'reader-print-footer'});
   previewNav.append(previewButton,prev,pageLabel,next);previewPanel.append(previewNav,preview,status);body.append(grid,previewPanel);footer.append(start,cancel);
-  dialog.append(el('h2',{textContent:'In PDF'}),body,el('p',{className:'reader-print-note',textContent:'Chọn máy in, số bản, Properties và hai mặt trong hộp thoại Windows tiếp theo (tùy driver). Khổ giấy và lề cần khớp máy in. Sách: giấy ngang, hai mặt, lật cạnh ngắn. Bản in dùng PDF.js; PDF gốc không đổi.'}),footer);document.body.append(dialog);
-  const print=el('button',{id:'printDocument',textContent:'In PDF…    Ctrl+P'});document.getElementById('readerMenuPanel').prepend(print);
+  dialog.append(el('h2',{textContent:'Bố trí in nâng cao'}),body,el('p',{className:'reader-print-note',textContent:'Máy in, số bản, Properties và in hai mặt sẽ dùng hộp thoại in Windows chuẩn (tùy driver). Bản in dùng PDF.js; PDF gốc không đổi.'}),footer);document.body.append(dialog);
   let preparing=false,abort=null,pdf=null,renderTask=null,previewIndex=0;
   const rules=[],sheet=[...document.styleSheets].find(s=>s.href?.split('?')[0].endsWith('/reader.css'));
   const showPreview=()=>{const canvases=[...document.querySelectorAll('#readerPrintStage canvas')];previewIndex=Math.max(0,Math.min(previewIndex,canvases.length-1));const c=canvases[previewIndex];preview.hidden=!c;if(!c){pageLabel.textContent='';return;}preview.width=Math.max(1,Math.round(c.width*Math.min(1,400/c.width)));preview.height=Math.max(1,Math.round(c.height*preview.width/c.width));preview.getContext('2d').drawImage(c,0,0,preview.width,preview.height);pageLabel.textContent=`Tờ ${previewIndex+1}/${canvases.length}`;prev.disabled=previewIndex===0;next.disabled=previewIndex===canvases.length-1;};
@@ -36,7 +35,7 @@ export function installReaderPrint(api){
   prev.onclick=()=>{previewIndex--;showPreview();};next.onclick=()=>{previewIndex++;showPreview();};
   const enabledOptions=()=>{count.disabled=mode.value!=='multiple';percent.disabled=scale.value!=='custom'&&mode.value!=='tile';};enabledOptions();
   grid.addEventListener('change',()=>{enabledOptions();if(!preparing){cleanup();pageLabel.textContent='';status.textContent='Tùy chọn đã đổi; nhấn Xem trước để cập nhật.';}});
-  print.onclick=()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();range.value='all';subset.value='all';status.textContent='Xem trước và in bản làm việc; PDF nguồn không đổi.';dialog.showModal();};
+  const resetOptions=()=>{subset.value='all';range.value='all';parity.value='all';reverse.checked=false;paper.value='source';orientation.value='auto';mode.value='single';count.value='1';scale.value='fit';percent.value='100';margin.value='0';rotate.checked=true;quality.value='216';edits.checked=true;annotations.checked=true;forms.checked=true;gray.checked=false;enabledOptions();};
   const prepare=async(doPrint)=>{
     const doc=api.current();if(!doc||preparing||api.busy)return;
     cleanup();abort=new AbortController();const signal=abort.signal;preparing=true;start.disabled=previewButton.disabled=true;grid.inert=true;
@@ -46,10 +45,10 @@ export function installReaderPrint(api){
       if(subset.value==='visible'){const bounds=doc.container.getBoundingClientRect();pages=[...doc.container.querySelectorAll('.page[data-page-number]')].filter(p=>{const r=p.getBoundingClientRect();return r.bottom>bounds.top&&r.top<bounds.bottom&&r.right>bounds.left&&r.left<bounds.right;}).map(p=>Number(p.dataset.pageNumber)-1);}
       pages=pages.filter(p=>parity.value==='all'||(p+1)%2===(parity.value==='odd'?1:0));if(reverse.checked)pages.reverse();
       if(!pages.length||pages.length>50)throw Error('Chọn từ 1 đến 50 trang cho mỗi đợt in.');
-      let bytes;if(edits.checked&&forms.checked)bytes=await api.exportDocument(doc);
-      else if(edits.checked){const unfilled=await api.pdfjs.getDocument({data:doc.bytes.slice(),isEvalSupported:false,enableXfa:false}).promise;try{bytes=await api.exportDocument({...doc,pdf:unfilled,formDirty:false});}finally{await unfilled.loadingTask.destroy();}}
-      else bytes=forms.checked&&doc.pdf.annotationStorage.size?await doc.pdf.saveDocument():doc.bytes.slice();
-      if(forms.checked&&!annotations.checked){const flattened=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});flattened.getForm().flatten({updateFieldAppearances:false});bytes=await flattened.save();}
+      const sourceBytes=await api.readSourceBytes(doc);let bytes;if(edits.checked&&forms.checked)bytes=await api.exportDocument(doc);
+      else if(edits.checked){const unfilled=await api.pdfjs.getDocument({data:sourceBytes.slice(),isEvalSupported:false,enableXfa:false}).promise;try{bytes=await api.exportDocument({...doc,pdf:unfilled,formDirty:false});}finally{await unfilled.loadingTask.destroy();}}
+      else bytes=forms.checked&&doc.pdf.annotationStorage.size?await doc.pdf.saveDocument():sourceBytes.slice();
+      if(forms.checked&&!annotations.checked){await api.ensurePdfLib();const flattened=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});flattened.getForm().flatten({updateFieldAppearances:false});bytes=await flattened.save();}
       signal.throwIfAborted();pdf=await api.pdfjs.getDocument({data:bytes,isEvalSupported:false,enableXfa:false,standardFontDataUrl:'./vendor/pdfjs/standard_fonts/',cMapUrl:'./vendor/pdfjs/cmaps/',cMapPacked:true,wasmUrl:'./vendor/pdfjs/wasm/'}).promise;
       const sizes={},sourcePages={};for(const index of pages){signal.throwIfAborted();const p=await pdf.getPage(index+1);sourcePages[index]=p;const v=p.getViewport({scale:1});sizes[index]=[v.width,v.height];}
       let size=({a4:[595.276,841.89],letter:[612,792],a3:[841.89,1190.551]})[paper.value]||null;if(size&&orientation.value!=='auto'){size.sort((a,b)=>a-b);if(orientation.value==='landscape')size.reverse();}
@@ -74,6 +73,8 @@ export function installReaderPrint(api){
     }catch(error){cleanup();if(error.name!=='AbortError'&&error.name!=='RenderingCancelledException')throw error;}
     finally{preparing=false;grid.inert=false;start.disabled=previewButton.disabled=false;}
   };
+  const printDefault=async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang chuẩn bị bản in; cửa sổ in Windows sẽ mở sau đó.';await prepare(true);};
+  const openLayout=()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Bố trí in nâng cao. Máy in và Properties sẽ được chọn trong hộp thoại Windows.';dialog.showModal();};
   start.onclick=api.attempt(()=>prepare(true));previewButton.onclick=api.attempt(()=>prepare(false));
-  document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key.toLowerCase()==='p'){event.preventDefault();if(!dialog.open)print.click();}});
+  return {print:printDefault,openLayout};
 }

@@ -2,6 +2,14 @@ import {test,expect} from '@playwright/test';
 import {PDFDocument} from 'pdf-lib';
 import {exerciseReaderLoad} from './reader-load.mjs';
 
+test('Reader Home is interactive before loading the PDF.js engine; first open loads it on demand',async({page})=>{
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  expect(await page.evaluate(()=>typeof window.pdfjsLib==='undefined')).toBe(true);
+  const pdf=await PDFDocument.create();pdf.addPage([600,800]).drawText('LAZY READER OPEN',{x:60,y:650});
+  await page.locator('#pdfFiles').setInputFiles({name:'on-demand.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await expect(page.locator('.page canvas').first()).toBeVisible();await expect.poll(()=>page.evaluate(()=>typeof window.pdfjsLib)).toBe('object');
+});
+
 test('ten tabs and a 100-page PDF stay readable, bounded and closable',async({page})=>{
   const files=[];
   for(let n=0;n<9;n++){

@@ -1,18 +1,37 @@
 import {linkifyText,installLinkGuard} from './reader-link-guard.js';
-import * as pdfjs from './vendor/pdfjs/build/pdf.mjs';
-import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from './vendor/pdfjs/web/pdf_viewer.mjs';
 import { installR2 } from './reader-r2.js';
 import { connectNativeReader } from './reader-native.js';
 import { installLanguage,t,getLanguage } from './reader-language.js';
 import { installReaderActions } from './reader-actions.js';
 import { installDefaultPdfPrompt } from './reader-default-app.js';
 import { installReaderSession } from './reader-session.js';
-globalThis.pdfjsLib = pdfjs;
-pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/build/pdf.worker.mjs';
 const $ = id => document.getElementById(id), Q = window.QuickSign;
 installLinkGuard({message:text=>document.getElementById('status').textContent=text});
 const documents = new Map();
 let active = null, selected = null, asset = null, busy = false, drawing = false, inked = false;
+let pdfjs=null,pdfRuntimePromise=null,pdfLibPromise=null;
+function ensurePdfRuntime(){
+  if(pdfjs)return pdfRuntimePromise;
+  if(!pdfRuntimePromise)pdfRuntimePromise=import('./vendor/pdfjs/build/pdf.mjs').then(async engine=>{
+    // PDF.js viewer modules read pdfjsLib from globalThis during evaluation.
+    // Publish the engine before importing the viewer to keep the lazy startup safe.
+    pdfjs=engine;globalThis.pdfjsLib=engine;engine.GlobalWorkerOptions.workerSrc='./vendor/pdfjs/build/pdf.worker.mjs';
+    const viewer=await import('./vendor/pdfjs/web/pdf_viewer.mjs');
+    return {pdfjs:engine,...viewer};
+  }).catch(error=>{pdfRuntimePromise=null;throw error;});
+  return pdfRuntimePromise;
+}
+function ensurePdfLib(){
+  if(window.PDFLib)return Promise.resolve(window.PDFLib);
+  if(!pdfLibPromise)pdfLibPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src='./vendor/pdf-lib.min.js';script.onload=()=>resolve(window.PDFLib);script.onerror=()=>{pdfLibPromise=null;reject(Error('Không tải được thư viện lưu PDF.'));};document.head.append(script);
+  });
+  return pdfLibPromise;
+}
+async function readSourceBytes(doc){
+  if(!doc.sourceBytes)doc.sourceBytes=new Uint8Array(await doc.sourceFile.arrayBuffer());
+  return doc.sourceBytes;
+}
 const message = text => { $('status').textContent = text; };
 const attempt = fn => async (...args) => { try { await fn(...args); } catch (e) { message(`Không thể thực hiện: ${typeof e === 'string' ? e : e.message}`); } };
 // Disable WebView2's generic right-click menu ("Save as..." on PDF page
@@ -52,8 +71,10 @@ function renderTabs() {
 async function openFile(file, source = null) {
   if (file.size > 200 * 1024 * 1024) throw Error('Reader R1 giới hạn mỗi PDF ở 200 MB.');
   message(`Đang mở ${file.name}…`);
+  const runtimePromise=ensurePdfRuntime();
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const task = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, enableXfa: false,
+  const {pdfjs,EventBus,PDFViewer,PDFLinkService,PDFFindController}=await runtimePromise;
+  const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false, enableXfa: false,
     cMapUrl: './vendor/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: './vendor/pdfjs/standard_fonts/', wasmUrl: './vendor/pdfjs/wasm/' });
   task.onPassword = (update, reason) => {
     const password = prompt(t(reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD ? 'Mật khẩu chưa đúng. Nhập lại:' : 'Mật khẩu PDF:'));
@@ -64,7 +85,7 @@ async function openFile(file, source = null) {
   const viewer = document.createElement('div'); viewer.className = 'pdfViewer'; container.append(viewer); $('documents').append(container);
   const bus = new EventBus(), link = new PDFLinkService({ eventBus: bus, externalLinkEnabled: true }), find = new PDFFindController({ eventBus: bus, linkService: link });
   const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS, maxCanvasPixels: 12_000_000, enableScripting: false });
-  const doc = { id: crypto.randomUUID(), name: file.name, source, bytes, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
+  const doc = { id: crypto.randomUUID(), name: file.name, source, sourceFile:file, sourceBytes:null, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
   pdf.annotationStorage.onSetModified=()=>{doc.formDirty=true;changed(doc);};
   r2?.opened(doc);
@@ -259,10 +280,37 @@ $('pageNumber').onchange=()=>{
   // old scroll state to infer page 1 in installed Windows WebView2.
   d.view.scrollPageIntoView({pageNumber:requested});
 };
+function captureZoomCenter(d){
+  const bounds=d.container.getBoundingClientRect(),centerX=bounds.left+d.container.clientWidth/2,centerY=bounds.top+d.container.clientHeight/2;
+  const pages=[...d.container.querySelectorAll('.page[data-page-number]')];
+  const page=pages.find(node=>{const r=node.getBoundingClientRect();return centerX>=r.left&&centerX<=r.right&&centerY>=r.top&&centerY<=r.bottom;})
+    ||pages.find(node=>Number(node.dataset.pageNumber)===d.view.currentPageNumber)||pages[0];
+  if(!page)return null;
+  const rect=page.getBoundingClientRect(),factor=Number.parseFloat(getComputedStyle(page).getPropertyValue('--scale-factor'));
+  return {pageNumber:Number(page.dataset.pageNumber),x:(centerX-rect.left)/factor,y:(centerY-rect.top)/factor,centerX,centerY};
+}
+function changeScaleKeepingCenter(d,value){
+  const anchor=captureZoomCenter(d),oldScale=d.view.currentScale;if(!anchor){d.view.currentScaleValue=String(value);return;}
+  let finished=false;
+  const onRendered=({pageNumber})=>{
+    if(pageNumber!==anchor.pageNumber)return;
+    d.bus.off('pagerendered',onRendered);requestAnimationFrame(()=>{
+      if(finished)return;finished=true;
+      const page=d.container.querySelector(`.page[data-page-number="${anchor.pageNumber}"]`);if(!page)return;
+      const rect=page.getBoundingClientRect(),factor=Number.parseFloat(getComputedStyle(page).getPropertyValue('--scale-factor'));
+      d.container.scrollLeft+=rect.left+anchor.x*factor-anchor.centerX;
+      d.container.scrollTop+=rect.top+anchor.y*factor-anchor.centerY;
+    });
+  };
+  d.bus.on('pagerendered',onRendered);d.view.currentScaleValue=String(value);
+  if(d.view.currentScale===oldScale){finished=true;d.bus.off('pagerendered',onRendered);}
+}
 function changeZoom(value){
   const d=current();if(!d)return;
+  d.view.update();
   const selected=Math.max(1,Math.min(d.pdf.numPages,Number($('pageNumber').value)||d.view.currentPageNumber));
-  d.view.update();d.view.currentScaleValue=value;
+  if(d.view.currentPageNumber!==selected)d.view.scrollPageIntoView({pageNumber:selected});
+  changeScaleKeepingCenter(d,value);
   if(d.view.currentPageNumber!==selected)d.view.scrollPageIntoView({pageNumber:selected});
 }
 $('zoom').onchange=()=>changeZoom($('zoom').value);
@@ -283,23 +331,20 @@ document.addEventListener('wheel',event=>{
   const overPdf=event.clientX>=rect.left&&event.clientX<rect.right
     &&event.clientY>=rect.top&&event.clientY<rect.bottom;
   if(!overPdf)return;
-  d.view.update();
   const units=event.deltaMode===1?16:event.deltaMode===2?d.container.clientHeight:1;
   const delta=Math.max(-300,Math.min(300,event.deltaY*units));
   const scale=Math.max(.25,Math.min(4,d.view.currentScale*Math.exp(-delta*.002)));
   if(Math.abs(scale-d.view.currentScale)<.0001)return;
-  const bounds=d.container.getBoundingClientRect();
-  d.view.updateScale({scaleFactor:scale/d.view.currentScale,drawingDelay:100,
-    origin:[event.clientX-bounds.left+d.container.offsetLeft,event.clientY-bounds.top+d.container.offsetTop]});
+  changeScaleKeepingCenter(d,scale);
 },{capture:true,passive:false});
 $('sideToggle').onclick=()=>{$('sidebar').hidden=!$('sidebar').hidden;};$('showThumbs').onclick=()=>{$('thumbs').hidden=false;$('outline').hidden=true;const list=$('bookmarks');if(list)list.hidden=true;};$('showOutline').onclick=()=>{$('thumbs').hidden=true;$('outline').hidden=false;const list=$('bookmarks');if(list)list.hidden=true;};
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',attempt(async e=>{e.preventDefault();for(const file of e.dataTransfer.files)if(file.name.toLowerCase().endsWith('.pdf'))await openFile(file);}));
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();$(e.shiftKey?'save':'saveCurrent').click();}});
 document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected&&!e.target.closest('input,textarea,select,[contenteditable=true]')&&!document.querySelector('dialog[open]')){e.preventDefault();removeSignature();}});
 window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
-r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},flushSession:()=>session?.flush(),get busy(){return busy;}});
+r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,ensurePdfLib,readSourceBytes,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},flushSession:()=>session?.flush(),get busy(){return busy;}});
 session=installReaderSession({native:window.__TAURI__,documents,current,activate,message,attempt});
-installReaderActions({current,message,attempt,pdfjs,exportDocument:doc=>r2.exportDocument(doc),openFile,get busy(){return busy;}});
+installReaderActions({current,message,attempt,get pdfjs(){return pdfjs;},ensurePdfLib,readSourceBytes,exportDocument:doc=>r2.exportDocument(doc),openFile,get busy(){return busy;}});
 installLanguage();
 document.addEventListener('reader-language-changed',()=>{if($('outline').dataset.empty==='true')$('outline').textContent=t('PDF này chưa có mục lục.');});
 $('open').disabled=false;

@@ -93,7 +93,7 @@ export function installReaderShell(api,panels){
   propertiesButton.onclick=api.attempt(async()=>{
     const selected=api.current();
     if(!selected){api.message(t('Mở PDF trước.'));return;}
-    const [metadata,page]=await Promise.all([selected.pdf.getMetadata(),selected.pdf.getPage(1)]);
+    const [metadata,page,sourceBytes]=await Promise.all([selected.pdf.getMetadata(),selected.pdf.getPage(1),api.readSourceBytes(selected)]);
     // A document may be closed or another tab activated while metadata loads.
     if(!api.documents.has(selected.id)||api.current()!==selected)return;
     const info=metadata?.info||{};
@@ -105,7 +105,7 @@ export function installReaderShell(api,panels){
     const pageWidth=Math.abs(page.view[2]-page.view[0]);
     const pageHeight=Math.abs(page.view[3]-page.view[1]);
     const formatPoint=value=>Number(value.toFixed(2)).toLocaleString(document.documentElement.lang==='en'?'en-US':'vi-VN');
-    const size=(selected.bytes.byteLength/1024).toLocaleString(document.documentElement.lang==='en'?'en-US':'vi-VN',{maximumFractionDigits:1});
+    const size=(sourceBytes.byteLength/1024).toLocaleString(document.documentElement.lang==='en'?'en-US':'vi-VN',{maximumFractionDigits:1});
     const fields=[
       ['file','Tên tệp',selected.name],
       ['pages','Số trang',selected.pdf.numPages],

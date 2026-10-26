@@ -210,3 +210,13 @@ for (const exit of ['tab close', 'beforeunload']) {
     await expect(page.locator('#pageNumber')).toHaveValue('4');
   });
 }
+
+test('zoom controls keep the point at the document viewport center fixed',async({page})=>{
+  const pdf=await PDFDocument.create();for(let i=0;i<3;i++)pdf.addPage([600,800]).drawText(`CENTER ZOOM ${i+1}`,{x:50,y:700});
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles({name:'Center zoom.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.page canvas').first()).toBeVisible();
+  const before=await page.locator('.readerContainer:not([hidden])').evaluate(node=>{const r=node.getBoundingClientRect(),p=node.querySelector('.page'),b=p.getBoundingClientRect(),s=parseFloat(getComputedStyle(p).getPropertyValue('--scale-factor')),x=r.left+node.clientWidth/2,y=r.top+node.clientHeight/2;return {scale:s,x:(x-b.left)/s,y:(y-b.top)/s};});
+  await page.locator('#zoomIn').click();
+  const drift=async()=>page.locator('.readerContainer:not([hidden])').evaluate((node,anchor)=>{const r=node.getBoundingClientRect(),p=node.querySelector('.page'),b=p.getBoundingClientRect(),s=parseFloat(getComputedStyle(p).getPropertyValue('--scale-factor')),x=b.left+anchor.x*s,y=b.top+anchor.y*s,cx=r.left+node.clientWidth/2,cy=r.top+node.clientHeight/2;return Math.hypot(x-cx,y-cy);},before);
+  await expect.poll(drift).toBeLessThan(5);
+});
