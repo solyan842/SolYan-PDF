@@ -53,6 +53,13 @@ def main() -> None:
     # Tauri 2 production origin on Windows is http://tauri.localhost.
     # Keep the normal web backend default unchanged outside the desktop sidecar.
     os.environ.setdefault("SOLYAN_ALLOWED_ORIGINS", "http://tauri.localhost")
+    # The desktop webview and the loopback API are different origins. Cloud
+    # sessions use HttpOnly cookies, so allow credentialed CORS and SameSite=None
+    # only for the isolated local desktop process.
+    os.environ.setdefault("CLOUD_STORAGE_CALLBACK_BASE_URL", f"http://127.0.0.1:{args.port}")
+    os.environ.setdefault("CLOUD_STORAGE_FRONTEND_BASE_URL", "http://tauri.localhost")
+    os.environ.setdefault("CLOUD_STORAGE_COOKIE_SAMESITE", "none")
+    os.environ.setdefault("CLOUD_STORAGE_COOKIE_SECURE", "1")
 
     from backend.app.main import app as fastapi_app
     from starlette.middleware.cors import CORSMiddleware
@@ -63,6 +70,7 @@ def main() -> None:
     app = CORSMiddleware(
         DesktopTokenMiddleware(fastapi_app, args.token),
         allow_origins=[origin.strip() for origin in os.environ['SOLYAN_ALLOWED_ORIGINS'].split(',') if origin.strip()],
+        allow_credentials=True,
         allow_methods=['*'],
         allow_headers=['*'],
     )

@@ -5,7 +5,8 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const ui=new URL('../ui/',import.meta.url),assets=new Map();
-for(const p of ['poppler-convert.html','poppler-convert.js','tool.css','output-name.js','output-save.js'])assets.set('/'+p,await readFile(new URL(p,ui)));
+for(const p of ['poppler-convert.html','poppler-convert.js','tool.css','icons.js','output-name.js','output-save.js'])assets.set('/'+p,await readFile(new URL(p,ui)));
+assets.set('/icons/phosphor-duotone/file-image-duotone.svg',await readFile(new URL('icons/phosphor-duotone/file-image-duotone.svg',ui)));
 const server=createServer((req,res)=>{const path=new URL(req.url,'http://localhost').pathname,body=assets.get(path);res.writeHead(body?200:404,{'Content-Type':path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript','Content-Security-Policy':"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' http://127.0.0.1:*"});res.end(body||'not found')});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const browser=await chromium.launch({channel:process.env.STOOL_BROWSER_CHANNEL||undefined});
 try{

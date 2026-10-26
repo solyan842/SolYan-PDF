@@ -111,6 +111,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/network-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-network-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/translate.browser.mjs 2>&1 | Tee-Object artifacts/stool-translate-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/cloud-storage.browser.mjs 2>&1 | Tee-Object artifacts/stool-cloud-storage-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/page-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-page-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/image-to-pdf.browser.mjs 2>&1 | Tee-Object artifacts/stool-image-to-pdf-ui.log

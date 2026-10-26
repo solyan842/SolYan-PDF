@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dịch PDF — SolYan PDF</title>
+  <link rel="stylesheet" href="./tool.css">
+</head>
+<body class="tool-shell">
+  <div class="tool-layout">
+    <aside class="tool-sidebar"><a class="back-link" href="./index.html">← Trang chủ</a><div class="desktop-brand">SolYan PDF</div><p class="desktop-subtitle">Windows Desktop</p><hr class="tool-divider"><div class="sidebar-links">Chuyển đổi<br>Dịch PDF</div></aside>
+    <main class="tool-main">
+      <div class="tool-top"><a class="back-link" href="./index.html">Công cụ › Dịch PDF</a><span class="muted-small">Engine chỉ được gọi khi bạn bấm dịch</span></div>
+      <div class="tool-title"><div id="toolIcon" class="big-icon info-icon" aria-hidden="true"></div><div><h1>Dịch PDF giữ bố cục</h1><p>Chọn engine local hoặc dịch vụ đã cấu hình trong Core.</p></div></div>
+      <div class="repair-layout">
+        <section class="surface">
+          <div class="option-group"><label for="sourceFile">Tệp PDF</label><input id="sourceFile" class="tool-input" type="file" accept="application/pdf,.pdf"><p id="selectedFile" class="muted-small">Chưa chọn tệp.</p></div>
+          <div class="form-grid two-col">
+            <div class="option-group"><label for="sourceLanguage">Ngôn ngữ nguồn</label><select id="sourceLanguage" class="tool-input"><option value="en">English</option><option value="vi">Tiếng Việt</option><option value="zh">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="es">Español</option><option value="pt">Português</option><option value="ru">Русский</option></select></div>
+            <div class="option-group"><label for="targetLanguage">Ngôn ngữ đích</label><select id="targetLanguage" class="tool-input"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="zh">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="es">Español</option><option value="pt">Português</option><option value="ru">Русский</option></select></div>
+          </div>
+          <div class="form-grid two-col">
+            <div class="option-group"><label for="service">Engine dịch</label><select id="service" class="tool-input"><option value="argos">Argos · Local</option><option value="ollama">Ollama · Local</option><option value="openai">OpenAI · Online</option><option value="deepl">DeepL · Online</option><option value="google">Google · Online</option><option value="bing">Bing · Online</option></select></div>
+            <div class="option-group"><label for="outputMode">Đầu ra</label><select id="outputMode" class="tool-input"><option value="translated">PDF đã dịch</option><option value="bilingual">PDF song ngữ</option></select></div>
+          </div>
+          <p id="privacyNote" class="local-note">Argos/Ollama có thể chạy local khi engine và model được cấu hình. Engine online có thể gửi phần văn bản ra dịch vụ bên ngoài.</p>
+          <button id="runBtn" class="primary merge-btn" type="button" disabled>Dịch PDF →</button>
+          <p id="status" class="status-text" role="status">Chọn PDF để bắt đầu.</p>
+        </section>
+        <aside class="surface options"><h2>Thông tin engine</h2><p id="capabilities" class="local-note">Trạng thái được kiểm tra khi bạn bắt đầu tác vụ. API key không nhập vào giao diện.</p><p class="security-disclaimer">Dịch vụ Core chỉ điều phối qua adapter HTTP. Dịch vụ dịch phải được cấu hình ở phía ứng dụng.</p></aside>
+      </div>
+    </main>
+  </div>
+  <script src="./icons.js"></script><script src="./output-name.js"></script><script src="./output-save.js"></script><script src="./translate.js"></script>
+</body>
+</html>

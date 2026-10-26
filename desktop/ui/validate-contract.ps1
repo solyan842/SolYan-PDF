@@ -16,7 +16,7 @@ $required = @(
   "desktop/ui/poppler-convert.html", "desktop/ui/poppler-convert.js", "desktop/stool-tests/pdf-images.browser.mjs", "desktop/ui/network-tool.html", "desktop/ui/network-tool.js", "desktop/stool-tests/network-tools.browser.mjs", "desktop/backend/tests/test_network_ping.py", "backend/app/network_command.py", "desktop/ui/office-convert.html", "desktop/ui/office-convert.js",
   "desktop/ui/portfolio.html", "desktop/ui/portfolio.js", "desktop/ui/workspace.html", "desktop/ui/page-tools.html", "desktop/ui/page-tools.js", "desktop/ui/page-layout.html", "desktop/ui/page-layout.js", "desktop/ui/stamp.html", "desktop/ui/stamp.js", "desktop/ui/image-to-pdf.html", "desktop/ui/image-to-pdf.js", "desktop/ui/utilities.html", "desktop/ui/utility-tools.js", "desktop/ui/form-fill.html", "desktop/ui/form-fill.js", "desktop/ui/overlay.html", "desktop/ui/overlay.js", "desktop/stool-tests/page-layout.browser.mjs", "desktop/stool-tests/stamp.browser.mjs",
   "desktop/ui/ocr.html", "desktop/ui/ocr.js", "desktop/ui/ocr.css", "desktop/ui/ocr-tools.html", "desktop/ui/ocr-tools.js", "desktop/stool-tests/ocr-tools.browser.mjs", "desktop/stool-tests/ocr-export.browser.mjs",
-  "desktop/ui/sign.html", "desktop/ui/sign.js", "desktop/backend/sign_runner.py",
+  "desktop/ui/sign.html", "desktop/ui/sign.js", "desktop/backend/sign_runner.py", "desktop/ui/translate.html", "desktop/ui/translate.js", "desktop/stool-tests/translate.browser.mjs", "desktop/ui/cloud-storage.html", "desktop/ui/cloud-storage.js", "desktop/stool-tests/cloud-storage.browser.mjs",
   "desktop/ui/pdfa.html", "desktop/ui/pdfa.js", "desktop/backend/archive_runner.py",
   "desktop/backend/stage-native-runtimes.ps1", "desktop/backend/stage-office-runtime.ps1",
   "desktop/vendor/qpdf-windows-x64.json", "desktop/vendor/poppler-windows-x64.json", "desktop/vendor/libreoffice-windows-x64.json",
@@ -33,7 +33,7 @@ if ($iconBytes.Length -lt 6 -or $iconBytes[0] -ne 0 -or $iconBytes[1] -ne 0 -or 
 $html = Get-Content "desktop/ui/index.html" -Raw
 $catalog = (Get-Content "desktop/ui/catalog.js" -Raw) + (Get-Content "desktop/ui/catalog-additions.js" -Raw)
 $app = Get-Content "desktop/ui/app.js" -Raw
-$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'workflow':", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "ping:", "ranking:", "ip:", "'fill-form':", "overlay:", "highlight:", "'manual-redact':", "'auto-redact':", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "'bookmarks':", "'split-bookmark':", "'auto-rotate':", "'qr-split':", "'pdf-excel':", "'scan-table':", "orientation:", "'layout-analysis':", "watermark:", "stamp:", "compare:")
+$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'workflow':", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "ping:", "ranking:", "ip:", "keyword:", "gdrive:", "onedrive:", "webdav:", "translate:", "'fill-form':", "overlay:", "highlight:", "'manual-redact':", "'auto-redact':", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "'bookmarks':", "'split-bookmark':", "'auto-rotate':", "'qr-split':", "'pdf-excel':", "'scan-table':", "orientation:", "'layout-analysis':", "watermark:", "stamp:", "compare:")
 foreach ($route in $requiredRoutes) { if (-not $app.Contains($route)) { throw "Missing sTool UI route: $route" } }
 $resultPages = Get-ChildItem "desktop/ui" -Filter "*.html" | Where-Object { (Get-Content $_.FullName -Raw).Contains('./output-save.js') }
 foreach ($page in $resultPages) {
@@ -64,6 +64,8 @@ $scripts = @{
   ocr = Get-Content "desktop/ui/ocr.js" -Raw
   ocrTools = Get-Content "desktop/ui/ocr-tools.js" -Raw
   network = Get-Content "desktop/ui/network-tool.js" -Raw
+  translate = Get-Content "desktop/ui/translate.js" -Raw
+  cloudStorage = Get-Content "desktop/ui/cloud-storage.js" -Raw
   compare = Get-Content "desktop/ui/compare.js" -Raw
 }
 
@@ -93,6 +95,10 @@ $archiveProxy = Get-Content "backend/app/archive_proxy.py" -Raw
 foreach ($value in @("SOLYAN_ARCHIVE_TOKEN", "_archive_auth_headers")) {
   if (-not $archiveProxy.Contains($value)) { throw "Archive proxy auth contract missing: $value" }
 }
+$desktopRunner = Get-Content "desktop/backend/runner.py" -Raw
+foreach ($value in @("allow_credentials=True", "CLOUD_STORAGE_CALLBACK_BASE_URL", "CLOUD_STORAGE_FRONTEND_BASE_URL", "CLOUD_STORAGE_COOKIE_SAMESITE", "CLOUD_STORAGE_COOKIE_SECURE")) {
+  if (-not $desktopRunner.Contains($value)) { throw "Desktop cloud session contract missing: $value" }
+}
 $contracts = @(
   @{ n='Repair PDF'; s=$scripts.repair; t=@('desktop_core_session','/pdf/repair','X-SolYan-Desktop-Token') },
   @{ n='Extract Images'; s=$scripts.extractImages; t=@('desktop_core_session','/pdf/extract-images','X-SolYan-Desktop-Token','X-SolYan-Extracted-Images') },
@@ -115,13 +121,15 @@ $contracts = @(
   @{ n='Office converters'; s=$scripts.officeConvert; t=@('desktop_core_session','/office/to-pdf','/experimental/pdf-to-office','X-SolYan-Desktop-Token','target','mode','auto','X-SolYan-Conversion-Engine','LibreOffice-first') },
   @{ n='OCR PDF/Image'; s=$scripts.ocr; t=@('desktop_core_session','/ocr/text','X-SolYan-Desktop-Token','payload.text','SOLYAN_OUTPUT_NAME','renameOnly','auto-rename') },
   @{ n='Auto rotate, QR split and PDF to Excel'; s=$scripts.ocrTools; t=@('desktop_service_ready','/ocr/auto-rotate','/ocr/auto-split','/ocr/xlsx','/ocr/orientation','/ocr/structured','SOLYAN_OUTPUT_NAME_FROM_DISPOSITION','confidence_threshold','infer_undetected','duplex') },
-  @{ n='Network utilities'; s=$scripts.network; t=@('desktop_core_session','/net/ping','/net/site-rank','/net/local-ip','X-SolYan-Desktop-Token') },
+  @{ n='Network utilities'; s=$scripts.network; t=@('desktop_core_session','/net/ping','/net/site-rank','/net/local-ip','/net/keyword-position','X-SolYan-Desktop-Token') },
+  @{ n='PDF translation'; s=$scripts.translate; t=@('desktop_core_session','/pdf/translate/capabilities','/pdf/translate','X-SolYan-Desktop-Token') },
+  @{ n='Cloud storage'; s=$scripts.cloudStorage; t=@('desktop_core_session','/storage/providers','/storage/webdav/status','/storage/webdav/connect','X-SolYan-Desktop-Token','credentials:') },
   @{ n='PDF Portfolio'; s=$scripts.portfolio; t=@('desktop_core_session','/pdf/portfolio','X-SolYan-Desktop-Token','X-SolYan-Portfolio-Files') },
   @{ n='PDF Compare'; s=$scripts.compare; t=@('desktop_core_session','/pdf/compare','X-SolYan-Desktop-Token','left','right','averageSimilarity') }
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html","desktop/ui/visual-tools.html","desktop/ui/redaction-tools.html")
+$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/network-tool.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/ocr-tools.html","desktop/ui/network-tool.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html","desktop/ui/compare.html","desktop/ui/workflow.html","desktop/ui/visual-tools.html","desktop/ui/redaction-tools.html","desktop/ui/translate.html","desktop/ui/cloud-storage.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"

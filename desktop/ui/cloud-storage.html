@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cloud Storage — SolYan PDF</title><link rel="stylesheet" href="./tool.css"></head>
+<body class="tool-shell"><div class="tool-layout">
+  <aside class="tool-sidebar"><a class="back-link" href="./index.html">← Trang chủ</a><div class="desktop-brand">SolYan PDF</div><p class="desktop-subtitle">Windows Desktop</p><hr class="tool-divider"><div class="sidebar-links">Cloud Storage<br>Google Drive<br>OneDrive<br>WebDAV</div></aside>
+  <main class="tool-main"><div class="tool-top"><a class="back-link" href="./index.html">Công cụ › Cloud Storage</a><span class="muted-small">Chỉ kết nối khi bạn chủ động bấm</span></div>
+    <div class="tool-title"><div id="toolIcon" class="big-icon info-icon" aria-hidden="true"></div><div><h1>Google Drive · OneDrive · WebDAV</h1><p>Mở, tải và lưu PDF qua dịch vụ bạn đã cấu hình.</p></div></div>
+    <div class="repair-layout"><section class="surface">
+      <div class="form-grid two-col"><div class="option-group"><label for="provider">Nhà cung cấp</label><select id="provider" class="tool-input"><option value="google">Google Drive</option><option value="onedrive">OneDrive</option><option value="webdav">WebDAV</option></select></div><div class="option-group"><label>Phiên</label><p id="providerStatus" class="status-text">Chưa kiểm tra kết nối.</p></div></div>
+      <div class="form-grid two-col"><button id="refreshBtn" class="secondary-button" type="button">Kiểm tra kết nối và tải danh sách</button><button id="connectBtn" class="primary merge-btn" type="button">Kết nối</button></div>
+      <div class="form-grid two-col"><button id="upBtn" class="secondary-button" type="button" disabled>↑ Lên một cấp</button><label class="picker"><input id="uploadFile" type="file" accept="application/pdf,.pdf" hidden><span>+ Upload PDF vào thư mục này</span></label></div>
+      <p id="folderPath" class="muted-small">Root</p><div id="items" class="file-list"></div>
+      <p id="status" class="status-text" role="status">Nhấn kiểm tra kết nối để bắt đầu.</p>
+    </section><aside class="surface options"><h2>Thông tin bảo mật</h2><p id="providerNote" class="local-note">Credential OAuth hoặc WebDAV được cấu hình phía Core; ứng dụng không yêu cầu nhập bí mật vào giao diện.</p><p class="security-disclaimer">Google Drive sử dụng scope tối thiểu drive.file. Phiên cloud nằm trong bộ nhớ Core và mất khi ứng dụng đóng. Ghi đè tệp chỉ xảy ra sau xác nhận riêng.</p></aside></div>
+  </main>
+</div><script src="./icons.js"></script><script src="./output-name.js"></script><script src="./output-save.js"></script><script src="./cloud-storage.js"></script></body></html>

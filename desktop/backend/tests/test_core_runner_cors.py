@@ -1,5 +1,6 @@
 """Exercise production runner composition, including real Starlette CORS."""
 import sys
+import os
 import types
 import unittest
 from unittest.mock import patch
@@ -33,6 +34,13 @@ class CoreCorsTests(unittest.TestCase):
     def test_authenticated_request_returns_output(self):
         r=self.client.post('/pdf/test',headers={'Origin':ORIGIN,'X-SolYan-Desktop-Token':TOKEN})
         self.assertEqual(r.status_code,200);self.assertEqual(r.json()['result'],'output')
+
+    def test_desktop_cloud_sessions_allow_credentialed_cors(self):
+        r=self.client.get('/health',headers={'Origin':ORIGIN,'X-SolYan-Desktop-Token':TOKEN,'Cookie':'solyan_storage_session=test'})
+        self.assertEqual(r.status_code,200)
+        self.assertEqual(r.headers.get('access-control-allow-credentials'),'true')
+        self.assertEqual(os.environ['CLOUD_STORAGE_CALLBACK_BASE_URL'],'http://127.0.0.1:34567')
+        self.assertEqual(os.environ['CLOUD_STORAGE_FRONTEND_BASE_URL'],ORIGIN)
 
     def test_missing_or_wrong_token_stays_401_and_is_readable_by_installed_ui(self):
         for value in ['', 'invalid']:
