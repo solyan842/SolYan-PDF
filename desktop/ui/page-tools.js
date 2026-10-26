@@ -4,14 +4,16 @@
     'extract-pages': { operation:'extract', title:'Trích xuất trang', suffix:'extracted', description:'Lấy các trang đã chọn thành một PDF mới.', note:'Thứ tự trang xuất theo đúng dãy bạn nhập.' },
     reorder: { operation:'reorder', title:'Sắp xếp trang', suffix:'reordered', description:'Tạo PDF mới theo thứ tự trang bạn chỉ định.', note:'Nội dung trang được giữ; cấu trúc form/annotation tương tác có thể không được giữ nguyên.' },
     'remove-pages': { operation:'remove', title:'Xóa trang', suffix:'pages-removed', description:'Loại các trang đã chọn khỏi bản PDF kết quả.', note:'PDF nguồn được giữ nguyên. Không thể xóa hết trang của tài liệu.' },
-    rotate: { operation:'rotate', title:'Xoay PDF', suffix:'rotated', description:'Xoay các trang đã chọn rồi tạo PDF mới.', note:'Xoay trang giữ nguyên nội dung trang và không ghi đè PDF nguồn.' }
+    rotate: { operation:'rotate', title:'Xoay PDF', suffix:'rotated', description:'Xoay các trang đã chọn rồi tạo PDF mới.', note:'Xoay trang giữ nguyên nội dung trang và không ghi đè PDF nguồn.' },
+    crop: { operation:'crop', title:'Cắt vùng trang', suffix:'cropped', description:'Điều chỉnh vùng hiển thị của các trang PDF.', note:'Cắt vùng hiển thị; nội dung ngoài vùng cắt vẫn có thể tồn tại trong PDF.' },
+    metadata: { operation:'metadata', title:'Chỉnh thông tin PDF', suffix:'metadata', description:'Cập nhật tiêu đề, tác giả, chủ đề và từ khóa.', note:'Lưu metadata vào một tệp PDF mới.' }
   };
   const mode = new URLSearchParams(location.search).get('tool') || '';
   const config = configs[mode];
   const $ = id => document.getElementById(id);
   const zone=$('dropzone'),input=$('fileInput'),pick=$('pickFile'),remove=$('removeFile');
   const selected=$('selectedFile'),name=$('fileName'),meta=$('fileMeta'),runBtn=$('runBtn'),status=$('status'),result=$('result');
-  const pageRange=$('pageRange'),pageRangeGroup=$('pageRangeGroup'),orderGroup=$('orderGroup'),splitGroup=$('splitGroup'),rotationGroup=$('rotationGroup');
+  const pageRange=$('pageRange'),pageRangeGroup=$('pageRangeGroup'),orderGroup=$('orderGroup'),splitGroup=$('splitGroup'),rotationGroup=$('rotationGroup'),cropGroup=$('cropGroup'),metadataGroup=$('metadataGroup');
   let sourceFile=null,sourceBytes=null,pageCount=0,busy=false,loading=false;
 
   if(!config){
@@ -29,6 +31,8 @@
   orderGroup.hidden=config.operation!=='reorder';
   splitGroup.hidden=config.operation!=='split';
   rotationGroup.hidden=config.operation!=='rotate';
+  cropGroup.hidden=config.operation!=='crop';
+  metadataGroup.hidden=config.operation!=='metadata';
   if(config.operation==='rotate'){pageRange.value='all';$('pageRangeLabel').textContent='Trang cần xoay';$('pageRangeHint').textContent='Nhập trang như 1,3-5 hoặc all.';}
   if(config.operation==='remove')$('pageRangeLabel').textContent='Trang cần xóa';
 
@@ -107,6 +111,20 @@
         const order=parsePages($('pageOrder').value,pageCount);
         if(order.length!==pageCount)throw new Error('Thứ tự phải liệt kê đủ '+pageCount+' trang.');
         outputs.push({bytes:await makePdf(pdf,order),name:window.SOLYAN_OUTPUT_NAME(sourceFile.name,config.suffix)});
+      }else if(config.operation==='crop'){
+        const margins={left:Number($('cropLeft').value),right:Number($('cropRight').value),top:Number($('cropTop').value),bottom:Number($('cropBottom').value)};
+        if(Object.values(margins).some(value=>!Number.isFinite(value)||value<0))throw new Error('Lề cắt phải là số không âm.');
+        for(const page of pdf.getPages()){
+          const box=page.getCropBox(),width=box.width-margins.left-margins.right,height=box.height-margins.top-margins.bottom;
+          if(width<=0||height<=0)throw new Error('Lề cắt không được lớn hơn kích thước trang.');
+          page.setCropBox(box.x+margins.left,box.y+margins.bottom,width,height);
+        }
+        outputs.push({bytes:await pdf.save({useObjectStreams:true}),name:window.SOLYAN_OUTPUT_NAME(sourceFile.name,config.suffix)});
+      }else if(config.operation==='metadata'){
+        const title=$('metaTitle').value.trim(),author=$('metaAuthor').value.trim(),subject=$('metaSubject').value.trim();
+        const keywords=$('metaKeywords').value.split(',').map(value=>value.trim()).filter(Boolean);
+        if(title)pdf.setTitle(title);if(author)pdf.setAuthor(author);if(subject)pdf.setSubject(subject);if(keywords.length)pdf.setKeywords(keywords);
+        outputs.push({bytes:await pdf.save({useObjectStreams:true}),name:window.SOLYAN_OUTPUT_NAME(sourceFile.name,config.suffix)});
       }else if(config.operation==='rotate'){
         const pages=parsePages(pageRange.value,pageCount,true),angle=Number($('rotation').value);
         for(const index of pages){const page=pdf.getPage(index),current=page.getRotation().angle;page.setRotation(window.PDFLib.degrees((current+angle)%360));}
@@ -128,4 +146,5 @@
   zone.addEventListener('drop',event=>setFile(event.dataTransfer?.files?.[0]));
   update();
 })();
+
 

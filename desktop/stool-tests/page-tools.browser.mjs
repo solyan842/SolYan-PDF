@@ -25,7 +25,14 @@ try{
     ['extract-pages',[2],page=>page.locator('#pageRange').fill('3,1')],
     ['remove-pages',[2],page=>page.locator('#pageRange').fill('2')],
     ['reorder',[3],page=>page.locator('#pageOrder').fill('3,1,2')],
-    ['rotate',[3],page=>page.locator('#pageRange').fill('all')]
+    ['rotate',[3],page=>page.locator('#pageRange').fill('all')],
+
+
+
+
+
+    ['crop',[3],async page=>{await page.locator('#cropLeft').fill('5');await page.locator('#cropRight').fill('7');await page.locator('#cropTop').fill('6');await page.locator('#cropBottom').fill('8')}],
+    ['metadata',[3],async page=>{await page.locator('#metaTitle').fill('QA title');await page.locator('#metaAuthor').fill('Hoang Minh Anh');await page.locator('#metaSubject').fill('Local test');await page.locator('#metaKeywords').fill('pdf, local')}]
   ]){
     const page=await browser.newPage();
     await page.addInitScript(()=>{
@@ -62,11 +69,13 @@ try{
       assert.match(outputs[index].name,/^source-.+\.pdf$/);
       const result=await page.evaluate(async bytes=>{
         const doc=await PDFLib.PDFDocument.load(new Uint8Array(bytes));
-        return {count:doc.getPageCount(),widths:doc.getPages().map(page=>page.getSize().width),angles:doc.getPages().map(page=>page.getRotation().angle)};
+        return {count:doc.getPageCount(),widths:doc.getPages().map(page=>page.getSize().width),angles:doc.getPages().map(page=>page.getRotation().angle),cropBoxes:doc.getPages().map(page=>page.getCropBox()),title:doc.getTitle(),author:doc.getAuthor(),subject:doc.getSubject(),keywords:doc.getKeywords()};
       },outputs[index].bytes);
       assert.equal(result.count,expectedPages[index],tool+' output page count');
       if(tool==='reorder')assert.deepEqual(result.widths,[200,100,150]);
       if(tool==='rotate')assert.deepEqual(result.angles,[90,90,90]);
+      if(tool==='crop')assert.deepEqual([result.cropBoxes[0].x,result.cropBoxes[0].y,result.cropBoxes[0].width,result.cropBoxes[0].height],[5,8,88,96]);
+      if(tool==='metadata'){assert.equal(result.title,'QA title');assert.equal(result.author,'Hoang Minh Anh');assert.equal(result.subject,'Local test');assert.match(result.keywords,/pdf.*local/);}
     }
     const inputAfter=await page.locator('#fileInput').evaluate(async element=>Array.from(new Uint8Array(await element.files[0].arrayBuffer())));
     assert.equal(createHash('sha256').update(Buffer.from(inputAfter)).digest('hex'),sourceHash,'source PDF remains unchanged');
@@ -77,4 +86,6 @@ try{
   await browser.close();
   server.close();
 }
+
+
 

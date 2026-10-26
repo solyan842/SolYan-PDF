@@ -55,6 +55,22 @@
             <label for="rotation">Xoay thêm</label>
             <select id="rotation" class="text-input"><option value="90">90° theo chiều kim đồng hồ</option><option value="180">180°</option><option value="270">270° theo chiều kim đồng hồ</option></select>
           </div>
+          <div id="cropGroup" class="option-group" hidden>
+            <label>Lề cắt (điểm PDF)</label>
+            <div class="crop-grid">
+              <label for="cropTop">Trên<input id="cropTop" class="text-input" type="number" min="0" step="1" value="0"></label>
+              <label for="cropRight">Phải<input id="cropRight" class="text-input" type="number" min="0" step="1" value="0"></label>
+              <label for="cropBottom">Dưới<input id="cropBottom" class="text-input" type="number" min="0" step="1" value="0"></label>
+              <label for="cropLeft">Trái<input id="cropLeft" class="text-input" type="number" min="0" step="1" value="0"></label>
+            </div>
+            <p class="option-note">Đơn vị là point (1 inch = 72 point).</p>
+          </div>
+          <div id="metadataGroup" class="option-group" hidden>
+            <label for="metaTitle">Tiêu đề</label><input id="metaTitle" class="text-input" type="text" maxlength="240">
+            <label for="metaAuthor">Tác giả</label><input id="metaAuthor" class="text-input" type="text" maxlength="240">
+            <label for="metaSubject">Chủ đề</label><input id="metaSubject" class="text-input" type="text" maxlength="500">
+            <label for="metaKeywords">Từ khóa</label><input id="metaKeywords" class="text-input" type="text" maxlength="500" placeholder="từ khóa 1, từ khóa 2">
+          </div>
           <button id="runBtn" class="primary merge-btn" type="button" disabled>Thực hiện →</button>
           <p id="status" class="status-text" role="status">Chọn một tệp PDF để bắt đầu.</p>
           <div id="operationNote" class="local-note"></div>
@@ -68,6 +84,7 @@
   <script src="./page-tools.js"></script>
 </body>
 </html>
+
 
 
 
