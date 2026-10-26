@@ -58,7 +58,7 @@ window.SOLYAN_TOOL_CATALOG = {
     { id:"odf-pdf", name:"OpenDocument sang PDF", desc:"Chuyển ODT/ODS/ODP sang PDF", category:"convert", icon:"O", tone:"blue" },
     { id:"rtf-pdf", name:"RTF sang PDF", desc:"Chuyển RTF sang PDF", category:"convert", icon:"R", tone:"gray" },
     { id:"pdf-ppt", name:"PDF sang PowerPoint", desc:"Chuyển PDF sang PPTX", category:"convert", icon:"P", tone:"orange" },
-    { id:"pdf-images", name:"PDF sang ảnh", desc:"Xuất trang thành PNG hoặc JPEG", category:"convert", icon:"▧", tone:"amber" },
+    { id:"pdf-images", name:"PDF sang ảnh", desc:"Xuất các trang thành ảnh PNG trong tệp ZIP", category:"convert", icon:"▧", tone:"amber" },
     { id:"pdf-ps", name:"PDF sang PostScript", desc:"Xuất PS Level 2/3", category:"convert", icon:"PS", tone:"gray" },
     { id:"pdf-eps", name:"PDF sang EPS", desc:"Xuất trang PDF thành EPS", category:"convert", icon:"E", tone:"gray" },
     { id:"translate", name:"Dịch PDF", desc:"Quy trình dịch PDF local-first", category:"convert", icon:"文", tone:"purple" },

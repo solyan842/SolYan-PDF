@@ -93,6 +93,8 @@ jobs:
           $env:STOOL_BROWSER_CHANNEL = 'msedge'
           node desktop/stool-tests/output-save.browser.mjs 2>&1 | Tee-Object artifacts/stool-save-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/pdf-images.browser.mjs 2>&1 | Tee-Object artifacts/stool-pdf-images-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/page-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-page-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/image-to-pdf.browser.mjs 2>&1 | Tee-Object artifacts/stool-image-to-pdf-ui.log
