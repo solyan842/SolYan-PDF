@@ -77,6 +77,20 @@ public static class StoolSaveDialog {
     var button=GetDlgItem(dialog,id); if(button==IntPtr.Zero)throw new Exception("Dialog button missing: "+id);
     if(!PostMessage(dialog,273,new IntPtr(id),button))throw new Exception("Dialog click failed");
   }
+  public static IntPtr FindButton(IntPtr dialog,string label) {
+    IntPtr found=IntPtr.Zero;
+    EnumChildWindows(dialog,(h,p)=>{
+      if(Class(h)!="Button" || !IsWindowVisible(h))return true;
+      string text=Text(h).Replace("&","").Trim();
+      if(String.Equals(text,label,StringComparison.OrdinalIgnoreCase)){found=h;return false;}
+      return true;
+    },IntPtr.Zero);
+    return found;
+  }
+  public static void ClickButton(IntPtr button) {
+    if(button==IntPtr.Zero || !PostMessage(button,0x00F5,IntPtr.Zero,IntPtr.Zero))
+      throw new Exception("Dialog confirmation button click failed");
+  }
 }
 '@
 $deadline=[DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -95,14 +109,21 @@ $confirmed=$false
 while ([DateTime]::UtcNow -lt $deadline -and [StoolSaveDialog]::IsWindowVisible($dialog)) {
   foreach ($candidate in [StoolSaveDialog]::Dialogs($OwnerPid)) {
     if ($candidate -eq $dialog -or -not [StoolSaveDialog]::OwnedBy($candidate,$dialog)) { continue }
-    if ([StoolSaveDialog]::GetDlgItem($candidate,6) -ne [IntPtr]::Zero -and [StoolSaveDialog]::GetDlgItem($candidate,7) -ne [IntPtr]::Zero) {
+    $yes=[StoolSaveDialog]::GetDlgItem($candidate,6)
+    $no=[StoolSaveDialog]::GetDlgItem($candidate,7)
+    if($yes -eq [IntPtr]::Zero){$yes=[StoolSaveDialog]::FindButton($candidate,'Yes')}
+    if($no -eq [IntPtr]::Zero){$no=[StoolSaveDialog]::FindButton($candidate,'No')}
+    if ($yes -ne [IntPtr]::Zero -and $no -ne [IntPtr]::Zero) {
       if ($confirmed) { continue }
       if ($Action -eq 'DeclineOverwrite') {
-        [StoolSaveDialog]::Click($candidate,7)
+        if([StoolSaveDialog]::GetDlgItem($candidate,7) -ne [IntPtr]::Zero){[StoolSaveDialog]::Click($candidate,7)}else{[StoolSaveDialog]::ClickButton($no)}
         $confirmed=$true
         Start-Sleep -Milliseconds 200
         [StoolSaveDialog]::Click($dialog,2)
-      } elseif ($AllowOverwrite) { [StoolSaveDialog]::Click($candidate,6); $confirmed=$true }
+      } elseif ($AllowOverwrite) {
+        if([StoolSaveDialog]::GetDlgItem($candidate,6) -ne [IntPtr]::Zero){[StoolSaveDialog]::Click($candidate,6)}else{[StoolSaveDialog]::ClickButton($yes)}
+        $confirmed=$true
+      }
       else { throw 'Unexpected overwrite prompt; no overwrite authorization in test case' }
     } else { throw ('Unexpected owned Save dialog: '+[StoolSaveDialog]::Text($candidate)) }
   }
