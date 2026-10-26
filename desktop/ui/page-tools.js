@@ -6,14 +6,16 @@
     'remove-pages': { operation:'remove', title:'Xóa trang', suffix:'pages-removed', description:'Loại các trang đã chọn khỏi bản PDF kết quả.', note:'PDF nguồn được giữ nguyên. Không thể xóa hết trang của tài liệu.' },
     rotate: { operation:'rotate', title:'Xoay PDF', suffix:'rotated', description:'Xoay các trang đã chọn rồi tạo PDF mới.', note:'Xoay trang giữ nguyên nội dung trang và không ghi đè PDF nguồn.' },
     crop: { operation:'crop', title:'Cắt vùng trang', suffix:'cropped', description:'Điều chỉnh vùng hiển thị của các trang PDF.', note:'Cắt vùng hiển thị; nội dung ngoài vùng cắt vẫn có thể tồn tại trong PDF.' },
-    metadata: { operation:'metadata', title:'Chỉnh thông tin PDF', suffix:'metadata', description:'Cập nhật tiêu đề, tác giả, chủ đề và từ khóa.', note:'Lưu metadata vào một tệp PDF mới.' }
+    metadata: { operation:'metadata', title:'Chỉnh thông tin PDF', suffix:'metadata', description:'Cập nhật tiêu đề, tác giả, chủ đề và từ khóa.', note:'Lưu metadata vào một tệp PDF mới.' },
+    'page-numbers': { operation:'numbering', title:'Đánh số trang', suffix:'numbered', description:'Ghi số hiển thị trực tiếp lên từng trang PDF.', note:'Số trang được vẽ lên PDF, không thay đổi nhãn trang.' },
+    bates: { operation:'bates', title:'Đánh số Bates', suffix:'bates', description:'Ghi mã Bates liên tiếp lên từng trang.', note:'Tiền tố Bates dùng chữ Latin cơ bản.' }
   };
   const mode = new URLSearchParams(location.search).get('tool') || '';
   const config = configs[mode];
   const $ = id => document.getElementById(id);
   const zone=$('dropzone'),input=$('fileInput'),pick=$('pickFile'),remove=$('removeFile');
   const selected=$('selectedFile'),name=$('fileName'),meta=$('fileMeta'),runBtn=$('runBtn'),status=$('status'),result=$('result');
-  const pageRange=$('pageRange'),pageRangeGroup=$('pageRangeGroup'),orderGroup=$('orderGroup'),splitGroup=$('splitGroup'),rotationGroup=$('rotationGroup'),cropGroup=$('cropGroup'),metadataGroup=$('metadataGroup');
+  const pageRange=$('pageRange'),pageRangeGroup=$('pageRangeGroup'),orderGroup=$('orderGroup'),splitGroup=$('splitGroup'),rotationGroup=$('rotationGroup'),cropGroup=$('cropGroup'),metadataGroup=$('metadataGroup'),numberGroup=$('numberGroup');
   let sourceFile=null,sourceBytes=null,pageCount=0,busy=false,loading=false;
 
   if(!config){
@@ -33,6 +35,8 @@
   rotationGroup.hidden=config.operation!=='rotate';
   cropGroup.hidden=config.operation!=='crop';
   metadataGroup.hidden=config.operation!=='metadata';
+  numberGroup.hidden=!['numbering','bates'].includes(config.operation);
+  if(config.operation==='numbering')$('batesPrefix').disabled=true;
   if(config.operation==='rotate'){pageRange.value='all';$('pageRangeLabel').textContent='Trang cần xoay';$('pageRangeHint').textContent='Nhập trang như 1,3-5 hoặc all.';}
   if(config.operation==='remove')$('pageRangeLabel').textContent='Trang cần xóa';
 
@@ -125,6 +129,19 @@
         const keywords=$('metaKeywords').value.split(',').map(value=>value.trim()).filter(Boolean);
         if(title)pdf.setTitle(title);if(author)pdf.setAuthor(author);if(subject)pdf.setSubject(subject);if(keywords.length)pdf.setKeywords(keywords);
         outputs.push({bytes:await pdf.save({useObjectStreams:true}),name:window.SOLYAN_OUTPUT_NAME(sourceFile.name,config.suffix)});
+      }else if(config.operation==='numbering'||config.operation==='bates'){
+        const start=Number($('numberStart').value),size=Number($('numberSize').value),prefix=$('batesPrefix').value.trim();
+        if(!Number.isInteger(start)||start<1||start>999999999)throw new Error('Số bắt đầu phải từ 1 đến 999999999.');
+        if(!Number.isFinite(size)||size<6||size>72)throw new Error('Cỡ chữ phải từ 6 đến 72 point.');
+        if(config.operation==='bates'&&Array.from(prefix).some(ch=>ch.charCodeAt(0)<32||ch.charCodeAt(0)>126))throw new Error('Tiền tố Bates chỉ dùng chữ Latin cơ bản.');
+        if(prefix.length>24)throw new Error('Tiền tố Bates tối đa 24 ký tự.');
+        const font=await pdf.embedFont(window.PDFLib.StandardFonts.Helvetica),position=$('numberPosition').value;
+        pdf.getPages().forEach((page,index)=>{
+          const text=config.operation==='bates'?prefix+String(start+index).padStart(6,'0'):String(start+index);
+          const {width,height}=page.getSize(),x=Math.max(8,(width-font.widthOfTextAtSize(text,size))/2),y=position==='top'?Math.max(8,height-size-12):10;
+          page.drawText(text,{x,y,size,font,color:window.PDFLib.rgb(.2,.2,.2)});
+        });
+        outputs.push({bytes:await pdf.save({useObjectStreams:true}),name:window.SOLYAN_OUTPUT_NAME(sourceFile.name,config.suffix)});
       }else if(config.operation==='rotate'){
         const pages=parsePages(pageRange.value,pageCount,true),angle=Number($('rotation').value);
         for(const index of pages){const page=pdf.getPage(index),current=page.getRotation().angle;page.setRotation(window.PDFLib.degrees((current+angle)%360));}
@@ -146,5 +163,6 @@
   zone.addEventListener('drop',event=>setFile(event.dataTransfer?.files?.[0]));
   update();
 })();
+
 
 

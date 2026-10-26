@@ -32,7 +32,9 @@ try{
 
 
     ['crop',[3],async page=>{await page.locator('#cropLeft').fill('5');await page.locator('#cropRight').fill('7');await page.locator('#cropTop').fill('6');await page.locator('#cropBottom').fill('8')}],
-    ['metadata',[3],async page=>{await page.locator('#metaTitle').fill('QA title');await page.locator('#metaAuthor').fill('Hoang Minh Anh');await page.locator('#metaSubject').fill('Local test');await page.locator('#metaKeywords').fill('pdf, local')}]
+    ['metadata',[3],async page=>{await page.locator('#metaTitle').fill('QA title');await page.locator('#metaAuthor').fill('Hoang Minh Anh');await page.locator('#metaSubject').fill('Local test');await page.locator('#metaKeywords').fill('pdf, local')}],
+    ['page-numbers',[3],async()=>{}],
+    ['bates',[3],async page=>{await page.locator('#batesPrefix').fill('SY');await page.locator('#numberStart').fill('5')}]
   ]){
     const page=await browser.newPage();
     await page.addInitScript(()=>{
@@ -86,6 +88,7 @@ try{
   await browser.close();
   server.close();
 }
+
 
 
 

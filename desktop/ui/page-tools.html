@@ -71,6 +71,12 @@
             <label for="metaSubject">Chủ đề</label><input id="metaSubject" class="text-input" type="text" maxlength="500">
             <label for="metaKeywords">Từ khóa</label><input id="metaKeywords" class="text-input" type="text" maxlength="500" placeholder="từ khóa 1, từ khóa 2">
           </div>
+          <div id="numberGroup" class="option-group" hidden>
+            <label for="numberStart">Số bắt đầu</label><input id="numberStart" class="text-input" type="number" min="1" value="1">
+            <label for="batesPrefix">Tiền tố Bates</label><input id="batesPrefix" class="text-input" type="text" maxlength="24" placeholder="SY">
+            <label for="numberSize">Cỡ chữ (point)</label><input id="numberSize" class="text-input" type="number" min="6" max="72" value="10">
+            <label for="numberPosition">Vị trí số</label><select id="numberPosition" class="text-input"><option value="bottom">Giữa chân trang</option><option value="top">Giữa đầu trang</option></select>
+          </div>
           <button id="runBtn" class="primary merge-btn" type="button" disabled>Thực hiện →</button>
           <p id="status" class="status-text" role="status">Chọn một tệp PDF để bắt đầu.</p>
           <div id="operationNote" class="local-note"></div>
@@ -84,6 +90,7 @@
   <script src="./page-tools.js"></script>
 </body>
 </html>
+
 
 
 
