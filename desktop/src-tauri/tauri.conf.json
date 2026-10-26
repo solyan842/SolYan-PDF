@@ -32,6 +32,7 @@
     "targets": [
       "nsis"
     ],
+    "icon": ["icons/icon.ico"],
     "resources": {
       "resources/core/": "core/",
       "resources/office/": "office/",

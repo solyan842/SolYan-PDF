@@ -11,10 +11,13 @@ const server=createServer((req,res)=>{const path=new URL(req.url,'http://localho
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const browser=await chromium.launch({channel:process.env.STOOL_BROWSER_CHANNEL||undefined});
 try{
  const page=await browser.newPage();
+ const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
  await page.addInitScript(({port})=>{window.saved=[];window.calls=[];window.__TAURI__={core:{invoke:async(command,args)=>{if(command==='desktop_service_ready')return true;if(command==='desktop_core_session')return 'http://127.0.0.1:'+port+'\nlocal-token';if(command==='stool_save_output'){window.saved.push(args);return 'C:\\QA\\'+args.name}throw Error(command)}}};window.fetch=async(url,init)=>{window.calls.push({url:String(url),token:init.headers['X-SolYan-Desktop-Token'],name:init.body.get('file').name});return new Response(JSON.stringify({text:'SOL YAN OCR TEST',engine:'mock-local'}),{status:200,headers:{'Content-Type':'application/json'}})}},{port:server.address().port});
  await page.goto('http://127.0.0.1:'+server.address().port+'/ocr.html?tool=ocr-export');
- await page.waitForFunction(()=>document.querySelector('#toolIcon img')?.complete&&document.querySelector('#toolIcon img')?.naturalWidth>0);
+ await page.waitForFunction(()=>Boolean(document.querySelector('#toolIcon img')?.getAttribute('src'))).catch(()=>{throw new Error('OCR page script did not render its icon: '+pageErrors.join('; '))});
  assert.ok((await page.locator('#toolIcon img').getAttribute('src')).includes('file-arrow-up'));
+ const iconResponse=await page.request.get(new URL(await page.locator('#toolIcon img').getAttribute('src'),page.url()).href);
+ assert.equal(iconResponse.status(),200,'OCR Phosphor icon asset must be served under production CSP');
  assert.equal(await page.locator('#ocrTitle').textContent(),'Xuất kết quả OCR');
  const bytes=Buffer.from('%PDF-1.7 source fixture');
  await page.locator('#fileInput').setInputFiles({name:'Báo cáo Scan.pdf',mimeType:'application/pdf',buffer:bytes});

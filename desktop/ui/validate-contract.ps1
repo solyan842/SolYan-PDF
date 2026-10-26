@@ -18,10 +18,15 @@ $required = @(
   "desktop/ui/pdfa.html", "desktop/ui/pdfa.js", "desktop/backend/archive_runner.py",
   "desktop/backend/stage-native-runtimes.ps1", "desktop/backend/stage-office-runtime.ps1",
   "desktop/vendor/qpdf-windows-x64.json", "desktop/vendor/poppler-windows-x64.json", "desktop/vendor/libreoffice-windows-x64.json",
-  "desktop/src-tauri/tauri.conf.json"
+  "desktop/src-tauri/tauri.conf.json", "desktop/src-tauri/icons/icon.ico"
 )
 foreach ($path in $required) { if (-not (Test-Path $path)) { throw "Missing required desktop file: $path" } }
 
+
+$tauri = Get-Content "desktop/src-tauri/tauri.conf.json" -Raw
+if (-not $tauri.Contains('"icon": ["icons/icon.ico"]')) { throw "Tauri Windows application icon is not configured" }
+$iconBytes = [System.IO.File]::ReadAllBytes("desktop/src-tauri/icons/icon.ico")
+if ($iconBytes.Length -lt 6 -or $iconBytes[0] -ne 0 -or $iconBytes[1] -ne 0 -or $iconBytes[2] -ne 1 -or $iconBytes[3] -ne 0) { throw "Tauri Windows icon file is invalid" }
 
 $html = Get-Content "desktop/ui/index.html" -Raw
 $catalog = (Get-Content "desktop/ui/catalog.js" -Raw) + (Get-Content "desktop/ui/catalog-additions.js" -Raw)
