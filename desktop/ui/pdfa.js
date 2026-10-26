@@ -30,7 +30,7 @@
   }
   function save(blob) {
     const url=URL.createObjectURL(blob),link=document.createElement('a');
-    link.href=url;link.download=window.SOLYAN_OUTPUT_NAME(file, 'archive-pdfa');
+    link.href=url;link.download=window.SOLYAN_OUTPUT_NAME(file.name, 'archive-pdfa');
     document.body.appendChild(link);link.click();link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1500);
   }
