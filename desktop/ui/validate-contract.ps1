@@ -12,7 +12,7 @@ $required = @(
   "desktop/ui/remove-annotations.html", "desktop/ui/remove-annotations.js", "desktop/ui/unlock-forms.html", "desktop/ui/unlock-forms.js",
   "desktop/ui/remove-blank.html", "desktop/ui/remove-blank.js", "desktop/ui/page-labels.html", "desktop/ui/page-labels.js",
   "desktop/ui/poppler-convert.html", "desktop/ui/poppler-convert.js", "desktop/ui/office-convert.html", "desktop/ui/office-convert.js",
-  "desktop/ui/portfolio.html", "desktop/ui/portfolio.js", "desktop/ui/workspace.html", "desktop/ui/page-tools.html", "desktop/ui/page-tools.js", "desktop/ui/page-layout.html", "desktop/ui/page-layout.js", "desktop/ui/image-to-pdf.html", "desktop/ui/image-to-pdf.js", "desktop/ui/utilities.html", "desktop/ui/utility-tools.js", "desktop/ui/form-fill.html", "desktop/ui/form-fill.js", "desktop/ui/overlay.html", "desktop/ui/overlay.js", "desktop/stool-tests/page-layout.browser.mjs",
+  "desktop/ui/portfolio.html", "desktop/ui/portfolio.js", "desktop/ui/workspace.html", "desktop/ui/page-tools.html", "desktop/ui/page-tools.js", "desktop/ui/page-layout.html", "desktop/ui/page-layout.js", "desktop/ui/stamp.html", "desktop/ui/stamp.js", "desktop/ui/image-to-pdf.html", "desktop/ui/image-to-pdf.js", "desktop/ui/utilities.html", "desktop/ui/utility-tools.js", "desktop/ui/form-fill.html", "desktop/ui/form-fill.js", "desktop/ui/overlay.html", "desktop/ui/overlay.js", "desktop/stool-tests/page-layout.browser.mjs", "desktop/stool-tests/stamp.browser.mjs",
   "desktop/ui/ocr.html", "desktop/ui/ocr.js", "desktop/ui/ocr.css",
   "desktop/ui/sign.html", "desktop/ui/sign.js", "desktop/backend/sign_runner.py",
   "desktop/ui/pdfa.html", "desktop/ui/pdfa.js", "desktop/backend/archive_runner.py",
@@ -26,7 +26,7 @@ foreach ($path in $required) { if (-not (Test-Path $path)) { throw "Missing requ
 $html = Get-Content "desktop/ui/index.html" -Raw
 $catalog = (Get-Content "desktop/ui/catalog.js" -Raw) + (Get-Content "desktop/ui/catalog-additions.js" -Raw)
 $app = Get-Content "desktop/ui/app.js" -Raw
-$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "'fill-form':", "overlay:", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:")
+$requiredRoutes = @("split:", "rotate:", "'extract-pages':", "reorder:", "'remove-pages':", "crop:", "metadata:", "'image-pdf':", "'page-numbers':", "bates:", "'number-text':", "'vn-text':", "vat:", "percent:", "age:", "bmi:", "aircon:", "'fill-form':", "overlay:", "'advanced-split':", "'split-sections':", "resize:", "'long-page':", "nup:", "booklet:", "poster:", "watermark:", "stamp:")
 foreach ($route in $requiredRoutes) { if (-not $app.Contains($route)) { throw "Missing sTool UI route: $route" } }
 $scripts = @{
   repair = Get-Content "desktop/ui/repair.js" -Raw
@@ -103,7 +103,7 @@ $contracts = @(
 )
 foreach ($contract in $contracts) { foreach ($text in $contract.t) { if (-not $contract.s.Contains($text)) { throw "$($contract.n) local-core contract missing: $text" } } }
 
-$strictCspPages = @("desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html")
+$strictCspPages = @("desktop/ui/page-layout.html","desktop/ui/stamp.html","desktop/ui/index.html","desktop/ui/merge.html","desktop/ui/repair.html","desktop/ui/extract-images.html","desktop/ui/info.html","desktop/ui/active-content.html","desktop/ui/attachments.html","desktop/ui/remove-images.html","desktop/ui/sanitize.html","desktop/ui/linearize.html","desktop/ui/decompress.html","desktop/ui/transform.html","desktop/ui/security-transform.html","desktop/ui/remove-signature.html","desktop/ui/permissions.html","desktop/ui/remove-annotations.html","desktop/ui/unlock-forms.html","desktop/ui/remove-blank.html","desktop/ui/page-labels.html","desktop/ui/poppler-convert.html","desktop/ui/office-convert.html","desktop/ui/portfolio.html","desktop/ui/ocr.html","desktop/ui/sign.html","desktop/ui/pdfa.html","desktop/ui/workspace.html")
 foreach ($page in $strictCspPages) { if ((Get-Content $page -Raw) -match 'style\s*=') { throw "Strict CSP violation: inline style attribute found in $page" } }
 
 Write-Output "Desktop UI contract and CSP hygiene OK"
