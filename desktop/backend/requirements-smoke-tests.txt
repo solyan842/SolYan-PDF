@@ -1,4 +1,6 @@
 # Same lightweight ASGI stack as the packaged Core; no OCR/Office tooling.
 fastapi==0.119.0
+python-multipart==0.0.20
 uvicorn==0.37.0
 httpx==0.28.1
+
