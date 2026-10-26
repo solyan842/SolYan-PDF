@@ -103,7 +103,7 @@ window.SOLYAN_TOOL_CATALOG = {
     { id:"age", name:"Tính tuổi", desc:"Tính tuổi theo ngày sinh", category:"vn", icon:"◷", tone:"purple" },
     { id:"bmi", name:"BMI", desc:"Tính chỉ số khối cơ thể", category:"vn", icon:"B", tone:"green" },
     { id:"aircon", name:"Công suất điều hòa", desc:"Ước tính công suất điều hòa theo phòng", category:"vn", icon:"❄", tone:"cyan" },
-    { id:"ip", name:"Kiểm tra IP", desc:"Xem thông tin IP công cộng", category:"vn", icon:"IP", tone:"blue" },
+    { id:"ip", name:"Kiểm tra IP", desc:"Xem địa chỉ IP cục bộ của máy tính", category:"vn", icon:"IP", tone:"blue" },
     { id:"ping", name:"Ping", desc:"Kiểm tra kết nối mạng", category:"vn", icon:"↯", tone:"orange" },
     { id:"keyword", name:"Vị trí từ khóa Google", desc:"Kiểm tra vị trí từ khóa trên Google", category:"vn", icon:"G", tone:"blue" },
     { id:"ranking", name:"Website Ranking", desc:"Xem xếp hạng website từ danh sách Tranco công khai", category:"vn", icon:"↗", tone:"green" }

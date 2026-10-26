@@ -11,6 +11,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .network_command import local_ip_addresses, ping_command
+
 router = APIRouter(prefix="/net", tags=["Vietnamese Utilities"])
 
 HOST_RE = re.compile(r"^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$")
@@ -94,11 +96,10 @@ def public_ip(request: Request) -> dict[str, str]:
     return {"ip": request.client.host if request.client else "unknown"}
 
 
-def _ping_command(host: str, *, windows: bool | None = None) -> list[str]:
-    use_windows = os.name == "nt" if windows is None else windows
-    if use_windows:
-        return ["ping", "-n", "4", "-w", "2000", host]
-    return ["ping", "-c", "4", "-W", "2", host]
+@router.get("/local-ip")
+def local_ip() -> dict[str, object]:
+    hostname = socket.gethostname()
+    return {"hostname": hostname, "addresses": local_ip_addresses(hostname)}
 
 
 @router.post("/ping")
@@ -107,7 +108,7 @@ def ping(payload: HostRequest) -> dict[str, object]:
     _guard_ping_target(host)
     try:
         result = subprocess.run(
-            _ping_command(host),
+            ping_command(host),
             capture_output=True,
             text=True,
             timeout=12,
