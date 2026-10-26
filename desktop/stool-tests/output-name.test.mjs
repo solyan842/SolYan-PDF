@@ -38,6 +38,13 @@ test('keeps meaningful server filenames and decodes UTF-8 Content-Disposition', 
   assert.equal(context.window.SOLYAN_OUTPUT_NAME_FROM_DISPOSITION("attachment; filename*=UTF-8''H%E1%BB%93%20s%C6%A1%202026.pdf", 'source.docx', '', '.pdf'), 'Hồ sơ 2026.pdf');
 });
 
+const tauriMain = await readFile(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
+test('Tauri injects output-name helpers before page scripts', () => {
+  const name = tauriMain.indexOf('include_str!("../../ui/output-name.js")');
+  const shelf = tauriMain.indexOf('include_str!("../../ui/output-save.js")');
+  assert.ok(name >= 0 && shelf > name, 'output-name helper is injected before the Save shelf');
+});
+
 test('remaining PDF tools derive output names from the selected source', async () => {
   const cases = [['page-labels','page-labels-removed'],['portfolio','portfolio'],['remove-annotations','without-comments'],['remove-blank','without-blank-pages']];
   for (const [tool,suffix] of cases) {

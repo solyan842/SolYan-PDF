@@ -1022,7 +1022,7 @@ fn main() {
         .manage(CoreState::default()).manage(output_save::OutputState::default())
         .setup(|app|{
             tauri::WebviewWindowBuilder::from_config(app,&app.config().app.windows[0])?
-                .initialization_script(include_str!("../../ui/output-save.js")).build()?;
+                .initialization_script(concat!(include_str!("../../ui/output-name.js"),"\n",include_str!("../../ui/output-save.js"))).build()?;
             Ok(())
         })
         // No PyInstaller/Paddle/LibreOffice/pyHanko/OCRmyPDF launched while
@@ -1042,3 +1042,4 @@ fn main() {
         }
     });
 }
+
