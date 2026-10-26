@@ -45,6 +45,7 @@ try{
       }}};
     });
     await page.goto('http://127.0.0.1:'+server.address().port+'/page-tools.html?tool='+tool);
+    await page.waitForFunction(()=>Boolean(window.PDFLib?.PDFDocument),null,{timeout:15000});
     const fixture=await page.evaluate(async()=>{
       const doc=await PDFLib.PDFDocument.create();
       for(const [width,height] of [[100,110],[150,160],[200,210]])doc.addPage([width,height]);

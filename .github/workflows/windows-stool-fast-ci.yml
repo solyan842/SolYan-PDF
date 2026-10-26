@@ -101,6 +101,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/form-fill.browser.mjs 2>&1 | Tee-Object artifacts/stool-form-fill-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/overlay.browser.mjs 2>&1 | Tee-Object artifacts/stool-overlay-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check UI contracts, not the Reader build
         shell: pwsh
         run: |
