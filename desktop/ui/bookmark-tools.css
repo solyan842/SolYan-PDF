@@ -1,0 +1,10 @@
+.bookmark-tree,.chapter-preview{display:grid;gap:8px;max-height:68vh;overflow:auto;margin-top:16px}
+.bookmark-row{display:grid;grid-template-columns:minmax(150px,1fr) 88px;gap:8px;padding:10px;border:1px solid #dce4ef;border-radius:10px;background:#fff}
+.bookmark-controls{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
+.bookmark-controls button{min-height:32px;padding:4px 9px}
+.bookmark-row.depth-1{margin-left:12px}.bookmark-row.depth-2{margin-left:24px}.bookmark-row.depth-3{margin-left:36px}.bookmark-row.depth-4{margin-left:48px}.bookmark-row.depth-5{margin-left:60px}.bookmark-row.depth-6{margin-left:72px}.bookmark-row.depth-7{margin-left:84px}.bookmark-row.depth-8{margin-left:96px}.bookmark-row.depth-9{margin-left:108px}.bookmark-row.depth-10{margin-left:120px}.bookmark-row.depth-11{margin-left:132px}.bookmark-row.depth-12{margin-left:144px}.bookmark-row.depth-13{margin-left:156px}.bookmark-row.depth-14{margin-left:168px}.bookmark-row.depth-15{margin-left:180px}
+.option-row{display:flex;flex-wrap:wrap;gap:8px}
+.big-icon img,.upload-icon img{display:block}
+.chapter-row{display:flex;justify-content:space-between;gap:16px;padding:12px;border:1px solid #dce4ef;border-radius:10px;background:#fff}
+.check-row{display:flex;align-items:flex-start;gap:9px;margin:14px 0}.check-row input{margin-top:3px}
+@media(max-width:1100px){.bookmark-row{grid-template-columns:minmax(120px,1fr) 80px}.bookmark-controls{grid-column:1/-1}}

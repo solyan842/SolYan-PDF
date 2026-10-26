@@ -121,6 +121,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/ocr-export.browser.mjs 2>&1 | Tee-Object artifacts/stool-ocr-export-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/bookmarks.browser.mjs 2>&1 | Tee-Object artifacts/stool-bookmarks-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check UI contracts, not the Reader build
         shell: pwsh
         run: |
