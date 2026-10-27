@@ -104,3 +104,15 @@ test('Reader has exactly one shared rail/thumb style and one aligned text-contro
  assert.doesNotMatch(stylesheet,/#readerFormatPanel \.format-inline>input\[type=range\][^{]*\{[^}]*accent-color/);
  assert.doesNotMatch(stylesheet,/#readerFooter #zoomRange::\-webkit-slider-thumb/);
 });
+
+test('PDF.js decoder URLs resolve beside Reader from display and print paths',()=>{
+ const assets=read('../ui/reader-pdf-assets.js').toString();
+ const reader=read('../ui/reader.js').toString();
+ const print=read('../ui/reader-print.js').toString();
+ assert.match(assets,/wasmUrl:new URL\('\.\/vendor\/pdfjs\/wasm\/',import\.meta\.url\)\.href/);
+ assert.match(assets,/standardFontDataUrl:new URL\('\.\/vendor\/pdfjs\/standard_fonts\/',import\.meta\.url\)\.href/);
+ assert.match(reader,/\.\.\.pdfAssetOptions/);
+ assert.match(print,/\.\.\.pdfAssetOptions/);
+ assert.doesNotMatch(reader,/wasmUrl:'\.\/vendor\/pdfjs\/wasm\//);
+ assert.doesNotMatch(print,/wasmUrl:'\.\/vendor\/pdfjs\/wasm\//);
+});

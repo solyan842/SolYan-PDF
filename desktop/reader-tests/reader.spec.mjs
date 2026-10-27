@@ -220,3 +220,16 @@ test('zoom controls keep the point at the document viewport center fixed',async(
   const drift=async()=>page.locator('.readerContainer:not([hidden])').evaluate((node,anchor)=>{const r=node.getBoundingClientRect(),p=node.querySelector('.page'),b=p.getBoundingClientRect(),s=parseFloat(getComputedStyle(p).getPropertyValue('--scale-factor')),x=b.left+anchor.x*s,y=b.top+anchor.y*s,cx=r.left+node.clientWidth/2,cy=r.top+node.clientHeight/2;return Math.hypot(x-cx,y-cy);},before);
   await expect.poll(drift).toBeLessThan(5);
 });
+
+test('zooming out below viewport size keeps the document vertically centered instead of pinning it to the top',async({page})=>{
+  const pdf=await PDFDocument.create();pdf.addPage([600,800]).drawText('ZOOM OUT CENTER',{x:50,y:700});
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles({name:'Zoom out center.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  for(let i=0;i<16;i++)await page.locator('#zoomOut').click();
+  await expect.poll(()=>page.locator('.readerContainer:not([hidden]) .page').first().evaluate(node=>parseFloat(getComputedStyle(node).getPropertyValue('--scale-factor')))).toBeLessThan(.5);
+  await expect.poll(()=>page.locator('.readerContainer:not([hidden])').evaluate(container=>{
+    const viewer=container.querySelector('.pdfViewer'),c=container.getBoundingClientRect(),v=viewer.getBoundingClientRect();
+    return Math.abs((v.top+v.height/2)-(c.top+container.clientHeight/2));
+  })).toBeLessThan(5);
+});

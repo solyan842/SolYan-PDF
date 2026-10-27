@@ -1,4 +1,5 @@
 import {linkifyText,installLinkGuard} from './reader-link-guard.js';
+import {pdfAssetOptions} from './reader-pdf-assets.js';
 import { installR2 } from './reader-r2.js';
 import { connectNativeReader } from './reader-native.js';
 import { installLanguage,t,getLanguage } from './reader-language.js';
@@ -79,8 +80,7 @@ async function openFile(file, source = null, nativeName = null, runtimeReady = n
     ? Promise.resolve(file instanceof Uint8Array?file:new Uint8Array(file))
     : file.arrayBuffer().then(buffer=>new Uint8Array(buffer));
   const [{pdfjs,EventBus,PDFViewer,PDFLinkService,PDFFindController},bytes]=await Promise.all([runtimePromise,bytesPromise]);
-  const resources={isEvalSupported:false,enableXfa:false,cMapUrl:'./vendor/pdfjs/cmaps/',cMapPacked:true,
-    standardFontDataUrl:'./vendor/pdfjs/standard_fonts/',wasmUrl:'./vendor/pdfjs/wasm/'};
+  const resources={isEvalSupported:false,enableXfa:false,...pdfAssetOptions};
   // Keep one untouched source buffer for Save/Print; PDF.js transfers its own buffer to the worker.
   const task=pdfjs.getDocument({...resources,data:nativeBytes?bytes.slice():bytes});
   task.onPassword = (update, reason) => {

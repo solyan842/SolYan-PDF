@@ -1,4 +1,5 @@
 import {sheets} from './reader-print-layout.js';
+import {pdfAssetOptions} from './reader-pdf-assets.js';
 const el=(tag,props={})=>Object.assign(document.createElement(tag),props);
 export function installReaderPrint(api,{printButton,layoutButton}){
   const dialog=el('dialog',{id:'readerPrintDialog'}),grid=el('div',{className:'reader-print-controls'});
@@ -46,10 +47,10 @@ export function installReaderPrint(api,{printButton,layoutButton}){
       pages=pages.filter(p=>parity.value==='all'||(p+1)%2===(parity.value==='odd'?1:0));if(reverse.checked)pages.reverse();
       if(!pages.length||pages.length>50)throw Error('Chọn từ 1 đến 50 trang cho mỗi đợt in.');
       const sourceBytes=await api.readSourceBytes(doc);let bytes;if(edits.checked&&forms.checked)bytes=await api.exportDocument(doc);
-      else if(edits.checked){const unfilled=await api.pdfjs.getDocument({data:sourceBytes.slice(),isEvalSupported:false,enableXfa:false}).promise;try{bytes=await api.exportDocument({...doc,pdf:unfilled,formDirty:false});}finally{await unfilled.loadingTask.destroy();}}
+      else if(edits.checked){const unfilled=await api.pdfjs.getDocument({data:sourceBytes.slice(),isEvalSupported:false,enableXfa:false,...pdfAssetOptions}).promise;try{bytes=await api.exportDocument({...doc,pdf:unfilled,formDirty:false});}finally{await unfilled.loadingTask.destroy();}}
       else bytes=forms.checked&&doc.pdf.annotationStorage.size?await doc.pdf.saveDocument():sourceBytes.slice();
       if(forms.checked&&!annotations.checked){await api.ensurePdfLib();const flattened=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});flattened.getForm().flatten({updateFieldAppearances:false});bytes=await flattened.save();}
-      signal.throwIfAborted();pdf=await api.pdfjs.getDocument({data:bytes,isEvalSupported:false,enableXfa:false,standardFontDataUrl:'./vendor/pdfjs/standard_fonts/',cMapUrl:'./vendor/pdfjs/cmaps/',cMapPacked:true,wasmUrl:'./vendor/pdfjs/wasm/'}).promise;
+      signal.throwIfAborted();pdf=await api.pdfjs.getDocument({data:bytes,isEvalSupported:false,enableXfa:false,...pdfAssetOptions}).promise;
       const sizes={},sourcePages={};for(const index of pages){signal.throwIfAborted();const p=await pdf.getPage(index+1);sourcePages[index]=p;const v=p.getViewport({scale:1});sizes[index]=[v.width,v.height];}
       let size=({a4:[595.276,841.89],letter:[612,792],a3:[841.89,1190.551]})[paper.value]||null;if(size&&orientation.value!=='auto'){size.sort((a,b)=>a-b);if(orientation.value==='landscape')size.reverse();}
       if(mode.value!=='single'&&!size)throw Error('Chọn khổ giấy cố định cho bố trí nhiều trang, sách hoặc chia trang.');

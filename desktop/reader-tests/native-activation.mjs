@@ -11,6 +11,7 @@ import net from 'node:net';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
 import {exerciseReaderLoad} from './reader-load.mjs';
+import {qrFixture,qrPdf,qrMatches} from './reader-qr-fixture.mjs';
 const exec=promisify(execFile);
 if(process.platform!=='win32'||process.env.GITHUB_ACTIONS!=='true')throw Error('Installed activation tests require a disposable Windows Actions runner');
 const exe=resolve(process.argv[2]),root=resolve('desktop/reader-tests/test-results/native-activation');
@@ -18,8 +19,9 @@ const helper=fileURLToPath(new URL('./scripts/reader-window-check.ps1',import.me
 const policyHelper=fileURLToPath(new URL('./scripts/webview2-test-policy.ps1',import.meta.url));
 await mkdir(join(root,'Tiếng Việt (1)'),{recursive:true});
 const a=join(root,'Tiếng Việt (1)','Tài liệu A (1).pdf'),b=join(root,'B.pdf'),c=join(root,'Tài liệu A (1).pdf'),bad=join(root,'broken.pdf');
+const qr=join(root,'synthetic-ccitt-qr.pdf'),qrBytes=await qrPdf(),qrSha256=createHash('sha256').update(qrBytes).digest('hex');
 async function fixture(path,text){const pdf=await PDFDocument.create();for(let i=0;i<3;i++)pdf.addPage([600,800]).drawText(`${text} page ${i+1}`,{x:60,y:650});if(text==='NATIVE SOURCE A'){const field=pdf.getForm().createTextField('NativeName');field.setText('Initial');field.addToPage(pdf.getPage(1),{x:60,y:100,width:240,height:28});}await writeFile(path,await pdf.save());}
-await fixture(a,'NATIVE SOURCE A');await fixture(b,'NATIVE SOURCE B');await fixture(c,'NATIVE SOURCE C');await writeFile(bad,'not a PDF');
+await fixture(a,'NATIVE SOURCE A');await fixture(b,'NATIVE SOURCE B');await fixture(c,'NATIVE SOURCE C');await writeFile(bad,'not a PDF');await writeFile(qr,qrBytes);
 const originalA=await readFile(a);
 const log=[],owned=new Set(),policies=new Set();let app,browser,page;
 async function policy(mode,stateFile,cdp,profile){
@@ -169,6 +171,13 @@ try{
   }
   log.push({case:'Windows-font-on-demand-allowlist',available:fonts});
   await expect(activeText()).toContainText(['NATIVE SOURCE A']);
+  await secondary([qr]);await expect(page.locator('#tabs .tab')).toHaveCount(2);
+  const qrCanvas=page.locator('.readerContainer:not([hidden]) .page canvas').first();await expect(qrCanvas).toBeVisible();
+  await expect.poll(()=>qrMatches(qrCanvas)).toBe(qrFixture.modules.length**2);
+  expect(createHash('sha256').update(await readFile(qr)).digest('hex')).toBe(qrSha256);
+  log.push({case:'installed-WebView2-CCITT-QR-visible',modules:qrFixture.modules.length**2,sourceSha256Unchanged:true});
+  await page.locator('#tabs .tab').first().locator('.title').click();await expect(activeText()).toContainText(['NATIVE SOURCE A']);
+  await page.locator('#tabs .tab').nth(1).locator('.close').click();await expect(page.locator('#tabs .tab')).toHaveCount(1);
   // Installed Windows WebView2: Ctrl+wheel is also how Precision Touchpad
   // pinch is delivered by Chromium. Verify it changes PDF.js zoom only, not
   // the entire native shell. The laptop's physical pad still needs field QA.
