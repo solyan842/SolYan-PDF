@@ -259,3 +259,6 @@ body:has(#readerFormatPanel:not([hidden])) #signOptions{display:none!important}
 /* Center short PDFs at low zoom; tall documents keep natural scrolling. */
 .readerContainer{display:flex;flex-direction:column}
 .readerContainer>.pdfViewer{flex:none;margin-block:auto}
+
+.reader-print-title{display:flex;align-items:center;gap:9px}.reader-print-logo{width:24px;height:24px;object-fit:contain;background:transparent}.reader-print-preview-viewport{height:380px;max-height:50vh;overflow:auto;display:flex;align-items:safe center;justify-content:safe center;background:var(--surface,#f2f4f7);border:1px solid #cad2dc;border-radius:6px;overscroll-behavior:contain}.reader-print-preview-nav #printPreviewZoomLevel{min-width:42px;text-align:center;font-size:11px;color:var(--muted,#667085)}#readerPrintDialog #printPreview{display:block;max-width:none;max-height:none;object-fit:fill;margin:12px auto;flex:none}
+@media(max-width:750px){.reader-print-preview-viewport{height:260px;max-height:38vh}}
