@@ -410,7 +410,7 @@ try{
   await page.locator('#window-maximize').click();
   await expect.poll(async()=>(await assertSingle()).bounds).toEqual(normalBounds);
   await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'presentation-enter'}));
-  await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'close'}));
+  await page.evaluate(()=>{void window.__TAURI__.core.invoke('reader_window_control',{action:'close'}).catch(()=>{});});
   await expect.poll(()=>app.exitCode,{timeout:15000}).toBe(0);await stop();await start([]);
   expect(await page.evaluate(()=>window.__TAURI__.core.invoke('reader_window_control',{action:'fullscreen-state'}))).toBe(false);
   expect((await assertSingle()).bounds).toEqual(normalBounds);

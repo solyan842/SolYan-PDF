@@ -43,3 +43,8 @@ Local unit suite after the fix: **19/19 PASS**. The next exact-head Reader CI mu
 - Quick Sign follows the simpler Foxit Reader 11 visual-signature flow: Type, Draw or select an image, then place it. It remains a local visual image signature; no certificates, online service, image background-removal or payment-based SDK is introduced. Typed signatures get a small curated font selector; the existing local signature library and PDF placement stay unchanged.
 - Reference: [Foxit Reader 11.1 manual](https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReader11.1_Manual.pdf); [Foxit Reader 11.0 Quick Guide](https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReaderQuickGuide_11.0.pdf).
 - Platform boundary: WebView2's browser print panel is not the Windows printer driver dialog. Existing print invocation keeps Windows/driver handling; printer UI customization beyond this boundary would require a separate native print adapter and test against real installed drivers.
+
+
+## Reader CI #52 — installed fullscreen shutdown test race
+
+The Windows build, browser tests, native tests and NSIS installer passed. Installed-app acceptance failed only when Playwright awaited the IPC response from `reader_window_control({action:'close'})`: closing the native WebView can destroy the page before that JavaScript evaluation receives its response. The acceptance now fires that close request without awaiting the page promise and still requires the process to exit cleanly with code 0 before restarting and checking fullscreen cleanup. This changes only the test synchronization; no acceptance gate is skipped or relaxed.
