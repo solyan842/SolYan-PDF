@@ -33,3 +33,13 @@ Run [#44](https://github.com/solyan842/SolYan-PDF/actions/runs/40440444446), com
 The Reader-only config now explicitly allows `ipc:` and `http://ipc.localhost` in `connect-src`, while retaining the existing self/blob/loopback sources. The Toolbox config is unchanged. A Node regression assertion protects this Reader CSP contract. This matches the [official Tauri CSP guidance](https://tauri.app/security/csp/) for IPC.
 
 Local unit suite after the fix: **19/19 PASS**. The next exact-head Reader CI must verify the merged CSP and installed PDF open before this milestone can be considered passed.
+
+
+## Foxit Reader 11 print and Quick Sign reference
+
+- Foxit Reader 11.1's print manual is used as a layout reference: preview/navigation, page range, print handling and output settings. The screen in the request is not available as reusable open-source UI in Foxit's GitHub SDK demos; those demos require the proprietary/licensed SDK. We do not copy Foxit code or assets.
+- Reuse the existing pinned PDF.js print renderer/layout in this app. Its page range, parity, reverse order, paper, orientation, fit/scale, N-up, booklet, tile, margins, color and annotation controls remain wired to the existing print preparation path.
+- The native Windows print dialog remains responsible for installed-printer selection, copies, driver properties and duplex. The app does not show duplicate printer controls.
+- Quick Sign follows the simpler Foxit Reader 11 visual-signature flow: Type, Draw or select an image, then place it. It remains a local visual image signature; no certificates, online service, image background-removal or payment-based SDK is introduced. Typed signatures get a small curated font selector; the existing local signature library and PDF placement stay unchanged.
+- Reference: [Foxit Reader 11.1 manual](https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReader11.1_Manual.pdf); [Foxit Reader 11.0 Quick Guide](https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReaderQuickGuide_11.0.pdf).
+- Platform boundary: WebView2's browser print panel is not the Windows printer driver dialog. Existing print invocation keeps Windows/driver handling; printer UI customization beyond this boundary would require a separate native print adapter and test against real installed drivers.

@@ -262,3 +262,44 @@ body:has(#readerFormatPanel:not([hidden])) #signOptions{display:none!important}
 
 .reader-print-title{display:flex;align-items:center;gap:9px}.reader-print-logo{width:24px;height:24px;object-fit:contain;background:transparent}.reader-print-preview-viewport{height:380px;max-height:50vh;overflow:auto;display:flex;align-items:safe center;justify-content:safe center;background:var(--surface,#f2f4f7);border:1px solid #cad2dc;border-radius:6px;overscroll-behavior:contain}.reader-print-preview-nav #printPreviewZoomLevel{min-width:42px;text-align:center;font-size:11px;color:var(--muted,#667085)}#readerPrintDialog #printPreview{display:block;max-width:none;max-height:none;object-fit:fill;margin:12px auto;flex:none}
 @media(max-width:750px){.reader-print-preview-viewport{height:260px;max-height:38vh}}
+
+
+/* Foxit-inspired print workspace: PDF.js handles preview and layout; Windows
+   owns installed printers, copy count, driver properties and duplex settings. */
+#readerPrintDialog{width:min(1180px,96vw);max-width:1180px;max-height:92vh;padding:18px 20px}
+#readerPrintDialog .reader-print-title{margin:0 0 14px;font-size:18px}
+.reader-print-body{grid-template-columns:minmax(280px,.82fr) minmax(480px,1.55fr);gap:16px;min-height:0}
+.reader-print-preview{display:flex;flex-direction:column;min-height:0}
+.reader-print-preview-nav{min-height:34px}
+.reader-print-preview-viewport{height:min(62vh,620px);max-height:none;flex:1}
+.reader-print-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start;min-width:0}
+.reader-print-group{min-width:0;padding:10px 11px;border:1px solid var(--line,#d8dfeb);border-radius:5px;background:var(--surface,white)}
+.reader-print-group:first-child{grid-column:1/-1}
+.reader-print-group h3{margin:0 0 9px;font-size:12px;font-weight:600;color:var(--muted,#667085)}
+.reader-print-group-note{margin:0;font-size:11px;line-height:1.45;color:var(--muted,#667085)}
+.reader-print-settings label{display:grid!important;grid-template-columns:minmax(90px,.8fr) minmax(90px,1.2fr);gap:8px;align-items:center;min-height:33px}
+.reader-print-settings label:has(input[type=checkbox]){display:flex!important;flex-direction:row!important;justify-content:flex-start!important;min-height:28px}
+.reader-print-settings label:has(input[type=checkbox]) input{order:-1}
+.reader-print-settings :is(select,input:not([type=checkbox])){width:100%;min-width:0;height:29px}
+.reader-print-settings input[type=checkbox]{margin:0;flex:none}
+.reader-print-footer{margin-top:12px}
+.reader-print-note{font-size:11px;color:var(--muted,#667085)}
+#readerPrintDialog .reader-print-preview-nav button{margin:0;padding:5px 8px}
+#readerPrintDialog .reader-print-preview-viewport{background:var(--canvas,#f2f4f7)}
+@media(max-width:820px){.reader-print-body{grid-template-columns:1fr}.reader-print-preview-viewport{height:34vh;flex:none}.reader-print-settings{grid-template-columns:1fr 1fr}}
+@media(max-width:540px){.reader-print-settings{grid-template-columns:1fr}.reader-print-group:first-child{grid-column:auto}#readerPrintDialog{width:96vw;padding:12px}}
+/* Foxit Reader 11-style Quick Sign: three clear, local creation paths. */
+#signatureDialog.quick-sign-dialog{width:min(560px,calc(100vw - 32px));max-width:560px;padding:22px}
+.quick-sign-dialog h2{margin:0 0 6px;font-size:19px}
+.quick-sign-subtitle,.quick-sign-note{font-size:12px;line-height:1.5;color:var(--muted,#667085)}
+.quick-sign-modes{display:flex;gap:5px;margin:16px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line,#d8dfeb)}
+.quick-sign-modes button{min-width:86px;padding:7px 11px;border:1px solid transparent;background:transparent}
+.quick-sign-modes button[aria-pressed=true]{border-color:#9fc3ee;background:#1768cf12;color:var(--accent,#175cd3)}
+.quick-sign-panel{min-height:166px;padding:12px;border:1px solid var(--line,#d8dfeb);border-radius:5px}
+.quick-sign-panel[hidden]{display:none}
+.quick-sign-panel label{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;font-size:12px}
+.quick-sign-panel :is(input,select){height:32px;padding:5px 8px}
+#signatureDrawPanel canvas{display:block;width:100%;height:auto;max-height:165px;touch-action:none;border:1px dashed var(--line,#9aa4b2);border-radius:4px;background:transparent}
+.quick-sign-dialog .dialogActions{display:flex;justify-content:flex-end;gap:8px;margin-top:13px}
+.quick-sign-dialog .dialogActions button{padding:7px 12px}
+.quick-sign-note{margin:14px 0 0}

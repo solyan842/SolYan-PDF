@@ -213,9 +213,11 @@ $('open').onclick = attempt(async () => {
   else $('pdfFiles').click();
 });
 $('pdfFiles').onchange = attempt(async e => { for (const file of e.target.files) await openFile(file); e.target.value = ''; });
-$('sign').onclick = () => { if (!current() || busy) { message('Mở PDF trước khi ký.'); return; } clearInk(); $('signatureDialog').showModal(); };
+function setSignatureMode(mode) { for (const [key,panel] of [['type','signatureTypePanel'],['draw','signatureDrawPanel'],['image','signatureImagePanel']]) { const active=key===mode; $(panel).hidden=!active; $('signatureMode'+key[0].toUpperCase()+key.slice(1)).setAttribute('aria-pressed',String(active)); } }
+for (const [mode,id] of [['type','signatureModeType'],['draw','signatureModeDraw'],['image','signatureModeImage']]) $(id).onclick=()=>setSignatureMode(mode);
+$('sign').onclick = () => { if (!current() || busy) { message('Mở PDF trước khi ký.'); return; } clearInk(); setSignatureMode('type'); $('signatureDialog').showModal(); };
 $('clearInk').onclick = clearInk;
-$('typeName').onclick = () => { clearInk(); ctx.fillStyle = '#122c50'; ctx.font = 'italic 70px cursive'; ctx.fillText($('signatureName').value, 20, 140, 680); inked = Boolean($('signatureName').value.trim()); };
+$('typeName').onclick = () => { const name=$('signatureName').value.trim(); if(!name){message('Nhập tên trước khi tạo chữ ký.');return;} clearInk();ctx.fillStyle='#122c50';const fonts={'Segoe Print':'600 62px "Segoe Print", cursive','Comic Sans MS':'italic 68px "Comic Sans MS", cursive','cursive':'italic 70px cursive'};ctx.font=fonts[$('signatureFont').value]||fonts.cursive;ctx.fillText(name,20,140,680);inked=true; };
 $('imageSign').onclick = () => $('signatureFile').click();
 $('signatureFile').onchange = attempt(async e => {
   const file = e.target.files[0]; if (!file) return; if (file.size > 10*1024*1024) throw Error('Ảnh chữ ký tối đa 10 MB.');
