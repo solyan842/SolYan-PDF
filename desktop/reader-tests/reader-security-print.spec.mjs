@@ -18,7 +18,8 @@ test('Windows print workspace selects a printer, opens its Properties and submit
  }}};});
  await open(page);await page.keyboard.press('Control+p');await expect(page.locator('#readerPrintDialog')).toHaveAttribute('open','');
  await expect(page.locator('#printPrinter option')).toHaveCount(2);await expect(page.locator('#printPrinter')).toHaveValue('Default Laser');
- await page.locator('#printPrinter').selectOption('Office Printer');await page.locator('#printCopies').fill('2');await page.locator('#printPrinterProperties').click();
+ await expect(page.locator('#printPreviewPage')).toHaveText('Tờ 1/4');await expect.poll(()=>page.locator('.reader-print-settings').evaluate(e=>e.inert)).toBe(false);
+ await page.locator('#printPrinter').selectOption('Office Printer');await page.locator('#printCopies').fill('2');await expect(page.locator('#printCopies')).toHaveValue('2');await page.locator('#printPrinterProperties').click();
  await expect.poll(()=>page.evaluate(()=>window.__printerProperties)).toEqual(['Office Printer']);
  await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Office Printer',copies:2});
  expect(await page.evaluate(()=>window.__browserPrint)).toBeUndefined();
