@@ -79,7 +79,7 @@ export function installReaderPrint(api,{printButton,layoutButton}){
     }catch(error){cleanup();if(error.name!=='AbortError'&&error.name!=='RenderingCancelledException')throw error;}
     finally{preparing=false;grid.inert=false;start.disabled=previewButton.disabled=false;}
   };
-  const printDefault=async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang chuẩn bị bản in; cửa sổ in Windows sẽ mở sau đó.';await prepare(true);};
+  const printDefault=async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang chuẩn bị xem trước. Phóng to/thu nhỏ được neo ở tâm; nhấn In để chọn máy in.';dialog.showModal();await prepare(false);};
   const openLayout=()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Bố trí in nâng cao. Máy in và Properties sẽ được chọn trong hộp thoại Windows.';dialog.showModal();};
   start.onclick=api.attempt(()=>prepare(true));previewButton.onclick=api.attempt(()=>prepare(false));
   return {print:printDefault,openLayout};

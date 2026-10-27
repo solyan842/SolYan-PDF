@@ -7,9 +7,9 @@ test('PDF annotation and text links require native confirmation; Reader never na
  await open(page);const before=page.url();const a=page.locator('.annotationLayer a[href="https://example.com/link"]').first();await expect(a).toBeAttached();await a.dispatchEvent('click');await expect.poll(()=>page.evaluate(()=>window.__links)).toContain('https://example.com/link');expect(page.url()).toBe(before);
  await expect(page.locator('.reader-detected-link').first()).toBeAttached();await page.locator('.reader-detected-link').first().dispatchEvent('auxclick',{button:1});await expect.poll(()=>page.evaluate(()=>window.__links.length)).toBe(2);expect(page.url()).toBe(before);await expect(page.locator('#status')).toContainText('Không mở');
 });
-test('Ctrl+P opens the standard Windows print interface without the custom layout dialog',async({page})=>{
+test('Ctrl+P opens the centered in-app preview before the Windows print interface',async({page})=>{
  await page.addInitScript(()=>{window.print=()=>{window.__printed=true;};});await open(page);await page.keyboard.press('Control+p');
- await expect.poll(()=>page.evaluate(()=>window.__printed)).toBe(true);await expect(page.locator('#readerPrintDialog')).not.toHaveAttribute('open','');
+ await expect(page.locator('#readerPrintDialog')).toHaveAttribute('open','');await expect(page.locator('#printPreviewPage')).toHaveText('Tờ 1/4');await page.locator('#printPreviewZoomIn').click();await expect(page.locator('#printPreviewZoomLevel')).toHaveText('125%');await expect.poll(()=>page.locator('#printPreviewViewport').evaluate(e=>Math.abs(e.scrollTop-(e.scrollHeight-e.clientHeight)/2))).toBeLessThanOrEqual(2);await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__printed)).toBe(true);await expect(page.locator('#readerPrintDialog')).not.toHaveAttribute('open','');
  await expect(page.locator('#readerPrintStage .reader-print-page')).toHaveCount(4);
 });
 test('preview, even reverse, four-up and booklet produce actual output sheets',async({page})=>{
