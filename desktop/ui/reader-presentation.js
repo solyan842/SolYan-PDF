@@ -45,8 +45,9 @@ export function installPresentation(api){
       await frame();await frame();
       if(api.documents.has(s.doc.id)){
         const d=s.doc;if(d.view.currentScaleValue!==s.scale)d.view.currentScaleValue=s.scale;
-        d.view.currentPageNumber=s.originalPage;d.container.scrollLeft=s.left;d.container.scrollTop=s.top;d.view.update();
+        d.view.currentPageNumber=s.originalPage;d.view.update();
         if(api.current()===d){document.getElementById('zoom').value=s.zoom;api.render(d);(s.focus?.isConnected?s.focus:d.container).focus({preventScroll:true});}
+        await frame();await frame();d.container.scrollLeft=s.left;d.container.scrollTop=s.top;
       }
       exiting=false;
     }
