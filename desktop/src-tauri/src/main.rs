@@ -1148,12 +1148,14 @@ fn reader_next_open_request(window: tauri::WebviewWindow, state: State<'_, Reade
     Ok(request)
 }
 #[tauri::command]
-async fn reader_read_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<Vec<u8>, String> {
+async fn reader_read_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<tauri::ipc::Response, String> {
     reader_window(&window)?;
     let path = state.queue.lock().map_err(|_| "Reader queue unavailable")?.take(&ticket)?;
     let bytes=reader_open::read_pdf(&path)?;
     if let Ok(root)=handoff_root(&window.app_handle()){document_handoff::consume_reader_copy(&root,&path);}
-    Ok(bytes)
+    // Vec<u8> serializes as a JSON array of numbers. A raw IPC response returns
+    // an ArrayBuffer and avoids the large JSON encoding/copy cost for PDFs.
+    Ok(tauri::ipc::Response::new(bytes))
 }
 #[tauri::command]
 fn reader_discard_open_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<(), String> {

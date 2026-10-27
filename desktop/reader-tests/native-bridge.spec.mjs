@@ -10,13 +10,14 @@ async function fixture(text) {
 async function mockNative(page,files,delayed=false) {
   await page.addInitScript(({files,delayed})=>{
     const pending=[],grants=new Map();let callback,sequence=0;
-    window.__reads=[];window.__discards=[];
+    window.__reads=[];window.__discards=[];window.__saveCalls=[];
     window.__enqueue=(key,bytes=files[key])=>{
       const ticket=String(++sequence);grants.set(ticket,bytes);pending.push([ticket,key,'Same.pdf',null]);callback?.();
     };
     window.__TAURI__={core:{invoke:async(command,args)=>{
       if(command==='reader_next_open_request')return pending.shift()||null;
-      if(command==='reader_read_open_request'){window.__reads.push(args.ticket);const bytes=grants.get(args.ticket);grants.delete(args.ticket);return bytes;}
+      if(command==='reader_read_open_request'){window.__reads.push(args.ticket);const bytes=grants.get(args.ticket);grants.delete(args.ticket);return Uint8Array.from(bytes).buffer;}
+      if(command==='reader_save_as'){window.__saveCalls.push(args);return 'C:/Saved/Reader.pdf';}
       if(command==='reader_discard_open_request'){window.__discards.push(args.ticket);grants.delete(args.ticket);return null;}
       if(command==='reader_choose_files'){if(window.__chooseKey)window.__enqueue(window.__chooseKey);return Boolean(window.__chooseKey);}
       return null;
@@ -35,6 +36,18 @@ test('native startup queue survives notifications before listener readiness',asy
   await page.evaluate(()=>{window.__enqueue('b');window.__releaseListener();});
   await expect(page.locator('#tabs .tab')).toHaveCount(2);
   await expect(page.locator('.readerContainer:not([hidden]) .textLayer')).toContainText(['NATIVE B']);
+});
+
+test('raw native PDF bytes remain available intact for Save after PDF.js takes its worker copy',async({page})=>{
+  const bytes=await fixture('RAW IPC SOURCE');await mockNative(page,{a:bytes});
+  await page.goto('/reader.html');await expect(page.locator('.readerContainer:not([hidden]) .textLayer')).toContainText(['RAW IPC SOURCE']);
+  await page.locator('#save').click();await expect(page.locator('#status')).toContainText('Đã lưu bản PDF mới');
+  const preserved=await page.evaluate(expected=>{
+    const source=Uint8Array.from(atob(expected),char=>char.charCodeAt(0));
+    const saved=Uint8Array.from(window.__saveCalls[0].bytes);
+    return saved.length===source.length&&saved.every((byte,index)=>byte===source[index]);
+  },Buffer.from(bytes).toString('base64'));
+  expect(preserved).toBe(true);
 });
 
 for(const viewport of [{width:1440,height:940},{width:1024,height:768}])test(`forwarded files preserve dirty tabs and view state at ${viewport.width}x${viewport.height}; duplicate path focuses without reading again`,async({page})=>{

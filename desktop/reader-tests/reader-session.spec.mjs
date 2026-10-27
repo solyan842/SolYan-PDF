@@ -53,7 +53,12 @@ test('recent PDFs and full tab session restore after reload, including missing p
     return null;
   });
   await page.addInitScript(()=>{
-    window.__TAURI__={core:{invoke:(name,args)=>window.__readerMock(name,args)},event:{listen:async(name,callback)=>{
+    window.__TAURI__={core:{invoke:async(name,args)=>{
+      const result=await window.__readerMock(name,args);
+      // Playwright's exposed function serializes its result; emulate Tauri's
+      // raw IPC response from inside the browser realm instead.
+      return name==='reader_read_open_request'?Uint8Array.from(result).buffer:result;
+    }},event:{listen:async(name,callback)=>{
       if(name==='reader-open-pending')window.__nativeNotify=callback;return()=>{};
     }}};
   });

@@ -1,5 +1,5 @@
 // The notification is only a hint. Native requests survive until this bridge drains them.
-export async function connectNativeReader({native, find, activate, open, message, hasOpen, session}) {
+export async function connectNativeReader({native, find, activate, open, prepareOpen, message, hasOpen, session}) {
   if (!native?.core || !native?.event) return;
   let draining=false, again=false, received=false;
   const invoke=(name,args)=>native.core.invoke(name,args);
@@ -17,8 +17,11 @@ export async function connectNativeReader({native, find, activate, open, message
           try {
             const existing=find(source);
             if(existing){await invoke('reader_discard_open_request',{ticket});activate(existing.id);continue;}
-            const bytes=await invoke('reader_read_open_request',{ticket});
-            await open(new File([Uint8Array.from(bytes)],name,{type:'application/pdf'}),source);
+            const [bytes,runtime]=await Promise.all([
+              invoke('reader_read_open_request',{ticket}),
+              prepareOpen?prepareOpen():Promise.resolve(null)
+            ]);
+            await open(bytes,source,name,runtime);
           } catch(error) { message(`Không mở được PDF: ${typeof error==='string'?error:error.message}`); }
         }
       } while(again);

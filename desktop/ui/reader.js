@@ -68,14 +68,21 @@ function renderTabs() {
     tab.append(title, close); $('tabs').append(tab);
   }
 }
-async function openFile(file, source = null) {
-  if (file.size > 200 * 1024 * 1024) throw Error('Reader R1 giới hạn mỗi PDF ở 200 MB.');
-  message(`Đang mở ${file.name}…`);
-  const runtimePromise=ensurePdfRuntime();
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const {pdfjs,EventBus,PDFViewer,PDFLinkService,PDFFindController}=await runtimePromise;
-  const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false, enableXfa: false,
-    cMapUrl: './vendor/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: './vendor/pdfjs/standard_fonts/', wasmUrl: './vendor/pdfjs/wasm/' });
+async function openFile(file, source = null, nativeName = null, runtimeReady = null) {
+  const nativeBytes=file instanceof ArrayBuffer||ArrayBuffer.isView(file);
+  const name=nativeBytes?(nativeName||'document.pdf'):file.name;
+  const size=nativeBytes?file.byteLength:file.size;
+  if (size > 200 * 1024 * 1024) throw Error('Reader R1 giới hạn mỗi PDF ở 200 MB.');
+  message(`Đang mở ${name}…`);
+  const runtimePromise=runtimeReady||ensurePdfRuntime();
+  const bytesPromise=nativeBytes
+    ? Promise.resolve(file instanceof Uint8Array?file:new Uint8Array(file))
+    : file.arrayBuffer().then(buffer=>new Uint8Array(buffer));
+  const [{pdfjs,EventBus,PDFViewer,PDFLinkService,PDFFindController},bytes]=await Promise.all([runtimePromise,bytesPromise]);
+  const resources={isEvalSupported:false,enableXfa:false,cMapUrl:'./vendor/pdfjs/cmaps/',cMapPacked:true,
+    standardFontDataUrl:'./vendor/pdfjs/standard_fonts/',wasmUrl:'./vendor/pdfjs/wasm/'};
+  // Keep one untouched source buffer for Save/Print; PDF.js transfers its own buffer to the worker.
+  const task=pdfjs.getDocument({...resources,data:nativeBytes?bytes.slice():bytes});
   task.onPassword = (update, reason) => {
     const password = prompt(t(reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD ? 'Mật khẩu chưa đúng. Nhập lại:' : 'Mật khẩu PDF:'));
     if (password === null) { task.destroy(); message('Đã hủy mở PDF.'); } else update(password);
@@ -85,7 +92,7 @@ async function openFile(file, source = null) {
   const viewer = document.createElement('div'); viewer.className = 'pdfViewer'; container.append(viewer); $('documents').append(container);
   const bus = new EventBus(), link = new PDFLinkService({ eventBus: bus, externalLinkEnabled: true }), find = new PDFFindController({ eventBus: bus, linkService: link });
   const view = new PDFViewer({ container, viewer, eventBus: bus, linkService: link, findController: find, annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS, maxCanvasPixels: 12_000_000, enableScripting: false });
-  const doc = { id: crypto.randomUUID(), name: file.name, source, sourceFile:file, sourceBytes:null, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
+  const doc = { id: crypto.randomUUID(), name, source, sourceFile:nativeBytes?null:file, sourceBytes:nativeBytes?bytes:null, pdf, container, view, bus, link, placements: [], dirty: false, selectedId: null, query: '', matches: '' };
   documents.set(doc.id, doc); link.setViewer(view); link.setDocument(pdf); view.setDocument(pdf);
   pdf.annotationStorage.onSetModified=()=>{doc.formDirty=true;changed(doc);};
   r2?.opened(doc);
@@ -99,7 +106,7 @@ async function openFile(file, source = null) {
   bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } session?.touch(); });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });
   session?.opened(doc);
-  activate(doc.id); message(`${file.name} · ${pdf.numPages} trang · Xử lý offline`);
+  activate(doc.id); message(`${name} · ${pdf.numPages} trang · Xử lý offline`);
 }
 function activate(id) {
   active = id; const doc = current(); selected = doc.selectedId;
@@ -351,5 +358,5 @@ $('open').disabled=false;
 document.body.dataset.ready='true';
 installDefaultPdfPrompt({native:window.__TAURI__,message});
 attempt(async()=>{
-  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,message,hasOpen:()=>documents.size>0,session});
+  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,prepareOpen:ensurePdfRuntime,message,hasOpen:()=>documents.size>0,session});
 })();
