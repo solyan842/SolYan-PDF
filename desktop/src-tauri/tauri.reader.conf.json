@@ -3,6 +3,9 @@
   "mainBinaryName": "solyan-pdf-reader",
   "identifier": "vn.solyan.pdf.reader",
   "app": {
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' blob: http://127.0.0.1:* ipc: http://ipc.localhost"
+    },
     "windows": [
       {
         "label": "main",

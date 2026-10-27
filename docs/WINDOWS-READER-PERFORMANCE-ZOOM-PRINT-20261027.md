@@ -24,3 +24,12 @@ The native command now returns Tauri's raw `tauri::ipc::Response` bytes. The fro
 Local evidence on this Windows workstation: unit suite **19/19 PASS**; targeted session restoration **1/1 PASS**; full Reader E2E **46/47 PASS**. The remaining offline-network assertion observed Kaspersky's injected `gc.kis.v2.scr.kaspersky-labs.com` scripts on the local machine, including with Chrome extensions disabled. The test gate was kept unchanged. No local Rust/Cargo compiler was available, so native compilation and installed Windows behavior require the exact-head Reader CI.
 
 The local synthetic 100-page scenario is not a real-PDF timing measurement. The earlier mocked-buffer timing is not a native IPC benchmark. No measured Windows native PDF-open latency improvement is claimed until the standalone Reader runs on Windows with representative PDFs.
+
+
+## Reader CI #44 — installed WebView IPC CSP failure and fix
+
+Run [#44](https://github.com/solyan842/SolYan-PDF/actions/runs/40440444446), commit `57d365c2c0efcefbdd973a317916d0b1679ca58f`, completed with failure in the installed-app acceptance step. The durable `windows-reader-diagnostics` artifact showed WebView2 rejecting both `http://ipc.localhost/reader_window_control` and Tauri's event-listen endpoint because the effective Reader CSP omitted Tauri's IPC origins. The native Rust tests passed 15/15 and the standalone NSIS build completed; the installed app could not finish bootstrap or open the fixture PDF.
+
+The Reader-only config now explicitly allows `ipc:` and `http://ipc.localhost` in `connect-src`, while retaining the existing self/blob/loopback sources. The Toolbox config is unchanged. A Node regression assertion protects this Reader CSP contract. This matches the [official Tauri CSP guidance](https://tauri.app/security/csp/) for IPC.
+
+Local unit suite after the fix: **19/19 PASS**. The next exact-head Reader CI must verify the merged CSP and installed PDF open before this milestone can be considered passed.
