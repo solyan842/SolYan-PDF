@@ -14,7 +14,13 @@ test('Quick Sign keeps the three simple local creation paths and typography choi
 });
 test('print layout groups controls that already drive PDF.js print preparation',()=>{
   for(const id of ['printSubset','printRange','printParity','printLayout','printNup','printPaper','printOrientation','printScale','printPercent','printMargin','printAutoRotate','printQuality','printEdits','printAnnotations','printForms','printGray'])assert.match(print,new RegExp("'"+id+"'"));
-  assert.match(print,/reader_show_system_print_dialog/);
-  assert.match(native,/fn reader_list_printers/);\n  assert.match(native,/fn reader_open_printer_properties/);\n  assert.match(native,/async fn reader_print/);\n  assert.match(print,/id:'printPrinterProperties'/);\n  assert.match(print,/id:'printCopies'/);
+  assert.match(native,/fn reader_list_printers/);
+  assert.match(native,/fn reader_open_printer_properties/);
+  assert.match(native,/async fn reader_print/);
+  assert.match(print,/id:'printPrinterProperties'/);
+  assert.match(print,/id:'printCopies'/);
+  assert.match(print,/reader_list_printers/);
+  assert.match(print,/reader_open_printer_properties/);
+  assert.match(print,/reader_print/);
   assert.match(print,/window\.print\(\)/);
 });
