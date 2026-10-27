@@ -27,9 +27,25 @@ Synthetic 100-page text fixture, Chromium 145.0.7632.6, Windows 10.0.26300, Inte
 - GPL reference applications provide UX ideas only. Existing permissive PDF.js/pdf-lib handle parsing/rendering/writing; no new PDF parser, framework replacement or copied GPL code.
 - Additional MIT Phosphor originals are separately pinned in `desktop/ui/reader-icons/SOURCE.json`; the original 86 Tools SVG contract is unchanged.
 
+## Print, zoom, and public-PDF performance follow-up (2026-10-27)
+
+- The normal **In PDF / Ctrl+P** path prepares the document with the existing PDF.js print pipeline and calls `window.print()`; it does not open the custom advanced-layout dialog first. The advanced-layout dialog is a separate optional path for page range/order, paper/layout, N-up, booklet, and poster tiling. Printer selection, copies, driver Properties, and duplex stay with the Windows print UI/driver.
+- `desktop/reader-tests/reader-security-print.spec.mjs` verifies that Ctrl+P uses the normal print path and bypasses the advanced-layout dialog. The browser test mocks `window.print()`; it does **not** prove the native Windows printer dialog or a physical/PDF printer job. Native Windows print-driver acceptance remains open.
+- `desktop/reader-tests/reader.spec.mjs` checks that the document point at the viewer center remains within 5 CSS pixels after zoom. Reader CI #45 passed on exact code SHA `8d36793da8d7e2a74b566523f8c3e7c63700ce8e`.
+- A local PDF.js rendering diagnostic used three SHA-pinned public PDFs from `benchmarks/corpora/pdf_to_office_real_diagnostic_v1.json` (py-pdf/sample-files commit `02b8203bf416db3dbdb03438bc8278dfcb0555f3`, CC BY-SA 4.0). Source bytes and page counts were verified by the repository's existing fetcher. On Windows `10.0.22621`, Edge `156.0.4314.50`, Intel Xeon E5-2680 v4, 64 GiB RAM, first visible canvas was observed at:
+
+| Public manifest case | Pages | Source bytes | SHA-256 | First canvas |
+| --- | ---: | ---: | --- | ---: |
+| `docx-google-doc` | 1 | 80,100 | `69f6b7f493b1bc55d518942976cbeadc4ec0a36f6d8a6dc24feffc516d35b2c9` | 965 ms |
+| `docx-multicolumn` | 3 | 78,657 | `bdb495e95b3e1afae95013099dc59b0cea047f1fa70f677ee9cb33f10faa1c6c` | 380 ms |
+| `docx-libreoffice-images` | 3 | 78,772 | `16cb8e10bd59e30b4d350f11d0ed9c7d0bd7e7bb962a46022c89836e2aa44f63` | 331 ms |
+
+  These are single-run, automation-observed **Edge UI/PDF.js** timings: the first run loaded the PDF.js runtime and subsequent runs reused it. They do not measure the standalone Tauri shell, Explorer IPC, native peak memory, or a cold OS cache. They are diagnostic only; no release threshold is inferred.
+- The pinned Wikimedia scanned-table sample did not finish downloading during this local run, so there is no scanned-PDF timing here. Real native measurements across scanned/complex 1/100/500-page PDFs and peak memory remain open. The earlier private user PDF was tested locally and is intentionally not identified or included in this public report.
+
 ## Deferred release work
 
-Print; Unicode free-text/text boxes and Fill & Sign symbols/dates; interactive form editing with lossless save/history; editing pre-existing native annotations; bookmarks/recents with safe native reopen; document handoff to a specific Tools operation; persisted page-rotation editing (view rotation is supported); full real-corpus speed/peak-memory measurements; native dark/light taskbar and upgrade/default-association QA. Existing PDF associations are retained; installation is not a claim that Windows default-app choice was changed. Bundled Reader inside Tools uses the Tools process identity/profile; install standalone Reader for independent identity/profile.
+Native Windows print-driver acceptance; Unicode free-text/text boxes and Fill & Sign symbols/dates; interactive form editing with lossless save/history; editing pre-existing native annotations; bookmarks/recents with safe native reopen; document handoff to a specific Tools operation; persisted page-rotation editing (view rotation is supported); full real-corpus speed/peak-memory measurements; native dark/light taskbar and upgrade/default-association QA. Existing PDF associations are retained; installation is not a claim that Windows default-app choice was changed. Bundled Reader inside Tools uses the Tools process identity/profile; install standalone Reader for independent identity/profile.
 
 No placeholder buttons were added for deferred functions. No gate was removed or relaxed. No merge/release or `main` modification is authorized here.
 
