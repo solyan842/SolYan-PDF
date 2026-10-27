@@ -81,7 +81,7 @@ export function installReaderPrint(api,{printButton,layoutButton}){
         const wrapper=el('div',{className:'reader-print-page'});wrapper.style.width=w+'pt';wrapper.style.height=h+'pt';wrapper.dataset.page=layout.items.map(x=>x.index+1).join(',');if(sheet){const name='readerSheet'+i;rules.push(sheet.cssRules.length);sheet.insertRule(`@page ${name}{size:${w}pt ${h}pt;margin:0}`,sheet.cssRules.length);wrapper.style.page=name;if(i===0)stage.style.page=name;}wrapper.append(canvas);stage.append(wrapper);status.textContent=`Đã chuẩn bị ${i+1}/${plan.length} tờ.`;
       }
       stage.dataset.pixels=String(pixels);previewIndex=0;showPreview();signal.throwIfAborted();
-      if(doPrint){dialog.close();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));signal.throwIfAborted();window.print();api.message('Đã mở hộp thoại in.');}
+      if(doPrint){dialog.close();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));signal.throwIfAborted();if(window.__TAURI__?.core?.invoke){try{await window.__TAURI__.core.invoke('reader_show_system_print_dialog');api.message('Đã mở hộp thoại in Windows.');}catch(error){api.message('Không mở được hộp thoại in Windows; chuyển sang hộp thoại WebView2.');window.print();}}else{window.print();api.message('Đã mở hộp thoại in.');}}
     }catch(error){cleanup();if(error.name!=='AbortError'&&error.name!=='RenderingCancelledException')throw error;}
     finally{preparing=false;grid.inert=false;start.disabled=previewButton.disabled=false;}
   };

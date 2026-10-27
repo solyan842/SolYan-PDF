@@ -1188,6 +1188,45 @@ fn handoff_root(app:&tauri::AppHandle)->Result<PathBuf,String>{Ok(app.path().loc
 #[tauri::command]
 fn desktop_take_handoff(app:tauri::AppHandle,window:tauri::WebviewWindow,token:String)->Result<(String,Vec<u8>),String>{if cfg!(feature="reader-only")||(window.label()!="main"&&!window.label().starts_with("tools-handoff-")){return Err("Tools inbox only".into());}document_handoff::take(&handoff_root(&app)?,&token)}
 
+#[tauri::command]
+async fn reader_show_system_print_dialog(window: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2_16, COREWEBVIEW2_PRINT_DIALOG_KIND_SYSTEM,
+        };
+        use windows::core::Interface;
+
+        let (sender, receiver) = std::sync::mpsc::channel::<Result<(), String>>();
+        window
+            .with_webview(move |webview| {
+                let result = unsafe {
+                    webview
+                        .controller()
+                        .CoreWebView2()
+                        .and_then(|core| core.cast::<ICoreWebView2_16>())
+                        .and_then(|core| core.ShowPrintUI(COREWEBVIEW2_PRINT_DIALOG_KIND_SYSTEM))
+                }
+                .map_err(|error| error.to_string());
+                let _ = sender.send(result);
+            })
+            .map_err(|error| error.to_string())?;
+
+        tauri::async_runtime::spawn_blocking(move || {
+            receiver
+                .recv_timeout(Duration::from_secs(10))
+                .map_err(|_| "Timed out opening the Windows system print dialog".to_string())?
+        })
+        .await
+        .map_err(|error| error.to_string())?
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        Err("The system print dialog is only available on Windows.".to_string())
+    }
+}
+
 fn main() {
     let mut requests = reader_open::OpenQueue::default();
     requests.enqueue(std::env::args_os().skip(1).map(PathBuf::from), &std::env::current_dir().unwrap_or_default());
@@ -1314,7 +1353,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_links::reader_open_pdf_link])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_show_system_print_dialog, reader_links::reader_open_pdf_link])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 
