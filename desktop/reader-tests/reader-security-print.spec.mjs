@@ -7,7 +7,23 @@ test('PDF annotation and text links require native confirmation; Reader never na
  await open(page);const before=page.url();const a=page.locator('.annotationLayer a[href="https://example.com/link"]').first();await expect(a).toBeAttached();await a.dispatchEvent('click');await expect.poll(()=>page.evaluate(()=>window.__links)).toContain('https://example.com/link');expect(page.url()).toBe(before);
  await expect(page.locator('.reader-detected-link').first()).toBeAttached();await page.locator('.reader-detected-link').first().dispatchEvent('auxclick',{button:1});await expect.poll(()=>page.evaluate(()=>window.__links.length)).toBe(2);expect(page.url()).toBe(before);await expect(page.locator('#status')).toContainText('Không mở');
 });
-test('Ctrl+P opens the centered in-app preview before the Windows print interface',async({page})=>{
+test('Windows print workspace selects a printer, opens its Properties and submits copies to that printer',async({page})=>{
+ await page.addInitScript(()=>{window.__printerProperties=[];window.__submittedPrint=null;window.print=()=>{window.__browserPrint=true;};window.__TAURI__={core:{invoke:async(command,args)=>{
+  if(command==='reader_list_printers')return[{name:'Default Laser',is_default:true},{name:'Office Printer',is_default:false}];
+  if(command==='reader_open_printer_properties'){window.__printerProperties.push(args.printerName);return null;}
+  if(command==='reader_print'){window.__submittedPrint=args;return null;}
+  if(command==='reader_version')return'0.1.0';
+  if(command==='reader_session_recent')return[];
+  return null;
+ }}};});
+ await open(page);await page.keyboard.press('Control+p');await expect(page.locator('#readerPrintDialog')).toHaveAttribute('open','');
+ await expect(page.locator('#printPrinter option')).toHaveCount(2);await expect(page.locator('#printPrinter')).toHaveValue('Default Laser');
+ await page.locator('#printPrinter').selectOption('Office Printer');await page.locator('#printCopies').fill('2');await page.locator('#printPrinterProperties').click();
+ await expect.poll(()=>page.evaluate(()=>window.__printerProperties)).toEqual(['Office Printer']);
+ await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Office Printer',copies:2});
+ expect(await page.evaluate(()=>window.__browserPrint)).toBeUndefined();
+});
+test('Ctrl+P opens the centered in-app preview before the browser fallback print interface',async({page})=>{
  await page.addInitScript(()=>{window.print=()=>{window.__printed=true;};});await open(page);await page.keyboard.press('Control+p');
  await expect(page.locator('#readerPrintDialog')).toHaveAttribute('open','');await expect(page.locator('#printPreviewPage')).toHaveText('Tờ 1/4');await page.locator('#printPreviewZoomIn').click();await expect(page.locator('#printPreviewZoomLevel')).toHaveText('125%');await expect.poll(()=>page.locator('#printPreviewViewport').evaluate(e=>Math.abs(e.scrollTop-(e.scrollHeight-e.clientHeight)/2))).toBeLessThanOrEqual(2);await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__printed)).toBe(true);await expect(page.locator('#readerPrintDialog')).not.toHaveAttribute('open','');
  await expect(page.locator('#readerPrintStage .reader-print-page')).toHaveCount(4);

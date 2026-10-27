@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test quick-sign.test.mjs assets.test.mjs text.test.mjs print-layout.test.mjs",
+    "test": "node --test quick-sign.test.mjs quick-sign-ui.test.mjs assets.test.mjs text.test.mjs print-layout.test.mjs",
     "e2e": "playwright test"
   },
   "devDependencies": {

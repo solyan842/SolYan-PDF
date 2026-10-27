@@ -303,3 +303,12 @@ body:has(#readerFormatPanel:not([hidden])) #signOptions{display:none!important}
 .quick-sign-dialog .dialogActions{display:flex;justify-content:flex-end;gap:8px;margin-top:13px}
 .quick-sign-dialog .dialogActions button{padding:7px 12px}
 .quick-sign-note{margin:14px 0 0}
+
+
+/* Keep real printer selection, driver Properties and copies visible together. */
+.reader-print-settings .reader-printer-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(90px,.22fr);gap:9px;align-items:end}
+.reader-printer-row label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;min-width:0}
+.reader-printer-row :is(select,input){width:100%;min-width:0;height:32px}
+.reader-printer-row button{height:32px;white-space:nowrap}
+#printPrinterStatus{margin:8px 0 0}
+@media(max-width:540px){.reader-print-settings .reader-printer-row{grid-template-columns:minmax(0,1fr) auto}.reader-printer-row label:last-child{grid-column:1/-1}}

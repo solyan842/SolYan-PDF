@@ -1188,34 +1188,185 @@ fn handoff_root(app:&tauri::AppHandle)->Result<PathBuf,String>{Ok(app.path().loc
 #[tauri::command]
 fn desktop_take_handoff(app:tauri::AppHandle,window:tauri::WebviewWindow,token:String)->Result<(String,Vec<u8>),String>{if cfg!(feature="reader-only")||(window.label()!="main"&&!window.label().starts_with("tools-handoff-")){return Err("Tools inbox only".into());}document_handoff::take(&handoff_root(&app)?,&token)}
 
+#[derive(serde::Serialize)]
+struct ReaderPrinterChoice {
+    name: String,
+    is_default: bool,
+}
+
 #[tauri::command]
-async fn reader_show_system_print_dialog(window: tauri::WebviewWindow) -> Result<(), String> {
+fn reader_list_printers() -> Result<Vec<ReaderPrinterChoice>, String> {
     #[cfg(windows)]
     {
-        use webview2_com::Microsoft::Web::WebView2::Win32::{
-            ICoreWebView2_16, COREWEBVIEW2_PRINT_DIALOG_KIND_SYSTEM,
+        use windows_sys::Win32::Graphics::Printing::{
+            EnumPrintersW, GetDefaultPrinterW, PRINTER_ENUM_CONNECTIONS, PRINTER_ENUM_LOCAL,
+            PRINTER_INFO_4W,
         };
-        use windows::core::Interface;
+
+        unsafe fn wide_string(pointer: *const u16) -> String {
+            if pointer.is_null() {
+                return String::new();
+            }
+            let length = (0..).take_while(|index| *pointer.add(*index) != 0).count();
+            String::from_utf16_lossy(std::slice::from_raw_parts(pointer, length))
+        }
+
+        let mut default_length = 0u32;
+        let _ = unsafe { GetDefaultPrinterW(std::ptr::null_mut(), &mut default_length) };
+        let default_name = if default_length > 0 {
+            let mut name = vec![0u16; default_length as usize];
+            if unsafe { GetDefaultPrinterW(name.as_mut_ptr(), &mut default_length) } != 0 {
+                String::from_utf16_lossy(&name[..default_length.saturating_sub(1) as usize])
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let flags = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS;
+        let mut bytes_needed = 0u32;
+        let mut count = 0u32;
+        let _ = unsafe {
+            EnumPrintersW(
+                flags,
+                std::ptr::null(),
+                4,
+                std::ptr::null_mut(),
+                0,
+                &mut bytes_needed,
+                &mut count,
+            )
+        };
+        if bytes_needed == 0 {
+            return Ok(Vec::new());
+        }
+
+        let words = (bytes_needed as usize + std::mem::size_of::<usize>() - 1)
+            / std::mem::size_of::<usize>();
+        let mut buffer = vec![0usize; words];
+        let buffer_bytes = (buffer.len() * std::mem::size_of::<usize>()) as u32;
+        if unsafe {
+            EnumPrintersW(
+                flags,
+                std::ptr::null(),
+                4,
+                buffer.as_mut_ptr().cast::<u8>(),
+                buffer_bytes,
+                &mut bytes_needed,
+                &mut count,
+            )
+        } == 0
+        {
+            return Err(format!("Windows could not enumerate printers: {}", std::io::Error::last_os_error()));
+        }
+
+        let entries = buffer.as_ptr().cast::<PRINTER_INFO_4W>();
+        let mut printers = Vec::with_capacity(count as usize);
+        for index in 0..count as usize {
+            let name = unsafe { wide_string((*entries.add(index)).pPrinterName) };
+            if !name.is_empty() {
+                printers.push(ReaderPrinterChoice {
+                    is_default: name.eq_ignore_ascii_case(&default_name),
+                    name,
+                });
+            }
+        }
+        printers.sort_by(|left, right| {
+            right.is_default.cmp(&left.is_default).then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+        });
+        Ok(printers)
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Printer enumeration is available in the Windows Reader app.".to_string())
+    }
+}
+
+#[tauri::command]
+fn reader_open_printer_properties(printer_name: String) -> Result<(), String> {
+    let printers = reader_list_printers()?;
+    if !printers.iter().any(|printer| printer.name == printer_name) {
+        return Err("Choose an installed printer before opening its properties.".to_string());
+    }
+    #[cfg(windows)]
+    {
+        Command::new("rundll32.exe")
+            .args(["printui.dll,PrintUIEntry", "/p", "/n", printer_name.as_str()])
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Unable to open printer properties: {error}"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = printer_name;
+        Err("Printer properties are available in the Windows Reader app.".to_string())
+    }
+}
+
+#[tauri::command]
+async fn reader_print(
+    window: tauri::WebviewWindow,
+    printer_name: String,
+    copies: u32,
+) -> Result<(), String> {
+    if !(1..=999).contains(&copies) {
+        return Err("Print copies must be between 1 and 999.".to_string());
+    }
+    if !reader_list_printers()?.iter().any(|printer| printer.name == printer_name) {
+        return Err("The selected printer is unavailable. Refresh the printer list and try again.".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        use webview2_com::{
+            Microsoft::Web::WebView2::Win32::{
+                ICoreWebView2Environment6, ICoreWebView2PrintSettings2, ICoreWebView2_16,
+                COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE,
+                COREWEBVIEW2_PRINT_STATUS_SUCCEEDED,
+            },
+            PrintCompletedHandler,
+        };
+        use windows::core::{Interface, HSTRING};
 
         let (sender, receiver) = std::sync::mpsc::channel::<Result<(), String>>();
         window
             .with_webview(move |webview| {
-                let result = unsafe {
-                    webview
-                        .controller()
-                        .CoreWebView2()
-                        .and_then(|core| core.cast::<ICoreWebView2_16>())
-                        .and_then(|core| core.ShowPrintUI(COREWEBVIEW2_PRINT_DIALOG_KIND_SYSTEM))
+                let callback_sender = sender.clone();
+                let started = unsafe {
+                    let environment = webview.environment().cast::<ICoreWebView2Environment6>()?;
+                    let settings = environment.CreatePrintSettings()?;
+                    let settings2 = settings.cast::<ICoreWebView2PrintSettings2>()?;
+                    settings2.SetPrinterName(&HSTRING::from(printer_name.as_str()))?;
+                    settings2.SetCopies(copies as i32)?;
+                    let core = webview.controller().CoreWebView2()?.cast::<ICoreWebView2_16>()?;
+                    let handler = PrintCompletedHandler::create(Box::new(
+                        move |error: windows::core::Result<()>, status| -> windows::core::Result<()> {
+                            let result = match error {
+                                Ok(()) if status == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED => Ok(()),
+                                Ok(()) if status == COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE => {
+                                    Err("The selected printer is offline or unavailable.".to_string())
+                                }
+                                Ok(()) => Err("The Windows printer reported a print error.".to_string()),
+                                Err(error) => Err(error.to_string()),
+                            };
+                            let _ = callback_sender.send(result);
+                            Ok(())
+                        },
+                    ));
+                    core.Print(&settings, &handler)
                 }
                 .map_err(|error| error.to_string());
-                let _ = sender.send(result);
+                if let Err(error) = started {
+                    let _ = sender.send(Err(error));
+                }
             })
             .map_err(|error| error.to_string())?;
 
         tauri::async_runtime::spawn_blocking(move || {
             receiver
-                .recv_timeout(Duration::from_secs(10))
-                .map_err(|_| "Timed out opening the Windows system print dialog".to_string())?
+                .recv_timeout(Duration::from_secs(180))
+                .map_err(|_| "Timed out waiting for the Windows printer.".to_string())?
         })
         .await
         .map_err(|error| error.to_string())?
@@ -1223,7 +1374,7 @@ async fn reader_show_system_print_dialog(window: tauri::WebviewWindow) -> Result
     #[cfg(not(windows))]
     {
         let _ = window;
-        Err("The system print dialog is only available on Windows.".to_string())
+        Err("Direct printer selection is available in the Windows Reader app.".to_string())
     }
 }
 
@@ -1353,7 +1504,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_show_system_print_dialog, reader_links::reader_open_pdf_link])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_list_printers, reader_open_printer_properties, reader_print, reader_links::reader_open_pdf_link])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 

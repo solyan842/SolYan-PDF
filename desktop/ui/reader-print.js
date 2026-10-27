@@ -23,7 +23,15 @@ export function installReaderPrint(api,{printButton,layoutButton}){
   const forms=input('printForms','Gồm dữ liệu biểu mẫu đã điền','','checkbox');forms.checked=true;
   const gray=input('printGray','In đen trắng','','checkbox');
   const printGroup=(title,ids,extra)=>{const section=el('section',{className:'reader-print-group'});section.append(el('h3',{textContent:title}));if(extra)section.append(el('p',{className:'reader-print-group-note',textContent:extra}));for(const id of ids){const control=grid.querySelector('#'+id);const label=control?.closest('label');if(label)section.append(label);}return section;};
-  const printerGroup=printGroup('Máy in',[], 'Máy in, số bản, thuộc tính và in hai mặt được chọn trong hộp thoại Windows tiếp theo.');
+  const printerGroup=el('section',{className:'reader-print-group'});
+  printerGroup.append(el('h3',{textContent:'Máy in'}));
+  const printerSelect=el('select',{id:'printPrinter','aria-label':'Chọn máy in'});
+  const printerProperties=el('button',{id:'printPrinterProperties',type:'button',textContent:'Thuộc tính…'});
+  const copies=el('input',{id:'printCopies',type:'number',min:'1',max:'999',value:'1','aria-label':'Số bản in'});
+  const printerRow=el('div',{className:'reader-printer-row'}),printerLabel=el('label',{textContent:'Tên máy in'}),copiesLabel=el('label',{textContent:'Số bản'});
+  printerLabel.append(printerSelect);copiesLabel.append(copies);printerRow.append(printerLabel,printerProperties,copiesLabel);
+  const printerStatus=el('p',{id:'printPrinterStatus',role:'status',className:'reader-print-group-note'});
+  printerGroup.append(printerRow,printerStatus);
   const rangeGroup=printGroup('Phạm vi trang',['printSubset','printRange','printParity','printReverse']);
   const layoutGroup=printGroup('Cách in',['printLayout','printNup','printPaper','printOrientation','printScale','printPercent','printMargin']);
   const contentGroup=printGroup('Nội dung và chất lượng',['printEdits','printForms','printAnnotations','printGray','printAutoRotate','printQuality']);
@@ -35,8 +43,27 @@ export function installReaderPrint(api,{printButton,layoutButton}){
   const previewPanel=el('section',{className:'reader-print-preview'}),previewNav=el('div',{className:'reader-print-preview-nav'}),previewViewport=el('div',{id:'printPreviewViewport',className:'reader-print-preview-viewport'}),body=el('div',{className:'reader-print-body'}),footer=el('div',{className:'reader-print-footer'});
   const title=el('h2',{className:'reader-print-title'}),logo=el('img',{src:'./vendor/sReader_PDF.png',alt:'',className:'reader-print-logo'});title.append(logo,el('span',{textContent:'In'}));
   previewNav.append(previewButton,prev,pageLabel,next,zoomOut,zoomLabel,zoomIn,zoomFit);previewViewport.append(preview);previewPanel.append(previewNav,previewViewport,status);body.append(previewPanel,grid);footer.append(start,cancel);
-  dialog.append(title,body,el('p',{className:'reader-print-note',textContent:'Bản xem trước dùng PDF.js. Tài liệu PDF nguồn được giữ nguyên.'}),footer);document.body.append(dialog);
-  let preparing=false,abort=null,pdf=null,renderTask=null,previewIndex=0,previewFit={width:0,height:0},previewZoom=1;
+  dialog.append(title,body,el('p',{className:'reader-print-note',textContent:'Chọn máy in và Thuộc tính ngay tại đây. Bản xem trước dùng PDF.js; PDF nguồn được giữ nguyên.'}),footer);document.body.append(dialog);
+  let preparing=false,abort=null,pdf=null,renderTask=null,previewIndex=0,previewFit={width:0,height:0},previewZoom=1,preferredPrinter='';
+  const refreshPrinters=async()=>{
+    if(!window.__TAURI__?.core?.invoke){printerGroup.hidden=true;return;}
+    printerGroup.hidden=false;printerSelect.disabled=true;printerProperties.disabled=true;printerStatus.textContent='Đang tải máy in Windows…';
+    try{
+      const printers=await window.__TAURI__.core.invoke('reader_list_printers');
+      printerSelect.replaceChildren();
+      for(const item of printers||[])printerSelect.append(el('option',{value:item.name,textContent:item.is_default?item.name+' (Mặc định)':item.name}));
+      const selected=(printers||[]).find(p=>p.name===preferredPrinter)||(printers||[]).find(p=>p.is_default)||(printers||[])[0];
+      if(selected){printerSelect.value=selected.name;preferredPrinter=selected.name;printerStatus.textContent='Thuộc tính mở cài đặt driver Windows của máy đang chọn.';}
+      else{printerSelect.append(el('option',{value:'',textContent:'Không tìm thấy máy in'}));printerStatus.textContent='Cài đặt hoặc kết nối máy in rồi bấm thử lại.';}
+      printerSelect.disabled=!selected;printerProperties.disabled=!selected;
+    }catch(error){printerSelect.replaceChildren(el('option',{value:'',textContent:'Không tải được danh sách máy in'}));printerStatus.textContent=String(error);printerSelect.disabled=true;printerProperties.disabled=true;}
+  };
+  printerSelect.onchange=()=>{preferredPrinter=printerSelect.value;};
+  printerProperties.onclick=api.attempt(async()=>{
+    if(!printerSelect.value)throw Error('Chọn máy in trước.');
+    await window.__TAURI__.core.invoke('reader_open_printer_properties',{printerName:printerSelect.value});
+    api.message('Đã mở thuộc tính driver của '+printerSelect.value+'.');
+  });
   const rules=[],sheet=[...document.styleSheets].find(s=>s.href?.split('?')[0].endsWith('/reader.css'));
   const applyPreviewZoom=(center=true)=>{if(!previewFit.width||!previewFit.height)return;const w=Math.round(previewFit.width*previewZoom),h=Math.round(previewFit.height*previewZoom);preview.style.width=`${w}px`;preview.style.height=`${h}px`;zoomLabel.textContent=`${Math.round(previewZoom*100)}%`;zoomOut.disabled=previewZoom<=.5;zoomIn.disabled=previewZoom>=2.5;requestAnimationFrame(()=>{if(center){previewViewport.scrollLeft=Math.max(0,(previewViewport.scrollWidth-previewViewport.clientWidth)/2);previewViewport.scrollTop=Math.max(0,(previewViewport.scrollHeight-previewViewport.clientHeight)/2);}});};
   const fitPreview=()=>{const c=preview,box=previewViewport.getBoundingClientRect();if(!c.width||!c.height||!box.width||!box.height)return;const fit=Math.min(1,(box.width-24)/c.width,(box.height-24)/c.height);previewFit={width:Math.max(1,c.width*fit),height:Math.max(1,c.height*fit)};previewZoom=1;applyPreviewZoom(false);previewViewport.scrollLeft=previewViewport.scrollTop=0;};
@@ -47,7 +74,7 @@ export function installReaderPrint(api,{printButton,layoutButton}){
   zoomOut.onclick=()=>{previewZoom=Math.max(.5,Math.round((previewZoom-.25)*100)/100);applyPreviewZoom();};zoomIn.onclick=()=>{previewZoom=Math.min(2.5,Math.round((previewZoom+.25)*100)/100);applyPreviewZoom();};zoomFit.onclick=fitPreview;
   const enabledOptions=()=>{count.disabled=mode.value!=='multiple';percent.disabled=scale.value!=='custom'&&mode.value!=='tile';};enabledOptions();
   grid.addEventListener('change',()=>{enabledOptions();if(!preparing){cleanup();pageLabel.textContent='';status.textContent='Tùy chọn đã đổi; nhấn Xem trước để cập nhật.';}});
-  const resetOptions=()=>{subset.value='all';range.value='all';parity.value='all';reverse.checked=false;paper.value='source';orientation.value='auto';mode.value='single';count.value='1';scale.value='fit';percent.value='100';margin.value='0';rotate.checked=true;quality.value='216';edits.checked=true;annotations.checked=true;forms.checked=true;gray.checked=false;enabledOptions();};
+  const resetOptions=()=>{subset.value='all';range.value='all';parity.value='all';reverse.checked=false;paper.value='source';orientation.value='auto';mode.value='single';count.value='1';scale.value='fit';percent.value='100';margin.value='0';rotate.checked=true;quality.value='216';edits.checked=true;annotations.checked=true;forms.checked=true;gray.checked=false;copies.value='1';enabledOptions();};
   const prepare=async(doPrint)=>{
     const doc=api.current();if(!doc||preparing||api.busy)return;
     cleanup();abort=new AbortController();const signal=abort.signal;preparing=true;start.disabled=previewButton.disabled=true;grid.inert=true;
@@ -81,12 +108,12 @@ export function installReaderPrint(api,{printButton,layoutButton}){
         const wrapper=el('div',{className:'reader-print-page'});wrapper.style.width=w+'pt';wrapper.style.height=h+'pt';wrapper.dataset.page=layout.items.map(x=>x.index+1).join(',');if(sheet){const name='readerSheet'+i;rules.push(sheet.cssRules.length);sheet.insertRule(`@page ${name}{size:${w}pt ${h}pt;margin:0}`,sheet.cssRules.length);wrapper.style.page=name;if(i===0)stage.style.page=name;}wrapper.append(canvas);stage.append(wrapper);status.textContent=`Đã chuẩn bị ${i+1}/${plan.length} tờ.`;
       }
       stage.dataset.pixels=String(pixels);previewIndex=0;showPreview();signal.throwIfAborted();
-      if(doPrint){dialog.close();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));signal.throwIfAborted();if(window.__TAURI__?.core?.invoke){try{await window.__TAURI__.core.invoke('reader_show_system_print_dialog');api.message('Đã mở hộp thoại in Windows.');}catch(error){api.message('Không mở được hộp thoại in Windows; chuyển sang hộp thoại WebView2.');window.print();}}else{window.print();api.message('Đã mở hộp thoại in.');}}
+      if(doPrint){const copiesValue=Number(copies.value);if(!Number.isInteger(copiesValue)||copiesValue<1||copiesValue>999)throw Error('Số bản in phải từ 1 đến 999.');if(window.__TAURI__?.core?.invoke&&!printerSelect.value)throw Error('Chọn máy in trước khi in.');dialog.close();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));signal.throwIfAborted();if(window.__TAURI__?.core?.invoke){await window.__TAURI__.core.invoke('reader_print',{printerName:printerSelect.value,copies:copiesValue});cleanup();api.message('Đã gửi '+copiesValue+' bản tới '+printerSelect.value+'.');}else{window.print();api.message('Đã mở hộp thoại in.');}}
     }catch(error){cleanup();if(error.name!=='AbortError'&&error.name!=='RenderingCancelledException')throw error;}
     finally{preparing=false;grid.inert=false;start.disabled=previewButton.disabled=false;}
   };
-  const printDefault=async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang chuẩn bị xem trước. Phóng to/thu nhỏ được neo ở tâm; nhấn In để chọn máy in.';dialog.showModal();await prepare(false);};
-  const openLayout=()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Bố trí in nâng cao. Máy in và Properties sẽ được chọn trong hộp thoại Windows.';dialog.showModal();};
+  const printDefault=async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang chuẩn bị xem trước.';dialog.showModal();await refreshPrinters();await prepare(false);};
+  const openLayout=()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Bố trí in nâng cao.';dialog.showModal();void refreshPrinters();};
   start.onclick=api.attempt(()=>prepare(true));previewButton.onclick=api.attempt(()=>prepare(false));
   return {print:printDefault,openLayout};
 }

@@ -48,3 +48,8 @@ Local unit suite after the fix: **19/19 PASS**. The next exact-head Reader CI mu
 ## Reader CI #52 — installed fullscreen shutdown test race
 
 The Windows build, browser tests, native tests and NSIS installer passed. Installed-app acceptance failed only when Playwright awaited the IPC response from `reader_window_control({action:'close'})`: closing the native WebView can destroy the page before that JavaScript evaluation receives its response. The acceptance now fires that close request without awaiting the page promise and still requires the process to exit cleanly with code 0 before restarting and checking fullscreen cleanup. This changes only the test synchronization; no acceptance gate is skipped or relaxed.
+
+
+## Reader printer selection and properties — user correction
+
+The prior Foxit-inspired screen described choosing a printer in a later Windows dialog, but did not show those controls in the app. The Reader print workspace now lists printers from the Windows spooler, marks the default, opens the selected driver's Properties, and sends the selected printer and copy count directly to WebView2 Print. Windows driver Properties remain the platform UI; the app does not fake driver-specific controls. Browser-only fallback continues using `window.print()`. The regression checks exercise printer selection, Properties dispatch and copy-count routing; exact installed drivers still require owner-machine acceptance.
