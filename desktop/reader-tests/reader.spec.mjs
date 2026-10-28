@@ -77,6 +77,21 @@ test('open, tabs, find, zoom, all resize handles, apply, Save As and reopen pres
 
 });
 
+test('single-page layout navigates with keyboard while toolbar focus remains',async({page})=>{
+  const pdf=await PDFDocument.create();for(let i=0;i<4;i++)pdf.addPage([600,800]).drawText(`Keyboard page ${i+1}`);
+  await page.goto('/reader.html');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+  await page.locator('#pdfFiles').setInputFiles({name:'keyboard.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await expect(page.locator('.page canvas').first()).toBeVisible();
+  const pageNumber=page.locator('#pageNumber'),single=page.locator('#singlePage');
+  await single.click();await expect(single).toHaveAttribute('aria-pressed','true');
+  for(const [key,want] of [['ArrowRight','2'],['ArrowDown','3'],['ArrowLeft','2'],['ArrowUp','1'],['PageDown','2'],['PageUp','1'],['End','4'],['Home','1']]){
+    await page.keyboard.press(key);await expect(pageNumber).toHaveValue(want);
+    await expect(page.locator(`.page[data-page-number="${want}"] canvas`).first()).toBeVisible();
+  }
+  await page.locator('#query').focus();await page.keyboard.press('ArrowRight');await expect(pageNumber).toHaveValue('1');
+  await expect(single).toHaveAttribute('aria-pressed','true');
+});
+
 test('100-page document uses lazy canvases and remains navigable offline',async({page})=>{
   const external=[];page.on('request',request=>{if(/^https?:/.test(request.url())&&!request.url().startsWith('http://127.0.0.1:4179/'))external.push(request.url());});
   const pdf=await PDFDocument.create();for(let i=0;i<100;i++)pdf.addPage([600,800]).drawText(`Reader page ${i+1}`);

@@ -349,6 +349,21 @@ document.addEventListener('wheel',event=>{
 $('sideToggle').onclick=()=>{$('sidebar').hidden=!$('sidebar').hidden;};$('showThumbs').onclick=()=>{$('thumbs').hidden=false;$('outline').hidden=true;const list=$('bookmarks');if(list)list.hidden=true;};$('showOutline').onclick=()=>{$('thumbs').hidden=true;$('outline').hidden=false;const list=$('bookmarks');if(list)list.hidden=true;};
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',attempt(async e=>{e.preventDefault();for(const file of e.dataTransfer.files)if(file.name.toLowerCase().endsWith('.pdf'))await openFile(file);}));
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key.toLowerCase()==='o'){e.preventDefault();$('open').click();}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('query').focus();}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();$(e.shiftKey?'save':'saveCurrent').click();}});
+document.addEventListener('keydown',event=>{
+  if(event.defaultPrevented||event.ctrlKey||event.altKey||event.metaKey||document.querySelector('dialog[open]'))return;
+  const destination=({ArrowRight:1,ArrowDown:1,PageDown:1,ArrowLeft:-1,ArrowUp:-1,PageUp:-1,Home:'first',End:'last'})[event.key];
+  if(destination===undefined)return;
+  const target=event.target instanceof Element?event.target:null;
+  if(target?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]'))return;
+  const doc=current();if(!doc)return;
+  event.preventDefault();
+  const page=destination==='first'?1:destination==='last'?doc.pdf.numPages:Math.max(1,Math.min(doc.pdf.numPages,doc.view.currentPageNumber+destination));
+  if(page===doc.view.currentPageNumber)return;
+  doc.view.currentPageNumber=page;
+  // In PDF.js single-page mode the explicit scroll request is needed to
+  // activate the destination page; keep behavior aligned with the page field.
+  doc.view.scrollPageIntoView({pageNumber:page});
+});
 document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected&&!e.target.closest('input,textarea,select,[contenteditable=true]')&&!document.querySelector('dialog[open]')){e.preventDefault();removeSignature();}});
 window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
 r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,ensurePdfLib,readSourceBytes,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},flushSession:()=>session?.flush(),get busy(){return busy;}});
