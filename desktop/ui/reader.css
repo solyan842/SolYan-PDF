@@ -305,10 +305,10 @@ body:has(#readerFormatPanel:not([hidden])) #signOptions{display:none!important}
 .quick-sign-note{margin:14px 0 0}
 
 
-/* Keep real printer selection, driver Properties and copies visible together. */
-.reader-print-settings .reader-printer-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(90px,.22fr);gap:9px;align-items:end}
-.reader-printer-row label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;min-width:0}
-.reader-printer-row :is(select,input){width:100%;min-width:0;height:32px}
-.reader-printer-row button{height:32px;white-space:nowrap}
+/* Keep printer controls inside one aligned, predictable grid. */
+.reader-print-settings .reader-printer-row{display:grid;grid-template-columns:minmax(0,1fr) auto 132px;gap:8px;align-items:end}
+.reader-printer-row label{display:grid!important;grid-template-rows:16px 32px!important;align-items:center!important;gap:5px!important;min-width:0;min-height:0!important;margin:0}
+.reader-printer-row :is(select,input){box-sizing:border-box;width:100%;min-width:0;height:32px;min-height:32px;margin:0}
+.reader-printer-row button{box-sizing:border-box;align-self:end;height:32px;min-height:32px;margin:0;white-space:nowrap}
 #printPrinterStatus{margin:8px 0 0}
-@media(max-width:540px){.reader-print-settings .reader-printer-row{grid-template-columns:minmax(0,1fr) auto}.reader-printer-row label:last-child{grid-column:1/-1}}
+@media(max-width:540px){.reader-print-settings .reader-printer-row{grid-template-columns:minmax(0,1fr) 132px}.reader-printer-row label:first-child{grid-column:1/-1}.reader-printer-row button{grid-column:1;grid-row:2}.reader-printer-row label:last-child{grid-column:2;grid-row:2}}

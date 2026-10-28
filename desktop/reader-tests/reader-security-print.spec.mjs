@@ -19,6 +19,7 @@ test('Windows print workspace selects a printer, opens its Properties and submit
  await open(page);await page.keyboard.press('Control+p');await expect(page.locator('#readerPrintDialog')).toHaveAttribute('open','');
  await expect(page.locator('#printPrinter option')).toHaveCount(2);await expect(page.locator('#printPrinter')).toHaveValue('Default Laser');
  await expect(page.locator('#printPreviewPage')).toHaveText('Tờ 1/4');await expect.poll(()=>page.locator('.reader-print-settings').evaluate(e=>e.inert)).toBe(false);
+ const boxes=await Promise.all(['#printPrinter','#printPrinterProperties','#printCopies'].map(s=>page.locator(s).boundingBox()));expect(Math.max(...boxes.map(b=>b.y))-Math.min(...boxes.map(b=>b.y))).toBeLessThanOrEqual(1);expect(boxes[0].x+boxes[0].width).toBeLessThanOrEqual(boxes[1].x+1);expect(boxes[1].x+boxes[1].width).toBeLessThanOrEqual(boxes[2].x+1);
  await page.locator('#printPrinter').selectOption('Office Printer');await page.locator('#printCopies').fill('2');await expect(page.locator('#printCopies')).toHaveValue('2');await page.locator('#printPrinterProperties').click();
  await expect.poll(()=>page.evaluate(()=>window.__printerProperties)).toEqual(['Office Printer']);
  await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Office Printer',copies:2});
