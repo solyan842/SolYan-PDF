@@ -1333,29 +1333,31 @@ async fn reader_print(
         window
             .with_webview(move |webview| {
                 let callback_sender = sender.clone();
-                let started = unsafe {
-                    let environment = webview.environment().cast::<ICoreWebView2Environment6>()?;
-                    let settings = environment.CreatePrintSettings()?;
-                    let settings2 = settings.cast::<ICoreWebView2PrintSettings2>()?;
-                    settings2.SetPrinterName(&HSTRING::from(printer_name.as_str()))?;
-                    settings2.SetCopies(copies as i32)?;
-                    let core = webview.controller().CoreWebView2()?.cast::<ICoreWebView2_16>()?;
-                    let handler = PrintCompletedHandler::create(Box::new(
-                        move |error: windows::core::Result<()>, status| -> windows::core::Result<()> {
-                            let result = match error {
-                                Ok(()) if status == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED => Ok(()),
-                                Ok(()) if status == COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE => {
-                                    Err("The selected printer is offline or unavailable.".to_string())
-                                }
-                                Ok(()) => Err("The Windows printer reported a print error.".to_string()),
-                                Err(error) => Err(error.to_string()),
-                            };
-                            let _ = callback_sender.send(result);
-                            Ok(())
-                        },
-                    ));
-                    core.Print(&settings, &handler)
-                }
+                let started = (|| -> windows::core::Result<()> {
+                    unsafe {
+                        let environment = webview.environment().cast::<ICoreWebView2Environment6>()?;
+                        let settings = environment.CreatePrintSettings()?;
+                        let settings2 = settings.cast::<ICoreWebView2PrintSettings2>()?;
+                        settings2.SetPrinterName(&HSTRING::from(printer_name.as_str()))?;
+                        settings2.SetCopies(copies as i32)?;
+                        let core = webview.controller().CoreWebView2()?.cast::<ICoreWebView2_16>()?;
+                        let handler = PrintCompletedHandler::create(Box::new(
+                            move |error: windows::core::Result<()>, status| -> windows::core::Result<()> {
+                                let result = match error {
+                                    Ok(()) if status == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED => Ok(()),
+                                    Ok(()) if status == COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE => {
+                                        Err("The selected printer is offline or unavailable.".to_string())
+                                    }
+                                    Ok(()) => Err("The Windows printer reported a print error.".to_string()),
+                                    Err(error) => Err(error.to_string()),
+                                };
+                                let _ = callback_sender.send(result);
+                                Ok(())
+                            },
+                        ));
+                        core.Print(&settings, &handler)
+                    }
+                })()
                 .map_err(|error| error.to_string());
                 if let Err(error) = started {
                     let _ = sender.send(Err(error));
