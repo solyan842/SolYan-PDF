@@ -322,7 +322,16 @@ function changeZoom(value){
   changeScaleKeepingCenter(d,value);
   if(d.view.currentPageNumber!==selected)d.view.scrollPageIntoView({pageNumber:selected});
 }
-$('zoom').onchange=()=>changeZoom($('zoom').value);
+function returnFocusFromZoom(){
+  const zoom=$('zoom');
+  requestAnimationFrame(()=>{
+    const doc=current();let popupOpen=false;
+    try{popupOpen=zoom.matches(':open');}catch{}
+    if(doc&&document.activeElement===zoom&&!popupOpen)doc.container.focus({preventScroll:true});
+  });
+}
+$('zoom').onchange=()=>{changeZoom($('zoom').value);returnFocusFromZoom();};
+$('zoom').onkeydown=event=>{if(['Enter','Escape',' '].includes(event.key))returnFocusFromZoom();};
 $('zoomIn').onclick=()=>{if(current())changeZoom(Math.min(4,current().view.currentScale*1.2));};
 $('zoomOut').onclick=()=>{if(current())changeZoom(Math.max(.25,current().view.currentScale/1.2));};
 // Windows Precision Touchpad pinch is exposed by Chromium as a Ctrl+wheel.
@@ -354,7 +363,10 @@ document.addEventListener('keydown',event=>{
   const destination=({ArrowRight:1,ArrowDown:1,PageDown:1,ArrowLeft:-1,ArrowUp:-1,PageUp:-1,Home:'first',End:'last'})[event.key];
   if(destination===undefined)return;
   const target=event.target instanceof Element?event.target:null;
-  if(target?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]'))return;
+  let zoomPopupOpen=false;
+  if(target?.id==='zoom'){try{zoomPopupOpen=target.matches(':open');}catch{}}
+  if(target?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')
+    &&!(target.id==='zoom'&&!zoomPopupOpen))return;
   const doc=current();if(!doc)return;
   event.preventDefault();
   const page=destination==='first'?1:destination==='last'?doc.pdf.numPages:Math.max(1,Math.min(doc.pdf.numPages,doc.view.currentPageNumber+destination));

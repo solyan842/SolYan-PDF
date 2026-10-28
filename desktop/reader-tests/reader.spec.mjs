@@ -84,6 +84,12 @@ test('single-page layout navigates with keyboard while toolbar focus remains',as
   await expect(page.locator('.page canvas').first()).toBeVisible();
   const pageNumber=page.locator('#pageNumber'),single=page.locator('#singlePage');
   await single.click();await expect(single).toHaveAttribute('aria-pressed','true');
+  const zoom=page.locator('#zoom');await zoom.focus();await zoom.selectOption('1.5');await expect(zoom).toHaveValue('1.5');
+  await expect.poll(()=>page.evaluate(()=>document.activeElement?.classList.contains('readerContainer'))).toBe(true);
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark';});
+  expect(await zoom.locator('option').nth(2).evaluate(option=>getComputedStyle(option).color)).toBe('rgb(229, 237, 249)');
+  await page.keyboard.press('ArrowRight');await expect(pageNumber).toHaveValue('2');
+  await page.keyboard.press('Home');await expect(pageNumber).toHaveValue('1');
   for(const [key,want] of [['ArrowRight','2'],['ArrowDown','3'],['ArrowLeft','2'],['ArrowUp','1'],['PageDown','2'],['PageUp','1'],['End','4'],['Home','1']]){
     await page.keyboard.press(key);await expect(pageNumber).toHaveValue(want);
     await expect(page.locator(`.page[data-page-number="${want}"] canvas`).first()).toBeVisible();
