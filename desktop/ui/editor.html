@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sửa PDF — SolYan PDF</title>
+  <link rel="stylesheet" href="./tool.css">
+  <link rel="stylesheet" href="./editor.css">
+</head>
+<body class="tool-shell">
+  <div class="tool-layout">
+    <aside class="tool-sidebar"><a class="back-link" href="./index.html">← Trang chủ</a><div class="desktop-brand">SolYan PDF</div><p class="desktop-subtitle">Windows Desktop</p><hr class="tool-divider"><div class="sidebar-links">Sắp xếp PDF<br>Chỉnh sửa<br>Chuyển đổi<br>Bảo mật</div></aside>
+    <main class="tool-main editor-main">
+      <div class="tool-top"><a class="back-link" href="./index.html">Công cụ › Sửa PDF</a><span class="muted-small">Chỉnh sửa cục bộ · PDF.js / PDF-lib</span></div>
+      <div class="tool-title"><div class="big-icon" aria-hidden="true"><img class="tool-svg" src="./icons/phosphor-duotone/pencil-simple-duotone.svg" alt=""></div><div><h1>Sửa PDF</h1><p>Chọn công cụ rồi thao tác trực tiếp trên trang. Tệp nguồn luôn được giữ nguyên.</p></div></div>
+      <section class="editor-surface surface">
+        <div class="editor-toolbar">
+          <label class="editor-pick primary" for="fileInput">＋ Chọn PDF</label><input id="fileInput" type="file" accept="application/pdf,.pdf" hidden>
+          <span id="fileName" class="editor-file-name">Chưa chọn PDF</span>
+          <span class="toolbar-spacer"></span><button id="previous" class="secondary-button" type="button" disabled>‹</button><label class="editor-page">Trang <input id="pageNumber" type="number" min="1" value="1" disabled> / <span id="pageCount">—</span></label><button id="next" class="secondary-button" type="button" disabled>›</button>
+        </div>
+        <div class="editor-body">
+          <div class="editor-canvas-area"><div id="canvasStage" class="editor-canvas-stage"><div id="emptyPrompt" class="editor-empty"><strong>Chọn tệp PDF để bắt đầu</strong><span>Thêm chữ, ảnh, tô sáng, khung hoặc redact trên trang.</span></div><canvas id="pageCanvas" hidden></canvas><canvas id="overlayCanvas" hidden></canvas></div></div>
+          <aside class="editor-inspector">
+            <h2>Công cụ chỉnh sửa</h2>
+            <label class="field-label" for="toolSelect">Công cụ</label><select id="toolSelect" class="text-input"><option value="text">Thêm chữ</option><option value="image">Thêm ảnh</option><option value="highlight">Tô sáng</option><option value="rectangle">Vẽ khung</option><option value="redact">Redact an toàn</option></select>
+            <div id="textControls"><label class="field-label" for="textValue">Nội dung</label><textarea id="textValue" class="text-input" rows="3">SolYan PDF</textarea><label class="field-label" for="fontSize">Cỡ chữ</label><input id="fontSize" class="text-input" type="number" min="6" max="120" value="18"><label class="field-label" for="textColor">Màu chữ</label><input id="textColor" class="text-input" type="color" value="#182a42"></div>
+            <div id="imageControls" hidden><label class="field-label" for="imageInput">Ảnh PNG/JPG</label><input id="imageInput" class="text-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg"></div>
+            <div class="editor-coordinates"><label><span>X (pt)</span><input id="coordX" class="text-input" type="number" value="50"></label><label><span>Y (pt)</span><input id="coordY" class="text-input" type="number" value="50"></label><label><span>Rộng (pt)</span><input id="coordWidth" class="text-input" type="number" min="1" value="180"></label><label><span>Cao (pt)</span><input id="coordHeight" class="text-input" type="number" min="1" value="40"></label></div>
+            <p id="redactNotice" class="editor-warning" hidden>Redact sẽ rasterize trang đã chọn ở 150 DPI và loại bỏ nội dung PDF gốc của trang đó. Trang này sẽ không còn text/vector/form tương tác.</p>
+            <p class="editor-hint">Kéo trên trang để đặt vị trí/kích thước. Tọa độ tính theo point của PDF.</p>
+            <button id="exportButton" class="primary merge-btn" type="button" disabled>Xuất PDF đã chỉnh sửa →</button><p id="status" class="status-text" role="status">Chọn PDF để bắt đầu.</p>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="./vendor/pdf-lib.min.js"></script><script src="./icons.js"></script><script src="./output-name.js"></script><script src="./output-save.js"></script><script type="module" src="./editor.js"></script>
+</body>
+</html>

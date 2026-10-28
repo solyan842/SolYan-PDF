@@ -129,6 +129,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/stamp.browser.mjs 2>&1 | Tee-Object artifacts/stool-stamp-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stool-tests/editor.browser.mjs 2>&1 | Tee-Object artifacts/stool-editor-ui.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/ocr-tools.browser.mjs 2>&1 | Tee-Object artifacts/stool-ocr-tools-ui.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/stool-tests/ocr-export.browser.mjs 2>&1 | Tee-Object artifacts/stool-ocr-export-ui.log

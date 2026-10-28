@@ -1,6 +1,7 @@
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id),mode=new URLSearchParams(location.search).get('tool')||'watermark',editor=mode==='edit',watermark=mode==='watermark';
+if(editor){location.replace('./editor.html');return}
 const input=$('fileInput'),imageInput=$('imageInput'),run=$('run'),status=$('status'),selected=$('selected');let file=null,bytes=null,pageCount=0,busy=false,loading=false;
 if(!['watermark','stamp','edit'].includes(mode)){ $('title').textContent='Công cụ chưa khả dụng';return }
 document.title=(editor?'Sửa PDF':watermark?'Watermark':'Đóng dấu')+' — SolYan PDF';$('title').textContent=editor?'Sửa PDF':watermark?'Watermark PDF':'Đóng dấu PDF';$('description').textContent=editor?'Thêm chữ hoặc hình ảnh vào các trang PDF đã chọn.':watermark?'Thêm chữ hoặc ảnh mờ lên toàn bộ trang hay trang được chọn.':'Đóng dấu chữ hoặc hình lên các trang đã chọn.';$('toolBreadcrumb').textContent='Công cụ › '+(editor?'Sửa PDF':watermark?'Watermark':'Đóng dấu PDF');$('toolIcon').innerHTML=window.SOLYAN_PHOSPHOR.tool(editor?'edit-pdf':mode,'edit');$('run').textContent=editor?'Lưu bản chỉnh sửa →':watermark?'Tạo watermark →':'Tạo dấu →';
