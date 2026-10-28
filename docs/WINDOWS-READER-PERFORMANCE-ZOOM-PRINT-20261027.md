@@ -39,10 +39,10 @@ Local unit suite after the fix: **19/19 PASS**. The next exact-head Reader CI mu
 
 - Foxit Reader 11.1's print manual is used as a layout reference: preview/navigation, page range, print handling and output settings. The screen in the request is not available as reusable open-source UI in Foxit's GitHub SDK demos; those demos require the proprietary/licensed SDK. We do not copy Foxit code or assets.
 - Reuse the existing pinned PDF.js print renderer/layout in this app. Its page range, parity, reverse order, paper, orientation, fit/scale, N-up, booklet, tile, margins, color and annotation controls remain wired to the existing print preparation path.
-- The Windows system print dialog is opened by WebView2's ShowPrintUI(SYSTEM) API and remains responsible for installed-printer selection, copies, driver properties and duplex. The app does not show duplicate printer controls. Chromium's browser print preview is not opened on the Windows Reader path.
+- The Windows Reader print workspace enumerates installed printers from the spooler, marks the default, opens the selected driver's Properties, and sends the chosen printer and copy count through WebView2's direct Print API. Driver-specific options such as duplex stay in the Windows driver Properties UI.
 - Quick Sign follows the simpler Foxit Reader 11 visual-signature flow: Type, Draw or select an image, then place it. It remains a local visual image signature; no certificates, online service, image background-removal or payment-based SDK is introduced. Typed signatures get a small curated font selector; the existing local signature library and PDF placement stay unchanged.
 - Reference: [Foxit Reader 11.1 manual](https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReader11.1_Manual.pdf); [Foxit Reader 11.0 Quick Guide](https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReaderQuickGuide_11.0.pdf).
-- Platform boundary: WebView2's browser print panel is not the Windows printer driver dialog. Existing print invocation keeps Windows/driver handling; printer UI customization beyond this boundary would require a separate native print adapter and test against real installed drivers.
+- Platform boundary: printer selection and copies are visible in the Reader print workspace. The app opens the selected Windows driver Properties for device-specific settings. Browser-only fallback uses `window.print()`; real vendor-driver behavior still needs owner-machine acceptance.
 
 
 ## Reader CI #52 — installed fullscreen shutdown test race
@@ -53,3 +53,12 @@ The Windows build, browser tests, native tests and NSIS installer passed. Instal
 ## Reader printer selection and properties — user correction
 
 The prior Foxit-inspired screen described choosing a printer in a later Windows dialog, but did not show those controls in the app. The Reader print workspace now lists printers from the Windows spooler, marks the default, opens the selected driver's Properties, and sends the selected printer and copy count directly to WebView2 Print. Windows driver Properties remain the platform UI; the app does not fake driver-specific controls. Browser-only fallback continues using `window.print()`. The regression checks exercise printer selection, Properties dispatch and copy-count routing; exact installed drivers still require owner-machine acceptance.
+
+
+## Reader print preview page budget and printer alignment — 2026-10-28
+
+The previous 80-million-pixel raster ceiling stopped an A4, 216 dpi preview at about 17 sheets. Reader now computes a safe raster density for the full print plan, retains the requested 216 dpi for short jobs, and shows an explicit resolution notice when a longer job requires a lower density. The regression covers 30 A4 sheets and verifies the total/per-sheet pixel budgets. Windows Reader CI #58 passed this change.
+
+The printer row uses one-column field labels and fixed-height controls so printer, Properties and copies align in the same grid. E2E measures their top edges and horizontal separation. The first alignment assertion caught inherited two-column label CSS; that rule was corrected. Windows Reader CI #60 passed at code commit `a12863928b29dcd025b973c1ae4696de6bbac4c1`, including the standalone Windows x64 Reader build.
+
+Stable promotion preserves the existing Reader branch history by fast-forward from `7ef07ed1fd310c229126909c44875f9e7774807f`; no Toolbox or main changes are included.
