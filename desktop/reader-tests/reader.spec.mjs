@@ -88,6 +88,10 @@ test('single-page layout navigates with keyboard while toolbar focus remains',as
     await page.keyboard.press(key);await expect(pageNumber).toHaveValue(want);
     await expect(page.locator(`.page[data-page-number="${want}"] canvas`).first()).toBeVisible();
   }
+  await page.keyboard.press('ArrowLeft');await expect(pageNumber).toHaveValue('1');
+  await page.keyboard.press('End');await expect(pageNumber).toHaveValue('4');
+  await page.keyboard.press('ArrowRight');await expect(pageNumber).toHaveValue('4');
+  await page.keyboard.press('Home');await expect(pageNumber).toHaveValue('1');
   await page.locator('#query').focus();await page.keyboard.press('ArrowRight');await expect(pageNumber).toHaveValue('1');
   await expect(single).toHaveAttribute('aria-pressed','true');
 });
