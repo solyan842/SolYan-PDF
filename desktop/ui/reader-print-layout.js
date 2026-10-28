@@ -39,3 +39,18 @@ export function sheets(pages, sizes, options={}){
     result.push({size,items:batch.map((p,i)=>fit(p,margin+(i%cols)*w,margin+Math.floor(i/cols)*h,w,h)).filter(Boolean),clip:[margin,margin,size[0]-2*margin,size[1]-2*margin]});
   }return result;
 }
+
+// Keep every print sheet in memory while adapting raster resolution to the
+// whole job, instead of failing at a fixed page count (A4 hit the old limit
+// at about 17 sheets at 216 dpi).
+export function printPageDensity(plan, requestedDpi, {maxTotalPixels=80_000_000,maxSheetPixels=12_000_000}={}) {
+  if(!plan.length)return requestedDpi/72;
+  const areas=plan.map(sheet=>{
+    const [width,height]=sheet.size;
+    if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw Error('Invalid print sheet dimensions.');
+    return width*height;
+  });
+  const totalArea=areas.reduce((sum,area)=>sum+area,0);
+  const sheetLimit=Math.min(...areas.map(area=>Math.sqrt(maxSheetPixels/area)));
+  return Math.min(requestedDpi/72,Math.sqrt(maxTotalPixels/totalArea),sheetLimit);
+}

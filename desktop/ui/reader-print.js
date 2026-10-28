@@ -1,4 +1,4 @@
-import {sheets} from './reader-print-layout.js';
+import {sheets,printPageDensity} from './reader-print-layout.js';
 import {pdfAssetOptions} from './reader-pdf-assets.js';
 const el=(tag,props={})=>Object.assign(document.createElement(tag),props);
 export function installReaderPrint(api,{printButton,layoutButton}){
@@ -92,10 +92,10 @@ export function installReaderPrint(api,{printButton,layoutButton}){
       const sizes={},sourcePages={};for(const index of pages){signal.throwIfAborted();const p=await pdf.getPage(index+1);sourcePages[index]=p;const v=p.getViewport({scale:1});sizes[index]=[v.width,v.height];}
       let size=({a4:[595.276,841.89],letter:[612,792],a3:[841.89,1190.551]})[paper.value]||null;if(size&&orientation.value!=='auto'){size.sort((a,b)=>a-b);if(orientation.value==='landscape')size.reverse();}
       if(mode.value!=='single'&&!size)throw Error('Chọn khổ giấy cố định cho bố trí nhiều trang, sách hoặc chia trang.');
-      const plan=sheets(pages,sizes,{mode:mode.value,nup:mode.value==='multiple'?Number(count.value):1,paper:size,scale:scale.value,percent:n,margin:m,rotate:rotate.checked,orientation:orientation.value});if(plan.length>100)throw Error('Quá 100 tờ in; chọn ít trang hoặc khổ giấy lớn hơn.');
+      const plan=sheets(pages,sizes,{mode:mode.value,nup:mode.value==='multiple'?Number(count.value):1,paper:size,scale:scale.value,percent:n,margin:m,rotate:rotate.checked,orientation:orientation.value});if(plan.length>100)throw Error('Quá 100 tờ in; chọn ít trang hoặc khổ giấy lớn hơn.');const requestedDpi=Number(quality.value),density=printPageDensity(plan,requestedDpi),effectiveDpi=Math.max(1,Math.floor(density*72)),resolutionNote=effectiveDpi<requestedDpi?'Độ phân giải tự điều chỉnh còn '+effectiveDpi+' dpi để giữ đủ '+plan.length+' tờ trong bộ nhớ (mục tiêu '+requestedDpi+' dpi).':'';
       const stage=el('section',{id:'readerPrintStage'});document.body.append(stage);let pixels=0;
       for(const [i,layout]of plan.entries()){
-        signal.throwIfAborted();const [w,h]=layout.size,density=Math.min(Number(quality.value)/72,Math.sqrt(12_000_000/(w*h)));
+        signal.throwIfAborted();const [w,h]=layout.size;
         const canvas=el('canvas');canvas.width=Math.floor(w*density);canvas.height=Math.floor(h*density);pixels+=canvas.width*canvas.height;if(pixels>80_000_000)throw Error('Bản in quá lớn; chọn ít trang hơn.');
         const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.save();ctx.scale(density,density);ctx.beginPath();ctx.rect(...layout.clip);ctx.clip();
         for(const item of layout.items){
@@ -105,7 +105,7 @@ export function installReaderPrint(api,{printButton,layoutButton}){
           const stop=()=>renderTask?.cancel();signal.addEventListener('abort',stop,{once:true});try{await renderTask.promise;}finally{signal.removeEventListener('abort',stop);}signal.throwIfAborted();ctx.drawImage(scratch,item.x,item.y,item.width,item.height);scratch.width=scratch.height=0;
         }
         ctx.restore();if(gray.checked){const image=ctx.getImageData(0,0,canvas.width,canvas.height);for(let k=0;k<image.data.length;k+=4){const g=Math.round(image.data[k]*.2126+image.data[k+1]*.7152+image.data[k+2]*.0722);image.data[k]=image.data[k+1]=image.data[k+2]=g;}ctx.putImageData(image,0,0);}
-        const wrapper=el('div',{className:'reader-print-page'});wrapper.style.width=w+'pt';wrapper.style.height=h+'pt';wrapper.dataset.page=layout.items.map(x=>x.index+1).join(',');if(sheet){const name='readerSheet'+i;rules.push(sheet.cssRules.length);sheet.insertRule(`@page ${name}{size:${w}pt ${h}pt;margin:0}`,sheet.cssRules.length);wrapper.style.page=name;if(i===0)stage.style.page=name;}wrapper.append(canvas);stage.append(wrapper);status.textContent=`Đã chuẩn bị ${i+1}/${plan.length} tờ.`;
+        const wrapper=el('div',{className:'reader-print-page'});wrapper.style.width=w+'pt';wrapper.style.height=h+'pt';wrapper.dataset.page=layout.items.map(x=>x.index+1).join(',');if(sheet){const name='readerSheet'+i;rules.push(sheet.cssRules.length);sheet.insertRule(`@page ${name}{size:${w}pt ${h}pt;margin:0}`,sheet.cssRules.length);wrapper.style.page=name;if(i===0)stage.style.page=name;}wrapper.append(canvas);stage.append(wrapper);status.textContent=(resolutionNote?resolutionNote+' ':'')+`Đã chuẩn bị ${i+1}/${plan.length} tờ.`;
       }
       stage.dataset.pixels=String(pixels);previewIndex=0;showPreview();signal.throwIfAborted();
       if(doPrint){const copiesValue=Number(copies.value);if(!Number.isInteger(copiesValue)||copiesValue<1||copiesValue>999)throw Error('Số bản in phải từ 1 đến 999.');if(window.__TAURI__?.core?.invoke&&!printerSelect.value)throw Error('Chọn máy in trước khi in.');dialog.close();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));signal.throwIfAborted();if(window.__TAURI__?.core?.invoke){await window.__TAURI__.core.invoke('reader_print',{printerName:printerSelect.value,copies:copiesValue});cleanup();api.message('Đã gửi '+copiesValue+' bản tới '+printerSelect.value+'.');}else{window.print();api.message('Đã mở hộp thoại in.');}}

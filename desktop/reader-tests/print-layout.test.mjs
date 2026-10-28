@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 globalThis.window={PDFLib:await import('pdf-lib')};
-const {sheets}=await import('../ui/reader-print-layout.js');
+const {sheets,printPageDensity}=await import('../ui/reader-print-layout.js');
 const sizes={0:[600,800],1:[800,600],2:[1200,1600],3:[600,800],4:[600,800]};
 test('mixed physical sizes and actual/custom scaling preserve dimensions',()=>{
  const p=sheets([0,1],sizes);assert.deepEqual(p.map(s=>s.size),[[600,800],[800,600]]);
@@ -14,4 +14,16 @@ test('N-up and booklet impose page order with padding instead of dropping pages'
 });
 test('tiling covers entire large page at physical scale without source mutation',()=>{
  const source=structuredClone(sizes),p=sheets([2],sizes,{mode:'tile',paper:[600,800]});assert.equal(p.length,4);assert.deepEqual(p.map(s=>[s.items[0].x,s.items[0].y]),[[0,0],[-600,0],[0,-800],[-600,-800]]);assert.deepEqual(sizes,source);
+});
+
+test('print preview renders beyond 17 A4 sheets within the raster memory budget',()=>{
+ const pages=Array.from({length:30},(_,i)=>i),many=Object.fromEntries(pages.map(i=>[i,[595.276,841.89]]));
+ const plan=sheets(pages,many),density=printPageDensity(plan,216);
+ assert.equal(plan.length,30);
+ assert.ok(density>0&&density<216/72,'large jobs lower raster resolution rather than dropping sheets');
+ const total=plan.reduce((sum,sheet)=>sum+Math.floor(sheet.size[0]*density)*Math.floor(sheet.size[1]*density),0);
+ assert.ok(total<=80_000_000,'raster budget exceeded: '+total);
+ assert.ok(Math.min(...plan.map(s=>s.size[0]*s.size[1]*density*density))<=12_000_000);
+ const shortPlan=sheets(pages.slice(0,17),many);
+ assert.equal(printPageDensity(shortPlan,216),3,'small jobs retain requested print resolution');
 });
