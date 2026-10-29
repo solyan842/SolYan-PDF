@@ -55,6 +55,7 @@ export function installReaderShell(api,panels){
   left.append(take('sideToggle'));
   function move(id,target){const b=take(id);if(!b)throw Error('Missing Reader command '+id);target.append(b);return b;}
   for(const id of ['selectText','pan','rotateView'])icon(move(id,left));
+  icon(move('bookmarkAdd',left),'Đánh dấu trang','bookmark-simple');
   for(const id of ['annot-ink','annot-highlight','annot-note','typewriter','sign','annot-erase'])icon(move(id,center),id==='sign'?'Ký nhanh':undefined,({'annot-ink':'pen',sign:'signature','annot-erase':'eraser'})[id]);
   function popup(id,label,asset,host){
     const b=icon(node('button',{id,textContent:label}),label,asset),p=node('div',{id:id+'Panel',className:'command-popover'});

@@ -190,7 +190,10 @@ test('local per-PDF bookmarks and last reading position survive document reopen'
   await expect(page.locator('.page canvas').first()).toBeVisible();
   await page.locator('#pageNumber').fill('3');await page.locator('#pageNumber').press('Tab');
   await expect(page.locator('#pageNumber')).toHaveValue('3');
-  await command(page,'bookmarkAdd');
+  const bookmarkButton=page.locator('.toolbar-left #bookmarkAdd');
+  await expect(bookmarkButton).toBeVisible();
+  await expect(bookmarkButton).toHaveAttribute('aria-label','Đánh dấu trang');
+  await bookmarkButton.click();
   await expect(page.locator('#bookmarks .bookmark-row')).toHaveCount(1);
   await expect(page.locator('#bookmarks .bookmark-link')).toHaveText('Trang 3');
   await page.locator('#pageNumber').fill('2');await page.locator('#pageNumber').press('Tab');
