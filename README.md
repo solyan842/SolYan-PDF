@@ -34,7 +34,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Explicit rasterized Color Transform: invert, grayscale, high-contrast and custom two-color output
 - Auto Redact Text: literal PDF.js text-layer matching with security-first raster replacement only on affected pages
 - Deterministic Scanner Effect with bounded DPI/noise/blur/yellowing/border/skew presets
-- Browser-side PDF viewer and editor with add text/image, highlight, rectangle and security-first manual redaction
+- Browser-side PDF editor with text/image insertion, highlight, rectangle, selectable-text replacement and security-first manual redaction
 - AcroForm discovery/filling
 
 ### OCR & document intelligence
@@ -171,6 +171,7 @@ See `docs/BENCHMARKING.md` for:
 - Auto Rename is a deterministic PDF.js text-layer heuristic, not AI. Scanned/image-only PDFs without usable text retain the original filename until OCR is explicitly performed; the PDF bytes themselves are not rewritten by Auto Rename.
 - Color Transform intentionally rasterizes the full output. Selectable text, vector content, forms and annotations from the source are not retained as interactive source structures.
 - Security-first Editor redaction rasterizes only the selected page at 150 DPI after burning the redaction box, then rebuilds the PDF without copying that page's original content stream. The redacted page loses selectable text/vector/form/annotation interactivity and its displayed rotation is normalized. Document-level catalog structures such as bookmarks, attachments, AcroForm and metadata are not guaranteed to be preserved in this security-first path.
+- Edit PDF's selectable-text replacement covers the selected text with white and rasterizes that page at 200 DPI so the old text is removed from the output page; other pages are copied and remain searchable. The page loses selectable text/vector/form/annotation interactivity, page rotation is not supported for this operation, and white covering is intended for text on a plain light background. Document-level catalog structures such as bookmarks, attachments, AcroForm and metadata are not guaranteed to survive this page-rebuild path. Use security-first redaction for sensitive text, and inspect the exported page before using it when the background is not plain.
 - qpdf image optimization can recompress eligible non-JPEG images as JPEG when that reduces file size; this mode is intentionally separate from the structural/lossless optimization route because JPEG recompression is lossy.
 - PDF sanitization is a bounded removal of regression-tested standard PDF active-content structures, **not antivirus or universal exploit detection**. It does not claim to detect every malicious PDF technique. Rewriting/removing content changes the document and therefore invalidates existing digital signatures.
 - Active-content inspection is structural-only and bounded to 100 MB input, 500 findings, 64 KiB per displayed script and 256 KiB aggregate displayed script text. It walks only the object graph reachable from the trailer/root, never executes document JavaScript, and **does not claim antivirus coverage or prove that a PDF is safe**.
