@@ -26,7 +26,7 @@ test('Windows print workspace selects a printer, opens its Properties and submit
  expect(await page.evaluate(()=>window.__browserPrint)).toBeUndefined();
 });
 test('English print dialog applies scale options to preview and routes duplex to WebView2',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('sreader.language','en');window.__submittedPrint=null;window.print=()=>{};window.__TAURI__={core:{invoke:async(command,args)=>{if(command==='reader_list_printers')return[{name:'Default Laser',is_default:true}];if(command==='reader_print'){window.__submittedPrint=args;return null;}if(command==='reader_version')return'0.1.0';if(command==='reader_session_recent')return[];return null;}}};});
+ await page.addInitScript(()=>{if(location.protocol!=='about:')localStorage.setItem('sreader.language','en');window.__submittedPrint=null;window.print=()=>{};window.__TAURI__={core:{invoke:async(command,args)=>{if(command==='reader_list_printers')return[{name:'Default Laser',is_default:true}];if(command==='reader_print'){window.__submittedPrint=args;return null;}if(command==='reader_version')return'0.1.0';if(command==='reader_session_recent')return[];return null;}}};});
  await open(page,1,[300,400]);await page.keyboard.press('Control+p');
  await expect(page.locator('#readerPrintDialog h2')).toContainText('Print');
  await expect(page.locator('.reader-print-group h3').first()).toHaveText('Printer');
@@ -34,10 +34,11 @@ test('English print dialog applies scale options to preview and routes duplex to
  await expect(page.locator('#printScale option[value="fit"]')).toHaveText('Fit to printable area');
  await expect(page.locator('#printDuplex option[value="long-edge"]')).toHaveText('Two-sided · flip on long edge');
  const ink=()=>page.locator('#readerPrintStage canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]<220||d[i+1]<220||d[i+2]<220)n++;return n;});
- await page.locator('#printPaper').selectOption('a4');const fitInk=await ink();
- await page.locator('#printScale').selectOption('actual');await expect.poll(ink).not.toBe(fitInk);const actualInk=await ink();
- await page.locator('#printScale').selectOption('reduce');await expect.poll(ink).toBe(actualInk);
- await page.locator('#printScale').selectOption('fit');await expect.poll(ink).toBe(fitInk);
+ const status=page.locator('#printStatus'),waitForPreview=async()=>{await expect(status).toHaveText('Updating preview…');await expect(status).toContainText('Prepared 1/1 sheets.');};
+ const sourceInk=await ink();await page.locator('#printPaper').selectOption('a4');await waitForPreview();const fitInk=await ink();expect(fitInk).not.toBe(sourceInk);
+ await page.locator('#printScale').selectOption('actual');await waitForPreview();const actualInk=await ink();expect(actualInk).not.toBe(fitInk);
+ await page.locator('#printScale').selectOption('reduce');await waitForPreview();expect(await ink()).toBe(actualInk);
+ await page.locator('#printScale').selectOption('fit');await waitForPreview();expect(await ink()).toBe(fitInk);
  await page.locator('#printDuplex').selectOption('long-edge');await page.locator('#printStart').click();
  await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Default Laser',copies:1,duplex:'long-edge'});
 });

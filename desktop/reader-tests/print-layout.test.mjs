@@ -16,7 +16,7 @@ test('fit, reduce and actual size produce distinct placements when source paper 
  assert.ok(fit.width>reduce.width&&fit.height>reduce.height,'Fit should enlarge a small source page to the target paper');
  assert.deepEqual([reduce.width,reduce.height],[actual.width,actual.height],'Reduce should not enlarge; actual size should preserve native dimensions');
 });
-test('N-up and booklet impose page order with padding instead of dropping pages',
+test('N-up and booklet impose page order with padding instead of dropping pages',()=>{
  const multiple=sheets([0,1,2,3,4],sizes,{nup:4,paper:[800,600]});assert.equal(multiple.length,2);assert.deepEqual(multiple.flatMap(s=>s.items.map(p=>p.index)),[0,1,2,3,4]);
  const booklet=sheets([0,1,2,3,4],sizes,{mode:'booklet',paper:[800,600]});assert.equal(booklet.length,4);assert.deepEqual(booklet.map(s=>s.items.map(p=>p.index)),[[0],[1],[2],[3,4]]);
 });
