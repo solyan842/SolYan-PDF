@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {PDFDocument,PDFName,PDFString} from 'pdf-lib';
 import {qrFixture,qrPdf,qrMatches} from './reader-qr-fixture.mjs';
-async function open(page,count=4){const pdf=await PDFDocument.create();for(let i=0;i<count;i++)pdf.addPage([600,800]).drawText('https://example.com/'+i,{x:40,y:650});const a=pdf.context.obj({Type:'Annot',Subtype:'Link',Rect:[40,600,250,630],Border:[0,0,0],A:{Type:'Action',S:'URI',URI:PDFString.of('https://example.com/link')}});pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([pdf.context.register(a)]));await page.goto('/reader.html');await page.locator('body[data-ready=true]').waitFor();await page.locator('#pdfFiles').setInputFiles({name:'Links.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.page canvas').first()).toBeVisible();}
+async function open(page,count=4,size=[600,800]){const pdf=await PDFDocument.create();for(let i=0;i<count;i++)pdf.addPage(size).drawText('https://example.com/'+i,{x:40,y:Math.min(650,size[1]-80)});const a=pdf.context.obj({Type:'Annot',Subtype:'Link',Rect:[40,600,250,630],Border:[0,0,0],A:{Type:'Action',S:'URI',URI:PDFString.of('https://example.com/link')}});pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([pdf.context.register(a)]));await page.goto('/reader.html');await page.locator('body[data-ready=true]').waitFor();await page.locator('#pdfFiles').setInputFiles({name:'Links.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await expect(page.locator('.page canvas').first()).toBeVisible();}
 test('PDF annotation and text links require native confirmation; Reader never navigates',async({page})=>{
  await page.addInitScript(()=>{window.__links=[];window.__TAURI__={core:{invoke:async(c,a)=>{if(c==='reader_open_pdf_link'){window.__links.push(a.address);return 'cancelled';}if(c==='reader_version')return '0.1.0';if(c==='reader_session_recent')return [];return null;}}};});
  await open(page);const before=page.url();const a=page.locator('.annotationLayer a[href="https://example.com/link"]').first();await expect(a).toBeAttached();await a.dispatchEvent('click');await expect.poll(()=>page.evaluate(()=>window.__links)).toContain('https://example.com/link');expect(page.url()).toBe(before);
@@ -22,8 +22,24 @@ test('Windows print workspace selects a printer, opens its Properties and submit
  const boxes=await Promise.all(['#printPrinter','#printPrinterProperties','#printCopies'].map(s=>page.locator(s).boundingBox()));expect(Math.max(...boxes.map(b=>b.y))-Math.min(...boxes.map(b=>b.y))).toBeLessThanOrEqual(1);expect(boxes[0].x+boxes[0].width).toBeLessThanOrEqual(boxes[1].x+1);expect(boxes[1].x+boxes[1].width).toBeLessThanOrEqual(boxes[2].x+1);
  await page.locator('#printPrinter').selectOption('Office Printer');await page.locator('#printCopies').fill('2');await expect(page.locator('#printCopies')).toHaveValue('2');await page.locator('#printPrinterProperties').click();
  await expect.poll(()=>page.evaluate(()=>window.__printerProperties)).toEqual(['Office Printer']);
- await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Office Printer',copies:2});
+ await page.locator('#printStart').click();await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Office Printer',copies:2,duplex:'default'});
  expect(await page.evaluate(()=>window.__browserPrint)).toBeUndefined();
+});
+test('English print dialog applies scale options to preview and routes duplex to WebView2',async({page})=>{
+ await page.addInitScript(()=>{localStorage.setItem('sreader.language','en');window.__submittedPrint=null;window.print=()=>{};window.__TAURI__={core:{invoke:async(command,args)=>{if(command==='reader_list_printers')return[{name:'Default Laser',is_default:true}];if(command==='reader_print'){window.__submittedPrint=args;return null;}if(command==='reader_version')return'0.1.0';if(command==='reader_session_recent')return[];return null;}}};});
+ await open(page,1,[300,400]);await page.keyboard.press('Control+p');
+ await expect(page.locator('#readerPrintDialog h2')).toContainText('Print');
+ await expect(page.locator('.reader-print-group h3').first()).toHaveText('Printer');
+ await expect(page.locator('#printSubset option[value="all"]')).toHaveText('All');
+ await expect(page.locator('#printScale option[value="fit"]')).toHaveText('Fit to printable area');
+ await expect(page.locator('#printDuplex option[value="long-edge"]')).toHaveText('Two-sided · flip on long edge');
+ const ink=()=>page.locator('#readerPrintStage canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]<220||d[i+1]<220||d[i+2]<220)n++;return n;});
+ await page.locator('#printPaper').selectOption('a4');const fitInk=await ink();
+ await page.locator('#printScale').selectOption('actual');await expect.poll(ink).not.toBe(fitInk);const actualInk=await ink();
+ await page.locator('#printScale').selectOption('reduce');await expect.poll(ink).toBe(actualInk);
+ await page.locator('#printScale').selectOption('fit');await expect.poll(ink).toBe(fitInk);
+ await page.locator('#printDuplex').selectOption('long-edge');await page.locator('#printStart').click();
+ await expect.poll(()=>page.evaluate(()=>window.__submittedPrint)).toEqual({printerName:'Default Laser',copies:1,duplex:'long-edge'});
 });
 test('Ctrl+P opens the centered in-app preview before the browser fallback print interface',async({page})=>{
  await page.addInitScript(()=>{window.print=()=>{window.__printed=true;};});await open(page);await page.keyboard.press('Control+p');

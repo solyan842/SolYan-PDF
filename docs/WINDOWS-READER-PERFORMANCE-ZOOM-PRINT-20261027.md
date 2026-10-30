@@ -62,3 +62,11 @@ The previous 80-million-pixel raster ceiling stopped an A4, 216 dpi preview at a
 The printer row uses one-column field labels and fixed-height controls so printer, Properties and copies align in the same grid. E2E measures their top edges and horizontal separation. The first alignment assertion caught inherited two-column label CSS; that rule was corrected. Windows Reader CI #60 passed at code commit `a12863928b29dcd025b973c1ae4696de6bbac4c1`, including the standalone Windows x64 Reader build.
 
 Stable promotion preserves the existing Reader branch history by fast-forward from `7ef07ed1fd310c229126909c44875f9e7774807f`; no Toolbox or main changes are included.
+
+
+## Reader print duplex, scaling and English UI — 2026-10-30
+
+- The Reader print workspace now exposes the WebView2 duplex setting directly: printer default, one-sided, two-sided long-edge and two-sided short-edge. The native `ICoreWebView2PrintSettings2` API accepts these modes; vendor-specific properties remain in the Windows driver Properties dialog. If a selected device cannot honor a duplex mode, the driver may use its default.
+- The print dialog strings are translated through the existing Reader language preference. Scale semantics are explicit and regression-tested: Fit may enlarge or shrink to the printable box; Reduce only shrinks oversized pages; Actual preserves PDF dimensions. If the source page and paper size match, these choices can produce the same preview by design.
+- Reader UI regression coverage checks English labels, actual preview changes for a small source page on A4, and long-edge duplex routing to the native print command. The pure layout test verifies Fit vs Reduce/Actual dimensions. The exact-head Windows Reader CI remains the authority for native compilation and installer acceptance.
+- Platform references: [Microsoft WebView2 print settings](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2printsettings2?view=webview2-1.0.3912.50) and [duplex modes](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/winrt/microsoft_web_webview2_core/corewebview2printduplex?view=webview2-winrt-1.0.4022.49).

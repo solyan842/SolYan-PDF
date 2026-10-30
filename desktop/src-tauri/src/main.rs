@@ -1309,9 +1309,13 @@ async fn reader_print(
     window: tauri::WebviewWindow,
     printer_name: String,
     copies: u32,
+    duplex: String,
 ) -> Result<(), String> {
     if !(1..=999).contains(&copies) {
         return Err("Print copies must be between 1 and 999.".to_string());
+    }
+    if !matches!(duplex.as_str(), "default" | "one-sided" | "long-edge" | "short-edge") {
+        return Err("Unsupported printer duplex mode.".to_string());
     }
     if !reader_list_printers()?.iter().any(|printer| printer.name == printer_name) {
         return Err("The selected printer is unavailable. Refresh the printer list and try again.".to_string());
@@ -1322,6 +1326,8 @@ async fn reader_print(
         use webview2_com::{
             Microsoft::Web::WebView2::Win32::{
                 ICoreWebView2Environment6, ICoreWebView2PrintSettings2, ICoreWebView2_16,
+                COREWEBVIEW2_PRINT_DUPLEX_DEFAULT, COREWEBVIEW2_PRINT_DUPLEX_ONE_SIDED,
+                COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_LONG_EDGE, COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_SHORT_EDGE,
                 COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE,
                 COREWEBVIEW2_PRINT_STATUS_SUCCEEDED,
             },
@@ -1340,6 +1346,14 @@ async fn reader_print(
                         let settings2 = settings.cast::<ICoreWebView2PrintSettings2>()?;
                         settings2.SetPrinterName(&HSTRING::from(printer_name.as_str()))?;
                         settings2.SetCopies(copies as i32)?;
+                        let duplex_setting = match duplex.as_str() {
+                            "default" => COREWEBVIEW2_PRINT_DUPLEX_DEFAULT,
+                            "one-sided" => COREWEBVIEW2_PRINT_DUPLEX_ONE_SIDED,
+                            "long-edge" => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_LONG_EDGE,
+                            "short-edge" => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_SHORT_EDGE,
+                            _ => unreachable!("duplex mode was validated before starting the print"),
+                        };
+                        settings2.SetDuplex(duplex_setting)?;
                         let core = webview.controller().CoreWebView2()?.cast::<ICoreWebView2_16>()?;
                         let handler = PrintCompletedHandler::create(Box::new(
                             move |error: windows::core::Result<()>, status| -> windows::core::Result<()> {

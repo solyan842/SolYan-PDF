@@ -8,7 +8,15 @@ test('mixed physical sizes and actual/custom scaling preserve dimensions',()=>{
  assert.equal(sheets([0],sizes,{paper:[300,400],scale:'actual',rotate:false})[0].items[0].width,600);
  assert.equal(sheets([0],sizes,{paper:[300,400],scale:'custom',percent:50,rotate:false})[0].items[0].width,300);
 });
-test('N-up and booklet impose page order with padding instead of dropping pages',()=>{
+test('fit, reduce and actual size produce distinct placements when source paper is smaller',()=>{
+ const small={0:[300,400]};
+ const fit=sheets([0],small,{paper:[595,842],scale:'fit',rotate:false})[0].items[0];
+ const reduce=sheets([0],small,{paper:[595,842],scale:'reduce',rotate:false})[0].items[0];
+ const actual=sheets([0],small,{paper:[595,842],scale:'actual',rotate:false})[0].items[0];
+ assert.ok(fit.width>reduce.width&&fit.height>reduce.height,'Fit should enlarge a small source page to the target paper');
+ assert.deepEqual([reduce.width,reduce.height],[actual.width,actual.height],'Reduce should not enlarge; actual size should preserve native dimensions');
+});
+test('N-up and booklet impose page order with padding instead of dropping pages',
  const multiple=sheets([0,1,2,3,4],sizes,{nup:4,paper:[800,600]});assert.equal(multiple.length,2);assert.deepEqual(multiple.flatMap(s=>s.items.map(p=>p.index)),[0,1,2,3,4]);
  const booklet=sheets([0,1,2,3,4],sizes,{mode:'booklet',paper:[800,600]});assert.equal(booklet.length,4);assert.deepEqual(booklet.map(s=>s.items.map(p=>p.index)),[[0],[1],[2],[3,4]]);
 });
