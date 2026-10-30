@@ -34,7 +34,7 @@ SolYan PDF is a self-hostable, installable PWA for PDF tools and a dedicated **T
 - Explicit rasterized Color Transform: invert, grayscale, high-contrast and custom two-color output
 - Auto Redact Text: literal PDF.js text-layer matching with security-first raster replacement only on affected pages
 - Deterministic Scanner Effect with bounded DPI/noise/blur/yellowing/border/skew presets
-- Browser-side PDF editor with text/image insertion, highlight, rectangle, selectable-text replacement and security-first manual redaction
+- Browser-side PDF editor with queued multi-page text/image insertion, highlight, rectangle, selectable-text replacement and security-first manual redaction; edits can be removed before export
 - AcroForm discovery/filling
 
 ### OCR & document intelligence

@@ -29,7 +29,9 @@
             <div class="editor-coordinates"><label><span>X (pt)</span><input id="coordX" class="text-input" type="number" value="50"></label><label><span>Y (pt)</span><input id="coordY" class="text-input" type="number" value="50"></label><label><span>Rộng (pt)</span><input id="coordWidth" class="text-input" type="number" min="1" value="180"></label><label><span>Cao (pt)</span><input id="coordHeight" class="text-input" type="number" min="1" value="40"></label></div>
             <p id="redactNotice" class="editor-warning" hidden>Redact sẽ rasterize trang đã chọn ở 150 DPI và loại bỏ nội dung PDF gốc của trang đó. Trang này sẽ không còn text/vector/form tương tác.</p>
             <p id="replaceNotice" class="editor-warning" hidden>Bấm vào chữ cần sửa trên trang rồi nhập nội dung mới. Vùng chữ được che bằng nền trắng; để loại bỏ an toàn dữ liệu cũ, cả trang chuyển thành ảnh 200 DPI nên chữ trên trang đó không còn chọn/tìm kiếm được. Các trang khác được giữ nguyên.</p>
-            <p class="editor-hint">Kéo trên trang để đặt vị trí/kích thước. Với “Sửa chữ có sẵn”, bấm trực tiếp vào chữ cần thay. Tọa độ tính theo point của PDF.</p>
+            <p class="editor-hint">Đặt từng chỉnh sửa rồi thêm vào danh sách. Có thể thêm nhiều mục trên các trang khác nhau trước khi xuất. Với “Sửa chữ có sẵn”, bấm trực tiếp vào chữ cần thay. Tọa độ tính theo point của PDF.</p>
+            <button id="addEditButton" class="secondary-button editor-add-edit" type="button" disabled>＋ Thêm chỉnh sửa</button>
+            <section id="editQueue" class="editor-edit-queue" hidden><div class="editor-queue-heading"><strong>Chỉnh sửa đã thêm</strong><button id="clearEdits" class="secondary-button" type="button" disabled>Xóa hết</button></div><ol id="editList"></ol></section>
             <button id="exportButton" class="primary merge-btn" type="button" disabled>Xuất PDF đã chỉnh sửa →</button><p id="status" class="status-text" role="status">Chọn PDF để bắt đầu.</p>
           </aside>
         </div>
