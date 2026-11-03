@@ -47,6 +47,8 @@ jobs:
         run: |
           python -m unittest discover -s desktop/backend/tests -p test_network_ping.py -v 2>&1 | Tee-Object artifacts/stool-network-ping-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s desktop/backend/tests -p test_stool_package_manifest.py -v 2>&1 | Tee-Object artifacts/stool-package-manifest-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test real desktop ASGI authentication and CORS composition
         shell: pwsh
