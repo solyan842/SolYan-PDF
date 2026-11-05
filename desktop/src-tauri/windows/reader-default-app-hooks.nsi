@@ -4,10 +4,10 @@
   WriteRegStr HKCU "Software\Classes\SolYan.sReader.PDF" "" "sReader PDF document"
   WriteRegStr HKCU "Software\Classes\SolYan.sReader.PDF\DefaultIcon" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\",0"
   WriteRegStr HKCU "Software\Classes\SolYan.sReader.PDF\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
-  ; One Explorer invocation receives all selected paths and prints them in order.
+  ; Explorer supplies each selected PDF through %1; single-instance IPC queues the jobs.
   WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.pdf\shell\SolYanReaderPrint" "MUIVerb" "Print"
   WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.pdf\shell\SolYanReaderPrint" "MultiSelectModel" "Player"
-  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.pdf\shell\SolYanReaderPrint\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" --print %*"
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.pdf\shell\SolYanReaderPrint\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" --print $\"%1$\""
   WriteRegStr HKCU "Software\SolYan\sReader PDF\Capabilities" "ApplicationName" "sReader PDF"
   WriteRegStr HKCU "Software\SolYan\sReader PDF\Capabilities" "ApplicationDescription" "Lightweight local PDF reader for Windows"
   WriteRegStr HKCU "Software\SolYan\sReader PDF\Capabilities\FileAssociations" ".pdf" "SolYan.sReader.PDF"

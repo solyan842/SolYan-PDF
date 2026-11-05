@@ -19,7 +19,7 @@ try {
     $verb = Get-Item -LiteralPath $printVerb
     if ($verb.GetValue('MultiSelectModel',$null) -ne 'Player') { throw 'Explorer Print verb does not support multi-select' }
     $printCommand = (Get-Item -LiteralPath ($printVerb + '\command')).GetValue('')
-    if ($printCommand -notmatch '--print %\*') { throw 'Explorer Print verb does not pass the selected file list' }
+    if ($printCommand -notmatch '--print "%1"') { throw 'Explorer Print verb does not pass the selected file list' }
     'reader_default_candidate_registered=true; userchoice_unchanged=true'
     foreach ($engine in @('core','office','ocr','sign','archive')) {
         if (Test-Path -LiteralPath (Join-Path $root $engine)) { throw "Unexpected Tools resource: $engine" }

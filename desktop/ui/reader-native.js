@@ -1,7 +1,7 @@
 // The notification is only a hint. Native requests survive until this bridge drains them.
 export async function connectNativeReader({native, find, activate, open, prepareOpen, printFile, message, hasOpen, session}) {
   if (!native?.core || !native?.event) return;
-  let draining=false, again=false, received=false, printDraining=false, printAgain=false, printFailed=false;
+  let draining=false, again=false, received=false, printDraining=false, printAgain=false, printFailed=false, printCount=0;
   const invoke=(name,args)=>native.core.invoke(name,args);
   const drain=async()=>{
     if(draining){again=true;return;}
@@ -35,7 +35,7 @@ export async function connectNativeReader({native, find, activate, open, prepare
       do{
         printAgain=false;let request;
         while((request=await invoke('reader_next_print_request'))){
-          received=true;const [ticket,source,name,error]=request;
+          received=true;printCount++;const [ticket,source,name,error]=request;
           if(error){printFailed=true;message(error);continue;}
           try{
             const [bytes,runtime]=await Promise.all([invoke('reader_read_print_request',{ticket}),prepareOpen?prepareOpen():Promise.resolve(null)]);
@@ -46,6 +46,7 @@ export async function connectNativeReader({native, find, activate, open, prepare
       }while(printAgain);
     }catch(error){printFailed=true;message('Không nhận được danh sách PDF cần in: '+String(error?.message||error));}
     finally{printDraining=false;}
+    if(printOnly&&printCount===0){printFailed=true;message('Explorer không truyền tệp PDF cần in.');}
     await invoke('reader_finish_print_batch',{success:!printFailed});
   };
   const printOnly=await invoke('reader_is_print_only').catch(()=>false);
