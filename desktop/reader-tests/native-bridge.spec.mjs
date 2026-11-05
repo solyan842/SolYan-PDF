@@ -22,6 +22,7 @@ async function mockNative(page,files,delayed=false) {
       if(command==='reader_choose_files'){if(window.__chooseKey)window.__enqueue(window.__chooseKey);return Boolean(window.__chooseKey);}
       return null;
     }},event:{listen:async(name,handler)=>{
+      if(name==='reader-print-pending')return()=>{};
       if(name!=='reader-open-pending')throw Error('Wrong notification');
       if(delayed)await new Promise(resolve=>{window.__releaseListener=resolve;});
       callback=handler;return()=>{callback=null;};
