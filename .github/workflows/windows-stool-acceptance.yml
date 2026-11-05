@@ -26,7 +26,7 @@ jobs:
         id: candidate
         uses: actions/github-script@v7
         env:
-          CANDIDATE_RUN: ${{ inputs.installer_run_id }}
+          CANDIDATE_RUN: ${{ inputs.installer_run_id || (github.ref_name == 'feat/windows-stool-acceptance-20261105' && '41611205522') }}
         with:
           script: |
             if (!/^\d+$/.test(process.env.CANDIDATE_RUN)) throw new Error('Numeric run ID required');

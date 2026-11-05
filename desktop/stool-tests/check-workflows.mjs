@@ -13,6 +13,7 @@ assert.ok(steps.some(s=>s.run?.includes('stool-package-manifest.py')));
 const acceptance=get('windows-stool-acceptance.yml');
 assert.deepEqual(Object.keys(acceptance.on).sort(),['push','workflow_dispatch']);
 assert.deepEqual(acceptance.on.push.branches,['feat/windows-stool-acceptance-20261105']);
+assert.equal(acceptanceSteps.find(s=>s.id==='candidate').env.CANDIDATE_RUN,"${{ inputs.installer_run_id || (github.ref_name == 'feat/windows-stool-acceptance-20261105' && '41611205522') }}");
 const acceptanceSteps=acceptance.jobs['accept-existing-candidate'].steps;
 assert.ok(acceptanceSteps.some(s=>s.run?.includes('stool-installer-smoke.ps1')));
 assert.equal(acceptanceSteps.filter(s=>s.uses?.startsWith('actions/download-artifact@')).length,2);
