@@ -106,7 +106,7 @@ async function openFile(file, source = null, nativeName = null, runtimeReady = n
   bus.on('pagechanging', ({ pageNumber }) => { if (doc.id === active) { $('pageNumber').value = pageNumber;for(const b of $('thumbs').children)b.setAttribute('aria-current',String(Number(b.dataset.page)===pageNumber)); } session?.touch(); });
   bus.on('updatefindmatchescount', ({ matchesCount }) => { doc.matches = `${matchesCount.current}/${matchesCount.total}`; if (doc.id === active) $('matches').textContent = doc.matches; });
   session?.opened(doc);
-  activate(doc.id); message(`${name} · ${pdf.numPages} trang · Xử lý offline`);
+  activate(doc.id); message(`${name} · ${pdf.numPages} trang · Xử lý offline`); return doc;
 }
 function activate(id) {
   active = id; const doc = current(); selected = doc.selectedId;
@@ -380,12 +380,22 @@ document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected&&!e.target
 window.addEventListener('beforeunload',e=>{for(const doc of documents.values())r2?.flushBookmark(doc);if([...documents.values()].some(d=>d.dirty)){e.preventDefault();e.returnValue='';}});
 r2=installR2({placeAsset,current,documents,changed,render:renderSignatures,renderTabs,message,attempt,ensurePdfLib,readSourceBytes,select:id=>{selected=id;const d=current();if(d)d.selectedId=id;},flushSession:()=>session?.flush(),get busy(){return busy;}});
 session=installReaderSession({native:window.__TAURI__,documents,current,activate,message,attempt});
-installReaderActions({current,message,attempt,get pdfjs(){return pdfjs;},ensurePdfLib,readSourceBytes,exportDocument:doc=>r2.exportDocument(doc),openFile,get busy(){return busy;}});
+const readerActions=installReaderActions({current,message,attempt,get pdfjs(){return pdfjs;},ensurePdfLib,readSourceBytes,exportDocument:doc=>r2.exportDocument(doc),openFile,get busy(){return busy;}});
 installLanguage();
 document.addEventListener('reader-language-changed',()=>{if($('outline').dataset.empty==='true')$('outline').textContent=t('PDF này chưa có mục lục.');});
 $('open').disabled=false;
 document.body.dataset.ready='true';
 installDefaultPdfPrompt({native:window.__TAURI__,message});
+async function printExplorerPdf(bytes,source,name,runtime){
+  const previous=active;const doc=await openFile(bytes,source,name,runtime);
+  try{await readerActions.printSilently();}
+  finally{
+    if(documents.has(doc.id)){doc.thumbnails?.disconnect();doc.r2Abort?.abort();clearTimeout(doc.bookmarkTimer);doc.view.setDocument(null);doc.container.remove();documents.delete(doc.id);await doc.pdf.loadingTask.destroy();}
+    if(previous&&documents.has(previous))activate(previous);
+    else if(documents.size)activate(documents.keys().next().value);
+    else{$('welcome').hidden=false;$('thumbs').replaceChildren();$('outline').replaceChildren();document.getElementById('bookmarks')?.replaceChildren();$('signOptions').hidden=true;$('save').disabled=true;$('saveCurrent').disabled=true;renderTabs();}
+  }
+}
 attempt(async()=>{
-  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,prepareOpen:ensurePdfRuntime,message,hasOpen:()=>documents.size>0,session});
+  await connectNativeReader({native:window.__TAURI__,find:source=>[...documents.values()].find(d=>d.source===source),activate,open:openFile,prepareOpen:ensurePdfRuntime,printFile:printExplorerPdf,message,hasOpen:()=>documents.size>0,session});
 })();

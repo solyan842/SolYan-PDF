@@ -49,7 +49,7 @@ export function installReaderPrint(api,{printButton,layoutButton}){
   const title=el('h2',{className:'reader-print-title'}),logo=el('img',{src:'./vendor/sReader_PDF.png',alt:'',className:'reader-print-logo'});title.append(logo,el('span',{textContent:'In'}));
   previewNav.append(previewButton,prev,pageLabel,next,zoomLabel);previewViewport.append(preview);previewPanel.append(previewNav,previewViewport,status);body.append(previewPanel,grid);footer.append(start,cancel);
   dialog.append(title,body,el('p',{className:'reader-print-note',textContent:'Chọn máy in và Thuộc tính ngay tại đây. Bản xem trước dùng PDF.js; PDF nguồn được giữ nguyên.'}),footer);document.body.append(dialog);
-  let preparing=false,abort=null,pdf=null,renderTask=null,previewTimer=0,previewIndex=0,previewFit={width:0,height:0},previewZoom=1,preferredPrinter='';
+  let preparing=false,abort=null,pdf=null,renderTask=null,previewTimer=0,previewIndex=0,previewFit={width:0,height:0},previewZoom=1,preferredPrinter='',defaultPrinter='';
   const refreshPrinters=async()=>{
     if(!window.__TAURI__?.core?.invoke){printerGroup.hidden=true;return;}
     printerGroup.hidden=false;printerSelect.disabled=true;printerProperties.disabled=true;duplex.disabled=true;printerStatus.textContent='Đang tải máy in Windows…';
@@ -57,7 +57,8 @@ export function installReaderPrint(api,{printButton,layoutButton}){
       const printers=await window.__TAURI__.core.invoke('reader_list_printers');
       printerSelect.replaceChildren();
       for(const item of printers||[])printerSelect.append(el('option',{value:item.name,textContent:item.is_default?item.name+' (Mặc định)':item.name}));
-      const selected=(printers||[]).find(p=>p.name===preferredPrinter)||(printers||[]).find(p=>p.is_default)||(printers||[])[0];
+      const defaultChoice=(printers||[]).find(p=>p.is_default);defaultPrinter=defaultChoice?.name||'';
+      const selected=(printers||[]).find(p=>p.name===preferredPrinter)||defaultChoice||(printers||[])[0];
       if(selected){printerSelect.value=selected.name;preferredPrinter=selected.name;printerStatus.textContent='Thuộc tính mở cài đặt driver Windows của máy đang chọn.';}
       else{printerSelect.append(el('option',{value:'',textContent:'Không tìm thấy máy in'}));printerStatus.textContent='Cài đặt hoặc kết nối máy in rồi bấm thử lại.';}
       printerSelect.disabled=!selected;printerProperties.disabled=!selected;duplex.disabled=!selected;
@@ -119,5 +120,18 @@ export function installReaderPrint(api,{printButton,layoutButton}){
   const printDefault=async()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang chuẩn bị xem trước.';dialog.showModal();await refreshPrinters();await prepare(false,true);};
   const openLayout=()=>{if(!api.current()){api.message('Mở PDF trước.');return;}if(preparing||api.busy)return;cleanup();resetOptions();status.textContent='Đang tạo bản xem trước…';dialog.showModal();void refreshPrinters();void api.attempt(()=>prepare(false,true))();};
   start.onclick=api.attempt(()=>prepare(true));previewButton.onclick=api.attempt(()=>prepare(false,true));
-  return {print:printDefault,openLayout};
+  const printSilently=async()=>{
+    if(!window.__TAURI__?.core?.invoke)throw Error('In từ Explorer chỉ dùng được trong sReader trên Windows.');
+    const doc=api.current();if(!doc)throw Error('Không mở được PDF cần in.');
+    resetOptions();await refreshPrinters();
+    if(!defaultPrinter)throw Error('Windows chưa có máy in mặc định.');
+    printerSelect.value=defaultPrinter;preferredPrinter=defaultPrinter;copies.value='1';duplex.value='default';
+    const total=doc.pdf.numPages;
+    for(let first=1;first<=total;first+=50){
+      subset.value='custom';range.value=first===Math.min(total,first+49)?String(first):String(first)+'-'+String(Math.min(total,first+49));
+      await prepare(true,false);
+    }
+    cleanup();
+  };
+  return {print:printDefault,openLayout,printSilently};
 }

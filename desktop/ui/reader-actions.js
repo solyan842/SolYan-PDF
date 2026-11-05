@@ -24,4 +24,5 @@ export function installReaderActions(api){
     try{const bytes=await api.exportDocument(doc);if(window.__TAURI__?.core)await window.__TAURI__.core.invoke('desktop_switch_tools',{bytes:Array.from(bytes),name:doc.name});else{const {putTransfer}=await import('./document-transfer.js');const token=await putTransfer(new File([bytes],doc.name,{type:'application/pdf'}));window.open('./handoff.html?transfer='+token,'_blank','noopener');}api.message(t('Đã chuyển bản làm việc sang sTool PDF.'));}finally{preparing=false;}
   });
   const transfer=new URLSearchParams(location.search).get('transfer');if(transfer)void api.attempt(async()=>{const {takeTransfer}=await import('./document-transfer.js');const file=await takeTransfer(transfer);await api.openFile(file);history.replaceState(null,'',location.pathname);})();
+  return {printSilently:async()=>{const feature=await loadPrintFeature();await feature.printSilently();}};
 }

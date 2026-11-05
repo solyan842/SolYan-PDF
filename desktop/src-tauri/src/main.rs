@@ -5,6 +5,7 @@ mod reader_links;
 mod reader_window_state;
 mod reader_session;
 mod document_handoff;
+mod reader_batch;
 
 use rand::RngCore;
 use std::{
@@ -816,6 +817,9 @@ async fn reader_save(window: tauri::WebviewWindow, state: State<'_, ReaderOpenSt
 
 struct ReaderOpenState {
     queue: Mutex<reader_open::OpenQueue>,
+    print_queue: Mutex<reader_open::OpenQueue>,
+    print_only: bool,
+    print_restore_visible: Mutex<bool>,
     outputs: Mutex<std::collections::HashMap<String, PathBuf>>,
     session_lock: Mutex<()>,
 }
@@ -1163,6 +1167,39 @@ fn reader_discard_open_request(window: tauri::WebviewWindow, state: State<'_, Re
     state.queue.lock().map_err(|_| "Reader queue unavailable")?.take(&ticket)?;
     Ok(())
 }
+#[tauri::command]
+fn reader_next_print_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>) -> Result<Option<reader_open::Ticket>, String> {
+    reader_window(&window)?;
+    Ok(state.print_queue.lock().map_err(|_| "Reader print queue unavailable")?.next())
+}
+#[tauri::command]
+async fn reader_read_print_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<tauri::ipc::Response, String> {
+    reader_window(&window)?;
+    let path=state.print_queue.lock().map_err(|_| "Reader print queue unavailable")?.take(&ticket)?;
+    Ok(tauri::ipc::Response::new(reader_open::read_pdf(&path)?))
+}
+#[tauri::command]
+fn reader_discard_print_request(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>, ticket: String) -> Result<(), String> {
+    reader_window(&window)?;
+    state.print_queue.lock().map_err(|_| "Reader print queue unavailable")?.take(&ticket)?;
+    Ok(())
+}
+#[tauri::command]
+fn reader_is_print_only(window: tauri::WebviewWindow, state: State<'_, ReaderOpenState>) -> Result<bool, String> {
+    reader_window(&window)?; Ok(state.print_only)
+}
+#[tauri::command]
+fn reader_finish_print_batch(window: tauri::WebviewWindow, app: tauri::AppHandle, success: bool, state: State<'_, ReaderOpenState>) -> Result<(), String> {
+    reader_window(&window)?;
+    if state.print_only {
+        if success { app.exit(0); }
+        else { let _=window.show(); let _=window.set_focus(); }
+    } else {
+        let restore=*state.print_restore_visible.lock().map_err(|_| "Reader print visibility unavailable")?;
+        if restore { let _=window.show(); }
+    }
+    Ok(())
+}
 
 #[tauri::command]
 async fn desktop_switch_tools(app: tauri::AppHandle, bytes: Option<Vec<u8>>, name: Option<String>) -> Result<(), String> {
@@ -1395,21 +1432,25 @@ async fn reader_print(
 }
 
 fn main() {
-    let mut requests = reader_open::OpenQueue::default();
-    requests.enqueue(std::env::args_os().skip(1).map(PathBuf::from), &std::env::current_dir().unwrap_or_default());
-    let builder = tauri::Builder::default().manage(ReaderOpenState { queue: Mutex::new(requests), outputs: Mutex::new(std::collections::HashMap::new()), session_lock: Mutex::new(()) });
+    let (print_only, print_paths, open_paths)=reader_batch::split_args(std::env::args_os().skip(1));
+    let cwd=std::env::current_dir().unwrap_or_default();
+    let mut requests=reader_open::OpenQueue::default(); requests.enqueue(open_paths,&cwd);
+    let mut print_queue=reader_open::OpenQueue::default(); print_queue.enqueue(print_paths,&cwd);
+    let builder = tauri::Builder::default().manage(ReaderOpenState { queue: Mutex::new(requests), print_queue: Mutex::new(print_queue), print_only, print_restore_visible: Mutex::new(false), outputs: Mutex::new(std::collections::HashMap::new()), session_lock: Mutex::new(()) });
     // First plugin, Reader only. Its mutex is scoped by vn.solyan.pdf.reader.
     #[cfg(all(windows, feature = "reader-only"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
         let state = app.state::<ReaderOpenState>();
-        if let Ok(mut queue) = state.queue.lock() {
-            queue.enqueue(args.into_iter().skip(1).map(PathBuf::from), Path::new(&cwd));
-        }
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
-            let _ = window.emit("reader-open-pending", ());
+        let (print, print_paths, open_paths)=reader_batch::split_args(args.into_iter().skip(1));
+        if print {
+            if let Ok(mut queue)=state.print_queue.lock(){queue.enqueue(print_paths,Path::new(&cwd));}
+            if let Some(window)=app.get_webview_window("main"){
+                if !state.print_only {if let Ok(mut restore)=state.print_restore_visible.lock(){*restore=window.is_visible().unwrap_or(true);}let _=window.hide();}
+                let _=window.emit("reader-print-pending",());
+            }
+        } else {
+            if let Ok(mut queue)=state.queue.lock(){queue.enqueue(open_paths,Path::new(&cwd));}
+            if let Some(window)=app.get_webview_window("main"){let _=window.unminimize();let _=window.show();let _=window.set_focus();let _=window.emit("reader-open-pending",());}
         }
     }));
     #[cfg(all(windows,feature="reader-only"))]
@@ -1445,7 +1486,9 @@ fn main() {
             if let Ok(root)=handoff_root(app.handle()){document_handoff::cleanup(&root);}
             if cfg!(feature = "reader-only") {
                 let config=app.config().app.windows[0].clone();
+                let print_only=app.state::<ReaderOpenState>().print_only;
                 let window=tauri::WebviewWindowBuilder::from_config(app,&config)?
+                    .visible(!print_only)
                     // Let the plugin restore a client size below the default
                     // minimum on small/high-DPI monitors; fit sets the real limit.
                     .min_inner_size(1.0,1.0)
@@ -1520,7 +1563,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_list_printers, reader_open_printer_properties, reader_print, reader_links::reader_open_pdf_link])
+        .invoke_handler(tauri::generate_handler![desktop_core_session, desktop_take_handoff, desktop_open_reader, desktop_switch_tools, reader_save_as, reader_save, reader_choose_files, reader_next_open_request, reader_read_open_request, reader_discard_open_request, reader_next_print_request, reader_read_print_request, reader_discard_print_request, reader_is_print_only, reader_finish_print_batch, reader_session_save, reader_session_recent, reader_session_clear_recent, reader_session_open_recent, reader_session_restore, reader_window_control, reader_version, reader_windows_fonts, reader_windows_font, reader_open_external, reader_pdf_default_state, reader_list_printers, reader_open_printer_properties, reader_print, reader_links::reader_open_pdf_link])
         .build(tauri::generate_context!())
         .expect("error while building SolYan PDF Desktop");
 
