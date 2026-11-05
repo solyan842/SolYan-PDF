@@ -3,6 +3,9 @@ name: Windows sTool Existing Installer Acceptance
 # Optional release/integration gate. Reuse a packaged candidate: never rebuild
 # engines/models/NSIS just to rerun a test or repair its driver.
 on:
+  push:
+    branches:
+      - feat/windows-stool-acceptance-20261105
   workflow_dispatch:
     inputs:
       installer_run_id:
